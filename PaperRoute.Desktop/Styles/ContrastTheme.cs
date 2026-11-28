@@ -199,6 +199,13 @@ public static class ContrastTheme
             ["WarningBrush"] = SystemColorRole.WindowText,
             ["DangerBrush"] = SystemColorRole.WindowText,
 
+            // The success and info tones (Appendix C.1): the ink the window text,
+            // its muted fill the window (:411-473).
+            ["SuccessBrush"] = SystemColorRole.WindowText,
+            ["SuccessMutedBackgroundBrush"] = SystemColorRole.Window,
+            ["InfoBrush"] = SystemColorRole.WindowText,
+            ["InfoMutedBackgroundBrush"] = SystemColorRole.Window,
+
             // Quiet text and dividers: the inactive text (:95-125).
             ["SubtleBorderBrush"] = SystemColorRole.GrayText,
             ["MutedTextBrush"] = SystemColorRole.GrayText,

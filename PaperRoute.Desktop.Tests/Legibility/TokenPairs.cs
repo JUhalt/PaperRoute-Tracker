@@ -19,8 +19,10 @@ internal static class TokenPairs
         ["Teal", "Blue", "Violet", "Rose", "Amber", "Green", "Slate", "Orange"];
 
     // Where each pair is drawn: the ink and surface keys, from r1 5.1's "Board
-    // use" column and today's pair list (WorkflowThemeKeyboardSmokeTests.DrawnPairs).
-    public static IReadOnlyList<TokenPair> Text { get; } = BoardPairs().ToList();
+    // use" column and today's pair list (WorkflowThemeKeyboardSmokeTests.DrawnPairs),
+    // then Appendix C.1's success and info inks, which no view draws yet: each
+    // is paired from the day it is a token (the harness design, part 3.1).
+    public static IReadOnlyList<TokenPair> Text { get; } = BoardPairs().Concat(TonePairs()).ToList();
 
     // Each stage's and tag palette's foreground on its own background
     // (WorkTypeAndTagTests.EveryTagColorIsLegibleInBothThemes today).
@@ -64,5 +66,18 @@ internal static class TokenPairs
         yield return new("a primary button, pressed", "OnAccentTextBrush", ThemeTokens.AccentPressedBrush);
         yield return new("an off button (filled roles)", "MutedTextBrush", "BoardBackgroundBrush");
         yield return new("an off quiet button on a card", "MutedTextBrush", "CardBackgroundBrush");
+    }
+
+    // The success and info tones (Appendix C.1, the harness design's part 3.1):
+    // each ink on the board, on a card and on its own muted fill, as a pill or
+    // a callout will draw it. No view draws them yet.
+    private static IEnumerable<TokenPair> TonePairs()
+    {
+        yield return new("success text on a page (no view yet)", "SuccessBrush", "BoardBackgroundBrush");
+        yield return new("success text on a card (no view yet)", "SuccessBrush", "CardBackgroundBrush");
+        yield return new("a success pill or callout (no view yet)", "SuccessBrush", "SuccessMutedBackgroundBrush");
+        yield return new("info text on a page (no view yet)", "InfoBrush", "BoardBackgroundBrush");
+        yield return new("info text on a card (no view yet)", "InfoBrush", "CardBackgroundBrush");
+        yield return new("an info pill or callout (no view yet)", "InfoBrush", "InfoMutedBackgroundBrush");
     }
 }
