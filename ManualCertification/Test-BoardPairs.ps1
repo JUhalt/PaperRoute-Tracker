@@ -66,6 +66,17 @@ function New-RunJson($ui, $runUi, [double] $watchUi, [double] $riseUi, $conditio
         $rows.Add((& $row 'example' $idlePrimary 100 'report-only' 999 900))
         $rows.Add((& $row '500' 'prepare-published-idle' 50 'report-only' $prepare $prepare))
         $rows.Add((& $row '500' 'prepare-published-longest-step' 250 'report-only' ($prepare / 3) ($prepare / 3)))
+        # The search scenario's rows: the searches about alike on both
+        # sides, the refreshes about 0 on search-pending and more on
+        # search-refreshed, by design.
+        if ($idle.Side -like 'search-*') {
+            $refresh = if ($idle.Side -eq 'search-refreshed') { 45 } else { 0.2 }
+            $search = if ($idle.Side -eq 'search-refreshed') { 29 } else { 30 }
+            $rows.Add((& $row '500' 'search-keystroke-published-prepared' 50 'report-only' $search $search))
+            $rows.Add((& $row '500' 'refresh-published-after-search' 250 'report-only' $refresh $refresh))
+            $rows.Add((& $row '500' 'search-cleared-published-prepared' 50 'report-only' $search $search))
+            $rows.Add((& $row '500' 'refresh-published-after-clear' 250 'report-only' $refresh $refresh))
+        }
         if (-not $noPrimary -and -not $stopped) {
             $rows.Add((& $row '500' $idlePrimary 100 'report-only' $ui $runUi))
             $rows.Add((& $row '500' 'first-switch-published-after-idle-paint' 250 'report-only' 40 40))
@@ -449,6 +460,41 @@ try {
     & $pairsScript -Mode headless -Before $WorkFolder -After $WorkFolder -Out (Join-Path $WorkFolder 'refused') -PrimaryRow $idlePrimary -BeforeIdle prepared -AfterIdle prepared | Out-Null
 } catch { $refused = $_.Exception.Message -like '*both name the side prepared*' }
 Assert-That ($refused -and -not (Test-Path -LiteralPath (Join-Path $WorkFolder 'refused'))) 'two equal idle sides are refused, and nothing is written'
+
+# 29. A sitting of the search scenario (search-pending against
+# search-refreshed): its two refresh rows read higher on search-refreshed in
+# every pair, by design: reported apart with the preparation rows, and
+# neither is flagged as a watch row; the searches are watch rows. 9 of 10
+# lower on the primary row.
+$search = New-Sitting 'idle-search' 10 (Set-IdleSides (New-Pairs 10 -higher 7) 'search-pending' 'search-refreshed') 'search-pending' 'search-refreshed'
+$r = Invoke-Check 'idle sides of the search scenario' @($search)
+Assert-That ($r.Verdict -eq 'gain shown' -and $r.Lower -eq 9 -and $r.Pairs -eq 10) "gain shown, 9 of 10 (got $($r.Verdict), $($r.Lower) of $($r.Pairs))"
+Assert-That (@($r.WatchHigher).Count -eq 0 -and @($r.WatchBlocking).Count -eq 0) "no watch row is flagged (got higher: $(@($r.WatchHigher) -join ', '))"
+foreach ($id in 'refresh-published-after-search', 'refresh-published-after-clear') {
+    Assert-That (@($r.Lines | Where-Object { $_ -like "  $id (idle preparation, before the switch): after higher in 10 of 10 pairs. Reported; it does not block." }).Count -eq 1) "$id is reported and does not block"
+}
+Assert-That (@($r.Lines | Where-Object { $_ -like 'Idle sides: before runs with --after-idle search-pending, after with --after-idle search-refreshed. Scenario: search.*' }).Count -eq 1) 'the summary names the sides and their scenario'
+
+# 30. Run mode refuses two sides of different scenarios, which write
+# different rows, before it runs or checks anything else.
+$refused = $false
+try {
+    & $pairsScript -Mode headless -Before $WorkFolder -After $WorkFolder -Out (Join-Path $WorkFolder 'refused-scenarios') -PrimaryRow $idlePrimary -BeforeIdle none -AfterIdle search-refreshed | Out-Null
+} catch { $refused = $_.Exception.Message -like '*only two sides of the same scenario*' }
+Assert-That ($refused -and -not (Test-Path -LiteralPath (Join-Path $WorkFolder 'refused-scenarios'))) 'two sides of different scenarios are refused, and nothing is written'
+
+# 31. Window mode refuses the scaling scenario, which only a headless run
+# can make; headless takes it.
+$refused = $false
+try {
+    & $pairsScript -Mode window -Before $WorkFolder -After $WorkFolder -Out (Join-Path $WorkFolder 'refused-scaling') -PrimaryRow $idlePrimary -BeforeIdle scaling-none -AfterIdle scaling-prepared | Out-Null
+} catch { $refused = $_.Exception.Message -like '*runs headless only*' }
+Assert-That ($refused -and -not (Test-Path -LiteralPath (Join-Path $WorkFolder 'refused-scaling'))) 'window mode refuses the scaling scenario, and nothing is written'
+$scalingInWindow = $false
+try {
+    & $pairsScript -Mode headless -Before $WorkFolder -After $WorkFolder -Out (Join-Path $WorkFolder 'refused-scaling-headless') -PrimaryRow $idlePrimary -BeforeIdle scaling-none -AfterIdle scaling-prepared | Out-Null
+} catch { $scalingInWindow = $_.Exception.Message -like '*runs headless only*' }
+Assert-That (-not $scalingInWindow) 'headless mode does not refuse the scaling scenario as headless only'
 
 if ($failures.Count) {
     Write-Host "Board pairs check: $($failures.Count) failed."

@@ -12,7 +12,8 @@ namespace PaperRoute.ViewModels.Session;
 //                              library, write them as JSON, exit (d1 7.3)
 //   --after-idle <side>        with --measure only: the run is one side of a
 //                              with-and-without comparison of idle preparation
-//                              (none, width, half or prepared; IdleSides)
+//                              (IdleSides.All, but for the scaling sides,
+//                              which run headless only)
 //   --platform-check <file>.json  a real window on the example: try the file
 //                              dialog, the launcher and a restart once each,
 //                              write the outcomes as JSON, exit (step 15)
@@ -137,7 +138,15 @@ public sealed class TrialOptions
 
                 if (index + 1 >= args.Count || !Measurement.IdleSides.IsKnown(args[index + 1]))
                 {
-                    error = "\"--after-idle\" needs one of " + string.Join(", ", Measurement.IdleSides.All) + " after it.";
+                    error = "\"--after-idle\" needs one of " + string.Join(", ", Measurement.IdleSides.All.Where(side => !Measurement.IdleSides.HeadlessOnly(side))) + " after it.";
+                    return false;
+                }
+
+                // "--after-idle" runs in a real window, which cannot change
+                // its own display scaling.
+                if (Measurement.IdleSides.HeadlessOnly(args[index + 1]))
+                {
+                    error = $"\"--after-idle {args[index + 1]}\" changes the display scaling, which a real window cannot do by itself; that side runs headless only.";
                     return false;
                 }
 

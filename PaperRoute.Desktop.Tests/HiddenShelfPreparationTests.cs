@@ -12,6 +12,7 @@ using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using ManuscriptPipeline.Models;
+using PaperRoute.Desktop.Measurement;
 using PaperRoute.Desktop.Tests.Board;
 using PaperRoute.TestFixtures;
 using PaperRoute.ViewModels.Board;
@@ -57,6 +58,9 @@ namespace PaperRoute.Desktop.Tests;
 //   Shift+Tab then reach what they reach on the twin.
 // - T11: an empty Published, a short one, and the first cards arriving on a
 //   prepared empty one.
+// - R10: on a library of several thousand, the idle refresh after a search
+//   that takes most of Published off, and after it is cleared, is one row
+//   step and one layout, and the switch after it makes no view.
 [TestClass]
 public sealed class HiddenShelfPreparationTests : StorageCheckedTests
 {
@@ -1290,6 +1294,77 @@ public sealed class HiddenShelfPreparationTests : StorageCheckedTests
             Assert.IsFalse(preparer.IsPrepared, "Not called prepared.");
             AssertOnlyShown(board, 0, "after the show and hide");
             return new List<string> { $"shown and hidden after {steps} steps; none after" };
+        }));
+    }
+
+    // R10 (idle-preparation design, section 8, row 10, its load-free guard):
+    // on a library of several thousand, Published prepared, a search takes
+    // most of its cards off and clearing it puts them back. Each time the
+    // idle refresh is one row step R, which brings every row to the cards in
+    // one step (rows refilled, added or removed), and one full-size layout L;
+    // then Published is prepared again, and the switch after the last
+    // refresh makes no card view and refills no row. Counts, with the clock
+    // standing still; each R step's own time goes to the log, never read
+    // (the timed row is the search scenario's refresh row in a real window
+    // on a library of the same size).
+    [TestMethod]
+    public void R10_ARefreshOnALibraryOfSeveralThousandIsOneRowStepAndOneLayout()
+    {
+        string root = Path.Combine(_root, "several-thousand");
+        Directory.CreateDirectory(root);
+        LargeLibraryFixture.Create(root, BoardBudgetTests.SeveralThousand);
+        using DiskLibrarySession disk = Load(root, Path.Combine(root, "settings"));
+        Assert.HasCount(BoardBudgetTests.SeveralThousand, disk.Manuscripts);
+        MemorySession session = WholeLibrary(disk);
+        Write(Headless.Run(() =>
+        {
+            var facts = new List<string>();
+            using BoardWindow board = BoardWindow.Show(session, ThemeVariant.Light);
+            HiddenShelfPreparer preparer = Still(board);
+            Assert.AreEqual(FirstPreparationSteps, preparer.RunToEnd(), "The first preparation's steps.");
+            Assert.IsTrue(preparer.IsPrepared, "Published is prepared.");
+            ShelfViewModel published = board.Board.Shelves[1];
+            int all = published.Cards.Count;
+            Assert.IsGreaterThan(1000, all, "Published holds over a thousand cards.");
+            int searched = -1;
+            foreach ((string text, string what) in new[] { (BoardMeasurement.SearchText, "the search"), (string.Empty, "the search cleared") })
+            {
+                board.Board.SearchText = text;
+                board.Board.Render();
+                Settle(board);
+                int cards = published.Cards.Count;
+                if (text.Length > 0)
+                {
+                    searched = cards;
+                }
+
+                Assert.IsTrue(published.RowsAreStale, $"{what}: Published's rows wait for the refresh.");
+                Assert.IsFalse(preparer.IsPrepared, $"{what}: Published is not called prepared.");
+                using var refills = new RowRefills(published);
+                int madeBefore = CardView.MadeCount;
+                var clock = System.Diagnostics.Stopwatch.StartNew();
+                Assert.IsTrue(preparer.RunStep(), $"{what}: the first refresh step ran.");
+                clock.Stop();
+                Assert.AreEqual("R", preparer.Steps[^1].Kind, $"{what}: the first refresh step is R.");
+                Assert.IsFalse(published.RowsAreStale, $"{what}: one R brought every row to the cards.");
+                int rowsRefilled = refills.Count;
+                Assert.IsGreaterThan(0, rowsRefilled, $"{what}: R refilled, added or removed rows.");
+                Assert.IsTrue(preparer.RunStep(), $"{what}: the second refresh step ran.");
+                Assert.IsTrue(preparer.Steps[^1] is { Kind: "L", Cap: null }, $"{what}: the second refresh step is a full-size L.");
+                Assert.IsFalse(preparer.RunStep(), $"{what}: no third step.");
+                Assert.IsTrue(preparer.IsPrepared, $"{what}: Published is prepared again.");
+                facts.Add(FormattableString.Invariant($"{what}: {cards} of {all} cards; R refilled, added or removed {rowsRefilled} rows; R and L made {CardView.MadeCount - madeBefore} card views; R took {clock.Elapsed.TotalMilliseconds:0} ms on the Stopwatch (report-only, headless)"));
+            }
+
+            Assert.IsLessThan(all / 2, searched, $"The search took most of Published's cards off ({searched} of {all} left).");
+            using var atSwitch = new RowRefills(published);
+            int before = CardView.MadeCount;
+            Switch(board, 1);
+            Assert.AreEqual(0, CardView.MadeCount - before, "The switch after the last refresh made no card view.");
+            Assert.AreEqual(0, atSwitch.Count, "The switch after the last refresh refilled no row.");
+            AssertDrawnRight(board, "after the refresh on a library of several thousand");
+            facts.Add($"the switch after the last refresh made 0 card views and refilled 0 rows; {preparer.StepsRun} steps in the session");
+            return facts;
         }));
     }
     // T6: the window's tree and Tab walk with preparation done, against the

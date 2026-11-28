@@ -38,17 +38,20 @@ and counts toward no verdict.
 
 -BeforeIdle and -AfterIdle tell each side of a with-and-without comparison
 of preparing Published while the Board is idle which side it is (none,
-width, half or prepared): "--after-idle <side>" in a window, the
-PAPERROUTE_TRIAL_AFTER_IDLE variable headless. Such a run times
+width, half or prepared, or a side of another scenario of the method's
+section 13, such as key-none and key-step): "--after-idle <side>" in a
+window, the PAPERROUTE_TRIAL_AFTER_IDLE variable headless. Such a run times
 first-switch-published-after-idle in place of first-switch-published, after
-the same wait on every side. Give the same build as -Before and -After, so
-the pairs compare the sides and nothing else, and two different sides. A
-run whose JSON names another idle side than its build was given (or one
-when none was) is dropped and its pair replaced. A run whose preparation
-stopped (a slow step) did not time that switch: it is dropped and its pair
-replaced, and the summary lists those drops apart, since whether a step is
-slow is a timing. The two preparation rows, which come before the switch,
-are reported and never block: they time the work moved out of the switch.
+the same wait on every side, and before it the rows of its scenario. Give
+the same build as -Before and -After, so the pairs compare the sides and
+nothing else, and two different sides of the same scenario; the scaling
+sides run headless only. A run whose JSON names another idle side than its
+build was given (or one when none was) is dropped and its pair replaced. A
+run whose preparation stopped (a slow step) did not time that switch: it is
+dropped and its pair replaced, and the summary lists those drops apart,
+since whether a step is slow is a timing. The preparation rows and the idle
+refresh rows, which come before the switch, are reported and never block:
+they time the work moved out of the switch.
 
 -Analyze reads a sitting's folder again without running anything, so the
 rule can be checked on saved or canned files. -Pool adds earlier sittings of
@@ -94,8 +97,8 @@ param(
     [Parameter(ParameterSetName = 'Run')] [ValidateSet('None', 'Spin', 'Memory')] [string] $Load = 'None',
     # The idle side of each build's runs (given together, or neither): with
     # the same build on both sides, the pairs compare the sides.
-    [Parameter(ParameterSetName = 'Run')] [ValidateSet('none', 'width', 'half', 'prepared')] [string] $BeforeIdle,
-    [Parameter(ParameterSetName = 'Run')] [ValidateSet('none', 'width', 'half', 'prepared')] [string] $AfterIdle,
+    [Parameter(ParameterSetName = 'Run')] [ValidateSet('none', 'width', 'half', 'prepared', 'mid-step', 'key-none', 'key-step', 'timer-none', 'timer-on', 'search-pending', 'search-refreshed', 'maximise-none', 'maximise-prepared', 'scaling-none', 'scaling-prepared', 'theme-none', 'theme-prepared')] [string] $BeforeIdle,
+    [Parameter(ParameterSetName = 'Run')] [ValidateSet('none', 'width', 'half', 'prepared', 'mid-step', 'key-none', 'key-step', 'timer-none', 'timer-on', 'search-pending', 'search-refreshed', 'maximise-none', 'maximise-prepared', 'scaling-none', 'scaling-prepared', 'theme-none', 'theme-prepared')] [string] $AfterIdle,
     # A run still going after this many minutes is stopped and its pair
     # replaced. 0 takes the mode's default: 15 headless, 3 in a window.
     [Parameter(ParameterSetName = 'Run')] [ValidateRange(0, 120)] [int] $RunLimitMinutes = 0,
@@ -129,6 +132,25 @@ $VerdictHeading = 'Verdict on the budgets (method, section 7, in force since Nov
 $TestName = 'PaperRoute.Desktop.Tests.BoardBudgetTests.EveryRowIsMeasuredOnTheExampleAndTheFiveHundredLibrary'
 # How a headless run is told its idle side (BoardBudgetTests.AfterIdleVariable).
 $AfterIdleVariable = 'PAPERROUTE_TRIAL_AFTER_IDLE'
+# The scenario of each idle side (IdleSides.ScenarioOf): every side of a
+# scenario writes the same rows, so only two sides of one scenario are
+# compared. The scaling scenario runs headless only: a real window cannot
+# change its own display scaling.
+$IdleScenarios = [ordered]@{
+    'none' = 'switch'; 'width' = 'switch'; 'half' = 'switch'; 'prepared' = 'switch'; 'mid-step' = 'switch'
+    'key-none' = 'key'; 'key-step' = 'key'
+    'timer-none' = 'timer'; 'timer-on' = 'timer'
+    'search-pending' = 'search'; 'search-refreshed' = 'search'
+    'maximise-none' = 'maximise'; 'maximise-prepared' = 'maximise'
+    'scaling-none' = 'scaling'; 'scaling-prepared' = 'scaling'
+    'theme-none' = 'theme'; 'theme-prepared' = 'theme'
+}
+$HeadlessOnlyScenarios = @('scaling')
+# In a sitting of idle sides, the rows that time work idle preparation moves
+# out of the switch, before it (BoardMeasurement's preparation rows and
+# RefreshRows): they read about 0 on a side that does not prepare or
+# refresh, by design, so they are reported and never block.
+$PreparationRows = @('prepare-published-idle', 'prepare-published-longest-step', 'refresh-published-timer', 'refresh-published-after-search', 'refresh-published-after-clear', 'refresh-published-after-theme')
 
 function Get-Field($object, [string] $name) {
     if ($null -eq $object) { return $null }
@@ -449,7 +471,10 @@ function Get-Summary($sittings) {
         $lines.Add("Load: $($record.load)$(if ($null -ne $loadFor) { " for $loadFor s" }) under every $aName run. The counts compare the PC with and without the added load, not two builds; others busy includes the added load.")
     }
     $bIdle = [string] (Get-Field $record 'beforeIdle'); $aIdle = [string] (Get-Field $record 'afterIdle')
-    if ($bIdle -or $aIdle) { $lines.Add("Idle sides: $bName runs with --after-idle $bIdle, $aName with --after-idle $aIdle. Both wait alike before the first switch (preparation done, a fixed idle period, one frame). With the same build on both sides, the counts compare the sides.") }
+    if ($bIdle -or $aIdle) {
+        $scenario = if ($IdleScenarios.Contains($aIdle)) { " Scenario: $($IdleScenarios[$aIdle])." } else { '' }
+        $lines.Add("Idle sides: $bName runs with --after-idle $bIdle, $aName with --after-idle $aIdle.$scenario Both wait alike before the first switch (preparation done, the scenario's rows, a fixed idle period, one frame; a maximise or a scaling change and its frame after it). With the same build on both sides, the counts compare the sides.")
+    }
     $lines.Add("Primary row (named before the runs): $primary, expected lower. Expected to rise: $(if ($rise.Count) { $rise -join ', ' } else { 'none' }).")
     $lines.Add('The deciding sitting is the one the pull request named before the runs; every sitting is listed in it.')
     $index = 0
@@ -551,12 +576,13 @@ function Get-Summary($sittings) {
 
     # Watch rows: each sitting on its own. Higher once: a new sitting for that
     # row. Higher again in another sitting: it blocks the merge. In a sitting
-    # of idle sides the two preparation rows are not watch rows: they time
-    # the work idle preparation moves out of the switch, before it, so they
-    # read about 0 on the side none and more on a side that prepares, by
-    # design; they are reported and never block (the longest step is judged
-    # on its own, in a real window, against the UI thread budget).
-    $preparationRows = if ($bIdle -or $aIdle) { @('prepare-published-idle', 'prepare-published-longest-step') } else { @() }
+    # of idle sides the preparation rows and the idle refresh rows are not
+    # watch rows: they time the work idle preparation moves out of the
+    # switch, before it, so they read about 0 on a side that does not
+    # prepare or refresh and more on one that does, by design; they are
+    # reported and never block (the longest step is judged on its own, in a
+    # real window, against the UI thread budget).
+    $preparationRows = if ($bIdle -or $aIdle) { $PreparationRows } else { @() }
     $lines.Add('')
     $lines.Add('Watch rows (every row not named; UI higher after, ties count against):')
     $flagged = 0
@@ -682,6 +708,12 @@ if ($PSCmdlet.ParameterSetName -eq 'Run') {
     if ($BeforeName -eq $AfterName) { throw '-BeforeName and -AfterName must differ.' }
     if ([bool] $BeforeIdle -ne [bool] $AfterIdle) { throw '-BeforeIdle and -AfterIdle are given together: each side of an idle comparison times the first switch after idle.' }
     if ($BeforeIdle -and $BeforeIdle -eq $AfterIdle) { throw "-BeforeIdle and -AfterIdle both name the side $BeforeIdle, so the pairs would compare a side with itself; give two different sides." }
+    if ($BeforeIdle) {
+        # ValidateSet ignores case; the measurement does not.
+        foreach ($side in $BeforeIdle, $AfterIdle) { if (-not $IdleScenarios.Contains($side) -or @($IdleScenarios.Keys) -cnotcontains $side) { throw "No idle side is called $side; the sides are written in lower case." } }
+        if ($IdleScenarios[$BeforeIdle] -ne $IdleScenarios[$AfterIdle]) { throw "-BeforeIdle $BeforeIdle belongs to the scenario $($IdleScenarios[$BeforeIdle]) and -AfterIdle $AfterIdle to $($IdleScenarios[$AfterIdle]); only two sides of the same scenario write the same rows and are compared." }
+        if ($Mode -eq 'window' -and $HeadlessOnlyScenarios -contains $IdleScenarios[$BeforeIdle]) { throw "The scenario $($IdleScenarios[$BeforeIdle]) runs headless only: a real window cannot change its own display scaling." }
+    }
     foreach ($pathName in 'Before', 'After') {
         if (-not (Test-Path -LiteralPath (Get-Variable $pathName -ValueOnly))) { throw "Nothing at the -$pathName path." }
         Set-Variable $pathName ([IO.Path]::GetFullPath((Get-Variable $pathName -ValueOnly), (Get-Location).ProviderPath))

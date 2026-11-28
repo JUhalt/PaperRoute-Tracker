@@ -113,6 +113,29 @@ public sealed record MeasurementConditions
 // itself, then waits alike on every side (a fixed idle period, then one
 // frame) and times the first switch as first-switch-published-after-idle. A
 // run told no side is today's run: its first switch is first-switch-published.
+//
+// A first switch happens once per window, so each of the design's rows that
+// needs one of its own has its own scenario, and each scenario two sides (or
+// more) that write the same rows: one without preparation, one with it. Only
+// two sides of one scenario are compared in a sitting. The scenarios:
+// - switch (none, width, half, prepared, mid-step): the first switch after
+//   the side's steps (rows 1 to 4); mid-step asks for the switch as the last
+//   step starts, so the step runs first (row 11).
+// - key (key-none, key-step): a search keystroke that meets the last step
+//   (row 6, its first half).
+// - timer (timer-none, timer-on): the Board's own idle timer prepares
+//   Published, timed from the first frame (row 5); then a key typed after a
+//   0.5 s pause in a search, and the timer's refresh (row 6, its second half).
+// - search (search-pending, search-refreshed): a search typed, cleared and
+//   typed again while Published is prepared and hidden, with or without the
+//   idle refresh after each, then the first switch (rows 8 and 10).
+// - maximise (maximise-none, maximise-prepared): the first switch within
+//   0.4 s of a maximise (row 12).
+// - scaling (scaling-none, scaling-prepared): the first switch after a
+//   change of the display scaling (row 12); headless only, as a real window
+//   cannot change its own scaling.
+// - theme (theme-none, theme-prepared): managed memory before and after
+//   preparation, then a theme change and its refresh (row 9).
 public static class IdleSides
 {
     // No preparation: the wait only.
@@ -127,19 +150,97 @@ public static class IdleSides
     // Every step, until the Board says Published is prepared.
     public const string Prepared = "prepared";
 
-    public static IReadOnlyList<string> All { get; } = [None, Width, Half, Prepared];
+    // Every step but the last (W and the three capped layout steps); the
+    // last, full-size step runs inside the first switch's row, as when the
+    // switch is asked for while that step runs.
+    public const string MidStep = "mid-step";
+
+    // The key scenario: no preparation, or every step but the last, which
+    // runs inside the keystroke's row.
+    public const string KeyNone = "key-none";
+    public const string KeyStep = "key-step";
+
+    // The timer scenario: the timer off, or on until Published is prepared.
+    public const string TimerNone = "timer-none";
+    public const string TimerOn = "timer-on";
+
+    // The search scenario: both prepare; the idle refresh runs only on
+    // search-refreshed.
+    public const string SearchPending = "search-pending";
+    public const string SearchRefreshed = "search-refreshed";
+
+    public const string MaximiseNone = "maximise-none";
+    public const string MaximisePrepared = "maximise-prepared";
+
+    public const string ScalingNone = "scaling-none";
+    public const string ScalingPrepared = "scaling-prepared";
+
+    public const string ThemeNone = "theme-none";
+    public const string ThemePrepared = "theme-prepared";
+
+    // The scenarios (ScenarioOf).
+    public const string SwitchScenario = "switch";
+    public const string KeyScenario = "key";
+    public const string TimerScenario = "timer";
+    public const string SearchScenario = "search";
+    public const string MaximiseScenario = "maximise";
+    public const string ScalingScenario = "scaling";
+    public const string ThemeScenario = "theme";
+
+    // The number of steps before the last, full-size one on the sides that
+    // stop there (mid-step, key-step): W and the ladder's three capped steps
+    // (HiddenShelfPreparer.LadderSteps, which a test holds equal).
+    public const int StepsBeforeTheLast = 4;
+
+    public static IReadOnlyList<string> All { get; } =
+    [
+        None, Width, Half, Prepared, MidStep,
+        KeyNone, KeyStep,
+        TimerNone, TimerOn,
+        SearchPending, SearchRefreshed,
+        MaximiseNone, MaximisePrepared,
+        ScalingNone, ScalingPrepared,
+        ThemeNone, ThemePrepared,
+    ];
 
     public static bool IsKnown(string? side) => side is not null && All.Contains(side, StringComparer.Ordinal);
 
-    // How many steps the side runs: null for every step due.
+    // How many steps the side runs before the first switch's wait: null for
+    // every step due (by the timer on timer-on).
     public static int? StepsFor(string side) => side switch
     {
-        None => 0,
+        None or KeyNone or TimerNone or MaximiseNone or ScalingNone or ThemeNone => 0,
         Width => 1,
         Half => 3,
-        Prepared => null,
+        MidStep or KeyStep => StepsBeforeTheLast,
+        Prepared or TimerOn or SearchPending or SearchRefreshed or MaximisePrepared or ScalingPrepared or ThemePrepared => null,
         _ => throw new ArgumentException($"No idle side is called {side}.", nameof(side)),
     };
+
+    // The scenario a side belongs to; two sides are compared only when they
+    // belong to the same one.
+    public static string ScenarioOf(string side) => side switch
+    {
+        None or Width or Half or Prepared or MidStep => SwitchScenario,
+        KeyNone or KeyStep => KeyScenario,
+        TimerNone or TimerOn => TimerScenario,
+        SearchPending or SearchRefreshed => SearchScenario,
+        MaximiseNone or MaximisePrepared => MaximiseScenario,
+        ScalingNone or ScalingPrepared => ScalingScenario,
+        ThemeNone or ThemePrepared => ThemeScenario,
+        _ => throw new ArgumentException($"No idle side is called {side}.", nameof(side)),
+    };
+
+    // Whether the side prepares Published at all.
+    public static bool Prepares(string side) => StepsFor(side) != 0;
+
+    // Whether the Board's own idle timer prepares Published on this side
+    // (the measurement drives every other side's steps itself).
+    public static bool ByTimer(string side) => side == TimerOn;
+
+    // Whether only a headless run can make the side's change: a real window
+    // cannot change its own display scaling.
+    public static bool HeadlessOnly(string side) => ScenarioOf(side) == ScalingScenario;
 }
 
 // What idle preparation did before the first switch of one library, in a run
@@ -149,8 +250,23 @@ public static class IdleSides
 // made. When preparation stopped, the switch is made untimed: the row is not
 // taken (idle-preparation design, section 8, row 1), so ViewsMadeAtSwitch is
 // null. Then what the wait before the switch did, which is the same on every
-// side: the idle period it waited, in ms, and the frames drawn from the end
-// of preparation to the switch.
+// side of a scenario: the idle period it waited, in ms, and the frames drawn
+// from the start of the idle period to the switch (1, or 2 where a maximise
+// or a scaling change and its frame come after the idle period).
+//
+// The rest are the counts the other scenarios add (IdleSides), each null or
+// empty where the scenario has none: SessionSteps, every step the session ran
+// up to and with the first switch (refreshes and a step met inside a row
+// included); StepsMet and StepsMetViews, the steps run inside the row a key or
+// a click meets (mid-step: the first switch; key-step: the keystroke; timer:
+// the pause and the key after it, expected none) and the card views they made;
+// RefreshSteps, the idle refresh steps (search, timer, theme); RowsStaleAtSwitch,
+// whether Published's rows were stale as the switch began (the switch then
+// refills them); ManagedBytesBefore and ManagedBytesAfter, the managed heap
+// after a full collection before and after preparation (theme); StepFrameMs,
+// the frame drawn after each step the measurement drove, in ms (row 13); and
+// ChangeToSwitchMs, from the start of a maximise or a scaling change to the
+// start of the switch.
 public sealed record IdlePreparationRecord(
     string Library,
     string Side,
@@ -161,7 +277,26 @@ public sealed record IdlePreparationRecord(
     bool FirstSwitchTaken,
     int? ViewsMadeAtSwitch,
     double IdleWaitMs,
-    int FramesBeforeSwitch);
+    int FramesBeforeSwitch)
+{
+    public int SessionSteps { get; init; }
+
+    public int? StepsMet { get; init; }
+
+    public int? StepsMetViews { get; init; }
+
+    public int? RefreshSteps { get; init; }
+
+    public bool RowsStaleAtSwitch { get; init; }
+
+    public long? ManagedBytesBefore { get; init; }
+
+    public long? ManagedBytesAfter { get; init; }
+
+    public IReadOnlyList<double> StepFrameMs { get; init; } = [];
+
+    public double? ChangeToSwitchMs { get; init; }
+}
 
 // The numbers of one measurement run, headless (the budget tests) or in a
 // real window ("--measure", d1 7.3), and how they are written as JSON: per
@@ -494,6 +629,24 @@ public sealed class BoardMeasurementReport
 
             json.WriteNumber("idleWaitMs", Math.Round(record.IdleWaitMs, 1));
             json.WriteNumber("framesBeforeSwitch", record.FramesBeforeSwitch);
+
+            // The counts of the other scenarios: null where the scenario has none.
+            json.WriteString("scenario", IdleSides.IsKnown(record.Side) ? IdleSides.ScenarioOf(record.Side) : null);
+            json.WriteNumber("sessionSteps", record.SessionSteps);
+            WriteNumberOrNull(json, "stepsMet", record.StepsMet, 0);
+            WriteNumberOrNull(json, "stepsMetViews", record.StepsMetViews, 0);
+            WriteNumberOrNull(json, "refreshSteps", record.RefreshSteps, 0);
+            json.WriteBoolean("rowsStaleAtSwitch", record.RowsStaleAtSwitch);
+            WriteNumberOrNull(json, "managedBytesBefore", record.ManagedBytesBefore, 0);
+            WriteNumberOrNull(json, "managedBytesAfter", record.ManagedBytesAfter, 0);
+            json.WriteStartArray("stepFrameMs");
+            foreach (double frame in record.StepFrameMs)
+            {
+                json.WriteNumberValue(Math.Round(frame, 1));
+            }
+
+            json.WriteEndArray();
+            WriteNumberOrNull(json, "changeToSwitchMs", record.ChangeToSwitchMs, 1);
             json.WriteEndObject();
         }
 
@@ -578,8 +731,35 @@ public sealed class BoardMeasurementReport
         string switched = idle.FirstSwitchTaken
             ? string.Create(CultureInfo.InvariantCulture, $"the first switch after idle made {idle.ViewsMadeAtSwitch} card views")
             : "the first switch after idle was made but not timed";
-        return string.Create(CultureInfo.InvariantCulture,
+        string line = string.Create(CultureInfo.InvariantCulture,
             $"Idle side {idle.Side} ({idle.Library}): {idle.StepsRun} preparation steps made {idle.ViewsMade} card views; Published {(idle.Prepared ? "prepared" : "not prepared")} at the switch; {(idle.SkippedReason is { } reason ? "preparation stopped: " + reason : "preparation not stopped")}; {switched}.");
+        var more = new List<string>();
+        if (idle.StepsMet is { } met)
+        {
+            more.Add(string.Create(CultureInfo.InvariantCulture, $"{met} steps met by the key or the click ({idle.StepsMetViews ?? 0} card views)"));
+        }
+
+        if (idle.RefreshSteps is { } refresh)
+        {
+            more.Add(string.Create(CultureInfo.InvariantCulture, $"{refresh} idle refresh steps"));
+        }
+
+        if (idle.ManagedBytesBefore is { } before && idle.ManagedBytesAfter is { } after)
+        {
+            more.Add(string.Create(CultureInfo.InvariantCulture, $"managed memory {before / 1024.0 / 1024.0:0.0} MB before preparation, {after / 1024.0 / 1024.0:0.0} MB after"));
+        }
+
+        if (idle.ChangeToSwitchMs is { } change)
+        {
+            more.Add(string.Create(CultureInfo.InvariantCulture, $"{change:0} ms from the change to the switch"));
+        }
+
+        if (more.Count > 0 || idle.SessionSteps != idle.StepsRun)
+        {
+            more.Insert(0, string.Create(CultureInfo.InvariantCulture, $"{idle.SessionSteps} steps in the session; Published's rows {(idle.RowsStaleAtSwitch ? "stale" : "current")} at the switch"));
+        }
+
+        return more.Count == 0 ? line : line + " " + string.Join("; ", more) + ".";
     }
 
     public const string LocalFileMessage = "\"--measure\" needs a local file path such as C:\\Measurements\\board.json.";

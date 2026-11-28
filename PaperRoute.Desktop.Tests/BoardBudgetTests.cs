@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Avalonia.Automation.Peers;
 using Avalonia.Controls;
 using Avalonia.Headless;
@@ -94,6 +95,20 @@ public sealed class BoardBudgetTests : StorageCheckedTests
     // The folder the manual writer fills and "--measure" opens (d1 7.3),
     // under the repository's ignored TestResults folder.
     public static readonly string MeasurementFolder = Path.Combine("TestResults", "v11-trial", "large-500");
+
+    // The library of several thousand for the search scenario's refresh in a
+    // real window (idle-preparation design, section 8, row 10), written by
+    // its own manual writer.
+    public const int SeveralThousand = 3000;
+    public static readonly string SeveralThousandFolder = Path.Combine("TestResults", "v11-trial", "large-3000");
+
+    // The window's size in every measured run, and the size the headless
+    // runs give for a maximise: the headless platform has no screen to
+    // maximise to, so a resize to a full-HD screen less a taskbar stands in.
+    public const double Width = 1280;
+    public const double Height = 800;
+    public const double MaximisedWidth = 1920;
+    public const double MaximisedHeight = 1040;
 
     private static readonly TimeSpan s_runLimit = TimeSpan.FromMinutes(10);
 
@@ -241,24 +256,25 @@ public sealed class BoardBudgetTests : StorageCheckedTests
         }
     }
 
-    // Where the idle rows (BoardMeasurement.IdleRows) sit in one library's
+    // Where the idle rows (BoardMeasurement.IdleRowsFor) sit in one library's
     // rows. In a run told no side: none of them, and today's first switch and
     // its paint right after the startup rows and before the switch back to
-    // Pipeline. In a run told a side: the idle rows there instead, in their
-    // order (without the switch and its paint when preparation stopped and
-    // the switch was not timed), each report-only, shown against its budget
-    // for scale, waiting by design only where a frame is part of it, with
-    // the note that it is compared only between the two sides of a sitting;
-    // and today's first switch nowhere. A row removed, moved, doubled or not
-    // report-only fails.
+    // Pipeline. In a run told a side: the side's idle rows there instead, in
+    // their order (the two preparation rows, the scenario's rows, then the
+    // switch and its paint, left out when preparation stopped and the switch
+    // was not timed), each report-only, shown against its budget for scale,
+    // waiting by design only where a frame or a wait is part of it, with the
+    // note that it is compared only between the two sides of a sitting; and
+    // today's first switch, and every idle row of another scenario, nowhere.
+    // A row removed, moved, doubled or not report-only fails.
     public static void CheckIdleRows(IReadOnlyList<MeasuredRow> rows, string? side, bool switchTaken = true)
     {
         ArgumentNullException.ThrowIfNull(rows);
         string[] ids = rows.Select(row => row.Id).ToArray();
         string[] expected = side is null
             ? [BoardMeasurement.FirstSwitchToPublished, BoardMeasurement.FirstSwitchToPublishedPaint]
-            : BoardMeasurement.IdleRows.Take(switchTaken ? BoardMeasurement.IdleRows.Count : 2).ToArray();
-        string[] watched = [BoardMeasurement.FirstSwitchToPublished, BoardMeasurement.FirstSwitchToPublishedPaint, .. BoardMeasurement.IdleRows];
+            : BoardMeasurement.IdleRowsFor(side, switchTaken).ToArray();
+        string[] watched = [BoardMeasurement.FirstSwitchToPublished, BoardMeasurement.FirstSwitchToPublishedPaint, .. BoardMeasurement.AllIdleRows];
         foreach (string id in watched)
         {
             Assert.AreEqual(expected.Contains(id) ? 1 : 0, ids.Count(item => item == id), $"{id} is timed {(expected.Contains(id) ? "once" : "not at all")} in a run told {side ?? "no idle side"}.");
@@ -278,18 +294,31 @@ public sealed class BoardBudgetTests : StorageCheckedTests
         {
             Assert.IsTrue(row.Informational, $"{row.Id} is report-only.");
             Assert.Contains(BoardMeasurement.BetweenSides, row.Note, $"{row.Id}'s note says it is compared only between the two sides of a sitting.");
-            (double budget, string name, bool waits) = row.Id switch
-            {
-                BoardMeasurement.PreparePublishedIdle => (BoardMeasurement.FilterKeystrokeBudget, "filter keystroke", true),
-                BoardMeasurement.PreparePublishedLongestStep => (BoardMeasurement.UiThreadBudget, "UI thread", false),
-                BoardMeasurement.FirstSwitchToPublishedAfterIdle => (BoardMeasurement.PageSwitchBudget, "page switch", false),
-                _ => (BoardMeasurement.UiThreadBudget, "UI thread", true),
-            };
+            (double budget, string name, bool waits) = IdleRowShape(row.Id);
             Assert.AreEqual(budget, row.BudgetMs, $"{row.Id} is shown against the {name} budget.");
             Assert.AreEqual(name, row.BudgetName, row.Id);
             Assert.AreEqual(waits, row.Waits, $"{row.Id} waits by design: {waits}.");
         }
     }
+
+    // The budget each idle row is shown against, for scale only, and whether
+    // it waits by design: the preparation and refresh rows (a frame after
+    // each step, or the idle timer's waits), the maximise (the window's new
+    // size) and the paint.
+    public static (double Budget, string Name, bool Waits) IdleRowShape(string id) => id switch
+    {
+        BoardMeasurement.PreparePublishedIdle => (BoardMeasurement.FilterKeystrokeBudget, "filter keystroke", true),
+        BoardMeasurement.PreparePublishedLongestStep => (BoardMeasurement.UiThreadBudget, "UI thread", false),
+        BoardMeasurement.FirstSwitchToPublishedAfterIdle => (BoardMeasurement.PageSwitchBudget, "page switch", false),
+        BoardMeasurement.FirstSwitchToPublishedAfterIdlePaint => (BoardMeasurement.UiThreadBudget, "UI thread", true),
+        BoardMeasurement.SearchKeystrokeStepDue or BoardMeasurement.SearchKeystrokeAfterPause
+            or BoardMeasurement.SearchKeystrokePublishedPrepared or BoardMeasurement.SearchClearedPublishedPrepared => (BoardMeasurement.FilterKeystrokeBudget, "filter keystroke", false),
+        BoardMeasurement.RefreshPublishedTimer or BoardMeasurement.RefreshPublishedAfterSearch
+            or BoardMeasurement.RefreshPublishedAfterClear or BoardMeasurement.RefreshPublishedAfterTheme => (BoardMeasurement.UiThreadBudget, "UI thread", true),
+        BoardMeasurement.MaximiseWindow => (BoardMeasurement.UiThreadBudget, "UI thread", true),
+        BoardMeasurement.ScalingChange or BoardMeasurement.ThemeChange => (BoardMeasurement.UiThreadBudget, "UI thread", false),
+        _ => throw new AssertFailedException($"{id} is not an idle row."),
+    };
 
     // CheckIdleRows, on canned rows: it passes on the orders the measurement
     // writes and fails when an idle row is removed, moved, doubled or not
@@ -482,6 +511,172 @@ public sealed class BoardBudgetTests : StorageCheckedTests
         }
     }
 
+    // The rows of the other scenarios (IdleSides; idle-preparation design,
+    // section 8, rows 5, 6, 8, 9, 11, 12 and 13), one run per side, each on
+    // the library where its counts mean something: the 500 library for a
+    // side that prepares, the example for one that does not. The preparer's
+    // clock stands still, so no step reads as slow; on timer-on, whose idle
+    // rules read that clock, the real clock runs with the slow-step limit
+    // raised instead, so the stop cannot fire and only the counts are held.
+    // Counts only, which are load-free; the times are reported, never read.
+    // The rows sit where CheckIdleRows says and the two last rows stay last;
+    // every side of a scenario waits alike; every step of the session is
+    // counted once; and each scenario did what it says: the last step met
+    // by the switch or the key, no step in the pause before a key, the idle
+    // refresh's steps, Published's rows at the switch, the managed heap read,
+    // and no step between a maximise or a scaling change and the switch.
+    [TestMethod]
+    [DataRow(IdleSides.MidStep, "500")]
+    [DataRow(IdleSides.KeyNone, "example")]
+    [DataRow(IdleSides.KeyStep, "500")]
+    [DataRow(IdleSides.TimerNone, "example")]
+    [DataRow(IdleSides.TimerOn, "500")]
+    [DataRow(IdleSides.SearchPending, "500")]
+    [DataRow(IdleSides.SearchRefreshed, "500")]
+    [DataRow(IdleSides.MaximiseNone, "example")]
+    [DataRow(IdleSides.MaximisePrepared, "500")]
+    [DataRow(IdleSides.ScalingNone, "example")]
+    [DataRow(IdleSides.ScalingPrepared, "500")]
+    [DataRow(IdleSides.ThemeNone, "example")]
+    [DataRow(IdleSides.ThemePrepared, "500")]
+    public void TheScenarioRowsAreMeasuredForEachSide(string side, string library)
+    {
+        DateTime today = DateTime.Today;
+        bool large = library == "500";
+        using DiskLibrarySession session = large
+            ? Unloaded("five-hundred", today, root => LargeLibraryFixture.Create(root, 500))
+            : Unloaded("example", today, root => LargeLibraryFixture.WriteExample(root));
+        Action<BoardView> prepare = IdleSides.ByTimer(side) ? NoSlowStop : StillPreparer;
+        (IReadOnlyList<MeasuredRow> rows, _, IReadOnlyList<IdlePreparationRecord> idle) =
+            Headless.Run(() => MeasureLibrary(library, session, requireChanges: large, side, prepare), s_runLimit);
+        BoardMeasurementReport report = Report(rows, today, "the computer's date", heldLibrary: string.Empty, idle: idle);
+        TestContext.WriteLine(report.ToTable());
+        Assert.IsEmpty(report.Failures(), "Nothing is held here.");
+
+        CheckIdleRows(rows, side);
+        CheckLastRows(rows);
+        IdlePreparationRecord record = idle.Single();
+        TestContext.WriteLine(BoardMeasurementReport.DescribeIdlePreparation(record));
+        Assert.AreEqual(library, record.Library);
+        Assert.AreEqual(side, record.Side);
+        Assert.IsNull(record.SkippedReason, "Preparation did not stop.");
+        Assert.IsTrue(record.FirstSwitchTaken, "The first switch after idle was timed.");
+        Assert.Contains("0 idle preparation steps inside", rows.Single(row => row.Id == BoardMeasurement.WarmStartup).Note, "No step ran inside warm startup.");
+        string scenario = IdleSides.ScenarioOf(side);
+        bool change = scenario is IdleSides.MaximiseScenario or IdleSides.ScalingScenario;
+        Assert.IsGreaterThanOrEqualTo(BoardMeasurement.IdlePeriod.TotalMilliseconds, record.IdleWaitMs, $"The side {side} waited the whole idle period.");
+        Assert.AreEqual(change ? 2 : 1, record.FramesBeforeSwitch, $"The side {side} drew one frame after the idle period{(change ? ", and one after its change" : string.Empty)}.");
+        Assert.AreEqual(change, record.ChangeToSwitchMs is not null, "Only a maximise or a scaling change is timed to the switch.");
+
+        const int full = 1 + HiddenShelfPreparer.LadderSteps + 1;
+        int before = side is IdleSides.MidStep or IdleSides.KeyStep ? IdleSides.StepsBeforeTheLast : IdleSides.Prepares(side) ? full : 0;
+        Assert.AreEqual(before, record.StepsRun, "The side ran its steps before its scenario.");
+        Assert.AreEqual(record.StepsRun + (record.StepsMet ?? 0) + (record.RefreshSteps ?? 0), record.SessionSteps, "Every step of the session is counted once: the preparation, a step met by a key or a click, the refresh.");
+        int driven = IdleSides.ByTimer(side) ? 0 : record.StepsRun + (scenario is IdleSides.SearchScenario or IdleSides.ThemeScenario ? record.RefreshSteps ?? 0 : 0);
+        Assert.HasCount(driven, record.StepFrameMs, "A frame is timed after every step the measurement drove.");
+        if (!IdleSides.Prepares(side))
+        {
+            Assert.AreEqual(0, record.SessionSteps, "A side that does not prepare runs no step.");
+            Assert.AreEqual(0, record.ViewsMade, "A side that does not prepare makes no card view before the switch.");
+
+            // The timer scenario's switch shows the search's cards, and the
+            // example's Published shelf holds none that match it.
+            if (scenario != IdleSides.TimerScenario)
+            {
+                Assert.IsGreaterThan(0, record.ViewsMadeAtSwitch ?? 0, "Its switch made the shelf's card views.");
+            }
+        }
+
+        switch (side)
+        {
+            case IdleSides.MidStep:
+            case IdleSides.KeyStep:
+                Assert.AreEqual(1, record.StepsMet, $"{side}: the last step ran inside the row and was met.");
+                Assert.IsGreaterThan(0, record.StepsMetViews ?? 0, $"{side}: the last step made card views.");
+                Assert.IsFalse(record.Prepared && side == IdleSides.MidStep, "mid-step: Published was not prepared as the switch was asked for.");
+                if (side == IdleSides.MidStep)
+                {
+                    Assert.AreEqual(record.StepsMetViews, record.ViewsMadeAtSwitch, "mid-step: after the last step the switch itself made no card view.");
+                }
+
+                break;
+            case IdleSides.KeyNone:
+                Assert.AreEqual(0, record.StepsMet, "key-none: no step met the key.");
+                break;
+            case IdleSides.TimerNone:
+                Assert.AreEqual(0, record.StepsMet, "timer-none: no step in the pause or the key.");
+                Assert.AreEqual(0, record.RefreshSteps, "timer-none: no refresh.");
+                break;
+            case IdleSides.TimerOn:
+                Assert.AreEqual(0, record.StepsMet, "timer-on: a key after a pause of 0.5 s met no step (a refresh waits for 2 s after a render).");
+                Assert.AreEqual(2, record.RefreshSteps, "timer-on: the timer's refresh after the search was one row step and one layout.");
+                Assert.IsTrue(record.Prepared, "timer-on: Published was prepared again at the switch.");
+                Assert.IsFalse(record.RowsStaleAtSwitch, "timer-on: its rows were current at the switch.");
+                Assert.AreEqual(0, record.ViewsMadeAtSwitch, "timer-on: the switch made no card view.");
+                break;
+            case IdleSides.SearchPending:
+                Assert.AreEqual(0, record.RefreshSteps, "search-pending: no refresh.");
+                Assert.IsTrue(record.RowsStaleAtSwitch, "search-pending: Published's rows waited for the switch.");
+                Assert.IsFalse(record.Prepared, "search-pending: Published was not prepared at the switch.");
+                break;
+            case IdleSides.SearchRefreshed:
+                Assert.AreEqual(6, record.RefreshSteps, "search-refreshed: each of the three refreshes was one row step and one layout.");
+                Assert.IsFalse(record.RowsStaleAtSwitch, "search-refreshed: Published's rows were current at the switch.");
+                Assert.IsTrue(record.Prepared, "search-refreshed: Published was prepared at the switch.");
+                Assert.AreEqual(0, record.ViewsMadeAtSwitch, "search-refreshed: the switch made no card view.");
+                break;
+            case IdleSides.MaximisePrepared:
+            case IdleSides.ScalingPrepared:
+                Assert.IsFalse(record.Prepared, $"{side}: after the change Published was no longer called prepared.");
+                Assert.AreEqual(full, record.SessionSteps, $"{side}: no step ran between the change and the switch.");
+                break;
+            case IdleSides.ThemeNone:
+            case IdleSides.ThemePrepared:
+                Assert.IsNotNull(record.ManagedBytesBefore, $"{side}: the managed heap was read before preparation.");
+                Assert.IsNotNull(record.ManagedBytesAfter, $"{side}: the managed heap was read after preparation.");
+                Assert.AreEqual(side == IdleSides.ThemePrepared ? 1 : 0, record.RefreshSteps, $"{side}: the refresh after the theme change.");
+                if (side == IdleSides.ThemePrepared)
+                {
+                    Assert.IsTrue(record.Prepared, "theme-prepared: Published was prepared again at the switch.");
+                    Assert.AreEqual(0, record.ViewsMadeAtSwitch, "theme-prepared: the switch made no card view.");
+                }
+
+                break;
+        }
+
+        if (scenario != IdleSides.ThemeScenario)
+        {
+            Assert.IsNull(record.ManagedBytesBefore, "Only the theme scenario takes a full collection.");
+        }
+    }
+
+    // The preparer on the real clock with the slow-step limit raised, so a
+    // busy PC cannot stop the idle timer: its idle rules read that clock.
+    private static void NoSlowStop(BoardView view) => view.Preparer.SlowSliceLimit = TimeSpan.FromHours(1);
+
+    // The pairs script knows the sides IdleSides knows, in the same order,
+    // each in its scenario, and the scaling scenario as headless only.
+    [TestMethod]
+    public void ThePairsScriptKnowsEverySideAndItsScenario()
+    {
+        string script = File.ReadAllText(Path.Combine(RepositoryRoot(), "ManualCertification", "Measure-BoardPairs.ps1"));
+        MatchCollection sets = Regex.Matches(script, @"\[ValidateSet\(([^)]*)\)\] \[string\] \$(BeforeIdle|AfterIdle)");
+        Assert.HasCount(2, sets, "-BeforeIdle and -AfterIdle each name their sides.");
+        foreach (Match set in sets)
+        {
+            string[] names = Regex.Matches(set.Groups[1].Value, "'([^']*)'").Select(name => name.Groups[1].Value).ToArray();
+            CollectionAssert.AreEqual(IdleSides.All.ToArray(), names, $"-{set.Groups[2].Value} names the sides IdleSides knows.");
+        }
+
+        foreach (string side in IdleSides.All)
+        {
+            Assert.Contains($"'{side}' = '{IdleSides.ScenarioOf(side)}'", script, $"The pairs script puts {side} in its scenario.");
+        }
+
+        string[] headlessOnly = IdleSides.All.Where(IdleSides.HeadlessOnly).Select(IdleSides.ScenarioOf).Distinct().ToArray();
+        Assert.Contains($"$HeadlessOnlyScenarios = @({string.Join(", ", headlessOnly.Select(name => $"'{name}'"))})", script, "The pairs script refuses the headless-only scenarios in a window.");
+    }
+
     // CheckLastRows, on canned rows: it passes on the order the measurement
     // writes and fails when either row is removed, moved or not report-only.
     [TestMethod]
@@ -593,6 +788,33 @@ public sealed class BoardBudgetTests : StorageCheckedTests
         TestContext.WriteLine($"  PaperRoute.Desktop\\bin\\Release\\net10.0\\PaperRoute.Desktop.exe --snapshot-from \"{folder}\" --measure \"{Path.Combine(repository, "TestResults", "v11-trial", "measure-1.json")}\"");
     }
 
+    // The library of several thousand written once into
+    // TestResults\v11-trial\large-3000 under the repository, for the search
+    // scenario's refresh in a real window (idle-preparation design, section
+    // 8, row 10):
+    //   PaperRoute.Desktop.exe --snapshot-from <that folder> --measure <file>.json --after-idle search-refreshed
+    // Run by hand (TestCategory Manual).
+    [TestMethod]
+    [TestCategory(ManualCategory)]
+    public void WriteSeveralThousandLibraryForMeasurement()
+    {
+        string repository = RepositoryRoot();
+        string folder = Path.Combine(repository, SeveralThousandFolder);
+        Assert.EndsWith(Path.Combine("TestResults", "v11-trial", "large-3000"), folder);
+        if (Directory.Exists(folder))
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+
+        Directory.CreateDirectory(folder);
+        LargeLibraryFixture.SyntheticLibrary library = LargeLibraryFixture.Create(folder, SeveralThousand);
+        Assert.HasCount(SeveralThousand, library.Manuscripts);
+        Assert.IsGreaterThan(1000, library.Manuscripts.Count(manuscript => manuscript.Location == ManuscriptLocation.Published), "Published holds over a thousand manuscripts.");
+        Assert.IsNull(ReadOnlySnapshot.RefusalFor(folder), "The trial's --snapshot-from accepts the folder.");
+        TestContext.WriteLine($"The library of {SeveralThousand} is in {folder}. Measure the refresh on it with:");
+        TestContext.WriteLine($"  PaperRoute.Desktop\\bin\\Release\\net10.0\\PaperRoute.Desktop.exe --snapshot-from \"{folder}\" --measure \"{Path.Combine(repository, "TestResults", "v11-trial", "refresh-1.json")}\" --after-idle search-refreshed");
+    }
+
     // A captured frame: headless Skia draws the window as it is now.
     internal static void Frame(Window window)
     {
@@ -630,8 +852,23 @@ public sealed class BoardBudgetTests : StorageCheckedTests
     // PC's load.
     private static (IReadOnlyList<MeasuredRow> Rows, ThreadClock Clock, IReadOnlyList<IdlePreparationRecord> Idle) MeasureLibrary(string library, ILibrarySession session, bool requireChanges, string? side, Action<BoardView>? prepare = null)
     {
-        var measurement = new BoardMeasurement(Frame) { AfterIdle = side };
-        (MainWindow window, ShellViewModel shell) = measurement.Start(library, session, ThemeVariant.Light, 1280, 800);
+        var measurement = new BoardMeasurement(Frame)
+        {
+            AfterIdle = side,
+            Maximise = static window =>
+            {
+                window.Width = MaximisedWidth;
+                window.Height = MaximisedHeight;
+            },
+            Restore = static window =>
+            {
+                window.Width = Width;
+                window.Height = Height;
+            },
+            SetScaling = static (window, scaling) => window.SetRenderScaling(scaling),
+            DrawWhileWaiting = static () => AvaloniaHeadlessPlatform.ForceRenderTimerTick(),
+        };
+        (MainWindow window, ShellViewModel shell) = measurement.Start(library, session, ThemeVariant.Light, Width, Height);
         try
         {
             prepare?.Invoke(window.FindControl<BoardView>("BoardView") ?? throw new AssertFailedException("The window has no Board view."));
@@ -674,7 +911,8 @@ public sealed class BoardBudgetTests : StorageCheckedTests
     {
         foreach (MeasuredRow row in rows)
         {
-            bool waits = row.Id is BoardMeasurement.WarmStartup or BoardMeasurement.PreparePublishedIdle || row.Id.EndsWith("-paint", StringComparison.Ordinal);
+            bool waits = row.Id is BoardMeasurement.WarmStartup or BoardMeasurement.PreparePublishedIdle or BoardMeasurement.MaximiseWindow
+                || BoardMeasurement.RefreshRows.Contains(row.Id) || row.Id.EndsWith("-paint", StringComparison.Ordinal);
             Assert.AreEqual(waits, row.Waits, $"{row.Library} {row.Id}: waits by design is {waits}.");
         }
 
