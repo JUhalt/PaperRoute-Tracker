@@ -4,14 +4,20 @@
         xmlns:local="using:PaperRoute.Desktop"
         x:Class="PaperRoute.Desktop.MainWindow"
         x:DataType="vm:ShellViewModel"
-        Title="{Binding WindowTitle, FallbackValue='PaperRoute Board Trial'}"
-        Width="1280" Height="800"
+        Title="{Binding WindowTitle, FallbackValue='PaperRoute Tracker'}"
+        Width="1280" Height="840" MinWidth="960" MinHeight="680"
+        WindowStartupLocation="CenterScreen"
+        Icon="/Assets/PaperRoute.png"
         Background="{DynamicResource BoardBackgroundBrush}">
   <!--
     The shell (d1 4.1, step 7), laid out as today's window is (Form1.vb:336-371,
     647-674): the example banner across the top, the rail down the left, and
     to its right the page with the status line (the notice strip) under it.
     Ctrl+1, Ctrl+NumPad1 and F1 are bound in MainWindow.axaml.cs.
+    The frame is today's (Form1.vb:249-326; shell design B5): 1280x840 at
+    the start and 960x680 at the least, both capped to the screen's working
+    area when the window is made (MainWindow.axaml.cs), centred, and the
+    rail's logo as its icon.
   -->
   <DockPanel>
 

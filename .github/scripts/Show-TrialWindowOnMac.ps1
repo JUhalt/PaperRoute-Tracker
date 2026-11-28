@@ -45,7 +45,7 @@ param(
 
 $ErrorActionPreference = 'Continue'
 # The main window's title starts with this and goes on with " - <library>".
-$MainTitle = '^PaperRoute Board Trial( - |$)'
+$MainTitle = '^PaperRoute Tracker( - |$)'
 $LibraryEnding = 'TestResults/v11-trial/large-500'
 
 New-Item -ItemType Directory -Force -Path $Out | Out-Null
@@ -147,7 +147,7 @@ on run argv
         set frontmost of p to true
         repeat with w in (every window of p)
             try
-                if ((name of w) as text) starts with "PaperRoute Board Trial" then
+                if ((name of w) as text) starts with "PaperRoute Tracker" then
                     click (first button of w whose subrole is "AXCloseButton")
                     set closed to closed + 1
                 end if

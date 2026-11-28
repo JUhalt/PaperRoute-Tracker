@@ -278,8 +278,8 @@ public sealed class ShellViewTests
     }
 
     // The example window's title and banner (d1 3.3; Form1.Example.vb:36-60):
-    // the banner is named "Example library" and holds today's text plus the
-    // trial's sentence.
+    // today's title, and the banner is named "Example library" and holds
+    // today's text, the trial's sentence gone (shell design B5).
     [TestMethod]
     public void TheTitleAndBannerNameTheExample()
     {
@@ -302,13 +302,15 @@ public sealed class ShellViewTests
             }
         });
 
-        Assert.AreEqual("PaperRoute Board Trial - Example Library", title);
+        Assert.AreEqual("PaperRoute Tracker - Example Library", title, "Today's title (Form1.vb:294-303; shell design B5).");
         Assert.AreEqual("Example library", name, "Today's accessible name (Form1.Example.vb:48).");
         Assert.AreEqual(AutomationLandmarkType.Banner, landmark);
         Assert.AreEqual(ShellViewModel.ExampleBannerText, text);
-        Assert.IsTrue(text.StartsWith("Example library: a fictional research group's manuscripts, to explore and to teach with. ", StringComparison.Ordinal),
-            "Today's banner text comes first (Form1.Example.vb:55-56).");
-        Assert.IsTrue(text.EndsWith(" Trial build: nothing is saved.", StringComparison.Ordinal), "The trial's sentence comes last (d1 3.3).");
+        Assert.AreEqual(
+            "Example library: a fictional research group's manuscripts, to explore and to teach with. " +
+            "Change anything; it is discarded when this window closes, and your own library is never opened.",
+            text,
+            "Today's banner text (Form1.Example.vb:55-56), without the trial's sentence (shell design B5).");
     }
 
     // Form1.Shell.vb UpdateRailCounts (:420-435): no summary before the first

@@ -5,11 +5,12 @@ using CommunityToolkit.Mvvm.Input;
 using PaperRoute.ViewModels.Board;
 using PaperRoute.ViewModels.Notices;
 using PaperRoute.ViewModels.Session;
+using PaperRoute.ViewModels.Shell;
 
 namespace PaperRoute.ViewModels;
 
-// The window's view model (d1 3.3): the title, the banner (the example's, or
-// a snapshot's naming the folder copied), the rail,
+// The window's view model (d1 3.3; shell design B5): the title, the banner
+// (the example's, or a snapshot's naming the folder copied), the rail,
 // the Board, and the notice strip. The window shows "Loading…" at once, then
 // the session's startup notice ("Loaded 7 manuscripts from local storage.")
 // once the load is done (d1 3.4). The session and the Board are handed in;
@@ -23,18 +24,19 @@ public sealed partial class ShellViewModel : ObservableObject, IInteractions
 {
     public const string LoadingText = "Loading…";
 
-    // The window title. Today's example window is "PaperRoute Tracker -
-    // Example Library" (Form1.vb:294-303); the trial names itself (d1 3.3).
-    public const string ExampleWindowTitle = "PaperRoute Board Trial - Example Library";
+    // The window title, today's for the example window (Form1.vb:294-303;
+    // shell design 3.1 row 1). Nothing marks it apart from the Windows Forms
+    // app's: the two programs' process names differ.
+    public const string ExampleWindowTitle = "PaperRoute Tracker - Example Library";
 
     // The banner's accessible name, as today's (Form1.Example.vb:48).
     public const string ExampleBannerName = "Example library";
 
-    // Today's banner text (Form1.Example.vb:55-56), then the trial's sentence (d1 3.3).
+    // Today's banner text (Form1.Example.vb:55-56; shell design 3.1 row 4).
+    // Its "Return to My Library" button comes with the person's own library (#421).
     public const string ExampleBannerText =
         "Example library: a fictional research group's manuscripts, to explore and to teach with. " +
-        "Change anything; it is discarded when this window closes, and your own library is never opened." +
-        " Trial build: nothing is saved.";
+        "Change anything; it is discarded when this window closes, and your own library is never opened.";
 
     // F1 opens the User Guide today (Form1.vb:2589-2591); in the trial it gives
     // a notice only (d1 1.2), worded as the trial's other notices are.
@@ -56,6 +58,7 @@ public sealed partial class ShellViewModel : ObservableObject, IInteractions
         NoticeStrip.PropertyChanged += OnNoticeStripPropertyChanged;
         Board = board;
         Board.Interactions = this;
+        CurrentPage = board;
 
         // Today's order and names (Form1.Shell.vb:230-237); only the Board has a command.
         RailPages =
@@ -110,9 +113,10 @@ public sealed partial class ShellViewModel : ObservableObject, IInteractions
     // The snapshot's banner name (d1 1.3).
     public const string SnapshotBannerName = "Read-only snapshot";
 
-    // The window title of a snapshot: the trial, then the folder copied.
+    // The window title of a snapshot: the app, then the folder copied (shell
+    // design 3.1 row 1).
     public static string SnapshotWindowTitle(string sourceFolder) =>
-        "PaperRoute Board Trial - Read-only snapshot of " + sourceFolder;
+        "PaperRoute Tracker - Read-only snapshot of " + sourceFolder;
 
     // The snapshot's banner (d1 1.3, "Read-only snapshot taken at h:mm.
     // Nothing you do here is saved."), naming the folder copied; before the
@@ -126,6 +130,11 @@ public sealed partial class ShellViewModel : ObservableObject, IInteractions
     public string Tagline => ProductInfo.Tagline;
 
     public BoardViewModel Board { get; }
+
+    // The page shown, whose leave guard the window's close asks (shell design
+    // 3.1 row 5): the Board, the trial's one page, until the page host (B6a)
+    // shows others. Tests put a page of their own here.
+    public IPage CurrentPage { get; internal set; }
 
     // Board, Library, Journals, Deadlines, Insights, Import & Export.
     public IReadOnlyList<RailItemViewModel> RailPages { get; }
@@ -206,12 +215,67 @@ public sealed partial class ShellViewModel : ObservableObject, IInteractions
     private async Task LoadAsync(CancellationToken cancel)
     {
         NoticeStrip.Notice(LoadingText);
-        await _session.LoadAsync(cancel);
+        try
+        {
+            await _session.LoadAsync(cancel);
+        }
+        catch (OperationCanceledException) when (cancel.IsCancellationRequested)
+        {
+            // Cancelled by the window's close (CloseAsync): the load published
+            // nothing, and the window is closing.
+            return;
+        }
+
         NoticeStrip.Notice(_session.StartupNotice);
         if (_session.Kind == LibraryKind.Snapshot)
         {
             OnPropertyChanged(nameof(BannerText));
         }
+    }
+
+    // The window's close step (shell design 3.1 row 5; Form1.ManuscriptPage.vb
+    // OnFormClosing, :1413-1474). True: the window may close.
+    //
+    // At the operating system's shutdown or log-off it is never refused and
+    // asks nothing: it blocks until running library work has ended
+    // (WaitForWork, as today's FinishLibraryWorkForShutdown) and returns a
+    // finished true. A settings save held during that load is not written
+    // here: the session writes it on this thread once the load publishes,
+    // which a shutdown may never let happen. Its loss loses nothing a person
+    // changed, because a save held during a load writes the settings that
+    // load has just read (ILibrarySession.SaveSettingsAsync). Recovery drafts
+    // come with start-up (#421).
+    //
+    // Otherwise the page shown is asked first, and a refusal keeps the window;
+    // then a running load is cancelled and its end awaited, whatever it ended
+    // in. Finished at once when the page answers at once and no load runs.
+    // The refusal while a save runs and the question after a failed save come
+    // with the library save (shell design 2.6).
+    public ValueTask<bool> CloseAsync(CloseKind kind)
+    {
+        if (kind == CloseKind.Shutdown)
+        {
+            _session.WaitForWork();
+            return ValueTask.FromResult(true);
+        }
+
+        return CloseWhenAllowedAsync();
+    }
+
+    private async ValueTask<bool> CloseWhenAllowedAsync()
+    {
+        if (!await CurrentPage.CanLeaveAsync())
+        {
+            return false;
+        }
+
+        if (LoadCommand.IsRunning && LoadCommand.ExecutionTask is { } load)
+        {
+            LoadCommand.Cancel();
+            await Task.WhenAny(load);
+        }
+
+        return true;
     }
 
     private string SnapshotSource() =>

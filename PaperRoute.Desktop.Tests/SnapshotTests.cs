@@ -422,7 +422,7 @@ public sealed class SnapshotTests : StorageCheckedTests
         ShellViewModel shell = LibrarySessionTests.ShellOver(session);
 
         Assert.AreEqual(LibraryKind.Snapshot, session.Kind);
-        Assert.AreEqual("PaperRoute Board Trial - Read-only snapshot of " + Source, shell.WindowTitle);
+        Assert.AreEqual("PaperRoute Tracker - Read-only snapshot of " + Source, shell.WindowTitle);
         Assert.AreEqual("Read-only snapshot", shell.BannerName);
         Assert.AreEqual(
             "Read-only snapshot of the library in " + Source + ", taken at " + copy.TakenAt.ToString("h:mm tt", System.Globalization.CultureInfo.CurrentCulture) +
