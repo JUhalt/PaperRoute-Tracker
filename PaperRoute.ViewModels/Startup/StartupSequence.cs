@@ -11,7 +11,8 @@ namespace PaperRoute.ViewModels.Startup;
 //   ask-to-come-forward for a second copy, and at the end the hold's release
 //   and end-session.
 // A refused command line stops after options with exit code 2. A data root
-// that cannot be found stops with the no-window message and exit code 1. A
+// that cannot be found, or that is not a fully qualified path, stops with
+// the no-window message and exit code 1. A
 // second copy stops before any storage step and before the app starts.
 public static class StartupSequence
 {
@@ -88,8 +89,13 @@ public static class StartupSequence
 
     // Null when the data root cannot be found. Every failure here counts:
     // no window and no logs folder exist yet, so an error that escaped would
-    // end the process with no word at all. A blank answer is refused too,
-    // so no root becomes a path inside the folder PaperRoute started from.
+    // end the process with no word at all. Any answer that is not a fully
+    // qualified path is refused too, so no root becomes a path inside the
+    // folder PaperRoute started from. On Windows the real step can give
+    // such an answer without throwing: a redirected folder that is missing
+    // right now answers empty (StorageEnvironment.UserFolder), and the root
+    // then comes back as the bare folder name, "PaperRoute"
+    // (StorageMigrationService.CurrentDataRoot).
     private static string? FindDataRoot(IStartupSteps steps)
     {
         string dataRoot;
@@ -102,6 +108,6 @@ public static class StartupSequence
             return null;
         }
 
-        return string.IsNullOrWhiteSpace(dataRoot) ? null : dataRoot;
+        return string.IsNullOrWhiteSpace(dataRoot) || !Path.IsPathFullyQualified(dataRoot) ? null : dataRoot;
     }
 }

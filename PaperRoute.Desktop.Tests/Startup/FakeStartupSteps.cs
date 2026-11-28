@@ -5,10 +5,11 @@ namespace PaperRoute.Desktop.Tests.Startup;
 // Start-up's steps as a recording stand-in (start-up design 2.4, build 6 Q1):
 // each call appends the step's record name to Calls, so a test reads the
 // order from the calls StartupSequence made. Nothing here touches storage,
-// the system or a window: the data root is a name only.
+// the system or a window: the data root is a name only, a fully qualified
+// path (the sequence refuses any other) that is never made or opened.
 internal sealed class FakeStartupSteps : IStartupSteps
 {
-    public const string FakeDataRoot = "fake data root";
+    public static readonly string FakeDataRoot = Path.Combine(Path.GetTempPath(), "fake data root");
 
     private readonly List<string> _calls = [];
 

@@ -59,14 +59,18 @@ public sealed class StartupSequenceTests
             "The example's session must start before any data root is found, or the root found would be the person's library (Program.vb:46-50).");
     }
 
+    // The relative answer is the one the real step gives on Windows when the
+    // local application data folder answers empty: Path.Combine("",
+    // "PaperRoute") (StorageMigrationService.CurrentDataRoot).
     [TestMethod]
-    [DataRow(false, DisplayName = "the data-root step throws")]
-    [DataRow(true, DisplayName = "the data-root step answers blank")]
-    public void NoHomeFolderGivesTheNoWindowMessageAndExitsOne(bool blank)
+    [DataRow(true, "", DisplayName = "the data-root step throws")]
+    [DataRow(false, " ", DisplayName = "the data-root step answers blank")]
+    [DataRow(false, "PaperRoute", DisplayName = "the data-root step answers a relative path")]
+    public void NoHomeFolderGivesTheNoWindowMessageAndExitsOne(bool throws, string answer)
     {
-        var steps = blank
-            ? new FakeStartupSteps { DataRoot = " " }
-            : new FakeStartupSteps { FailAt = "data-root" };
+        var steps = throws
+            ? new FakeStartupSteps { FailAt = "data-root" }
+            : new FakeStartupSteps { DataRoot = answer };
 
         int exit = StartupSequence.Run(["--example"], steps);
 
