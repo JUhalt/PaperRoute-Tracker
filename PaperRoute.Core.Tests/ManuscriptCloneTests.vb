@@ -172,9 +172,12 @@ Public Class ManuscriptCloneTests
 
     ' Every settable property of a manuscript, nested ones included, survives
     ' the clone (#464). The record is filled by reflection, each property with
-    ' a value of its own that a new object does not have, so a property added
-    ' to the model later is covered without anyone remembering it, and one the
-    ' clone forgets, or copies from another property, is named by its path.
+    ' a value a new object does not have, so a property added to the model
+    ' later is covered without anyone remembering it, and one the clone
+    ' forgets is named by its path. Strings, Guids, numbers and dates get
+    ' values no other property has, so a clone that copies one of those from
+    ' another property is named too; booleans and enums may repeat, so a swap
+    ' among them is not caught.
     <TestMethod>
     Public Sub EverySettablePropertySurvivesTheClone()
 
@@ -444,10 +447,12 @@ Public Class ManuscriptCloneTests
 
 
     ' Fills a model object by reflection: every settable property gets a value
-    ' no other property has and a new object does not have, every list two
-    ' items and every dictionary two entries, filled the same way. A type it
-    ' does not know stops the test, so a new kind of property cannot pass
-    ' unchecked.
+    ' a new object does not have, every list two items and every dictionary
+    ' two entries, filled the same way. A string, Guid, number or date also
+    ' differs from every other property's; a boolean is the opposite of its
+    ' default and an enum is picked in turn, so those may repeat. A type it
+    ' does not know stops the test, so a new kind of settable property cannot
+    ' pass unchecked.
     Private NotInheritable Class CloneProbe
 
         Private _next As Integer
