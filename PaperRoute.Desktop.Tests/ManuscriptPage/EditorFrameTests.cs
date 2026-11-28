@@ -585,6 +585,26 @@ public sealed class EditorFrameTests : StorageCheckedTests
         Assert.IsTrue(page.Frame.IsLoaded);
     }
 
+    // The page's other state with nothing to edit (Form1.ManuscriptPage.vb:
+    // 154-162); its view is V1a's (V-8).
+    [TestMethod]
+    public async Task AManuscriptNoLongerInTheLibraryShowsItsTextAndNothingToEdit()
+    {
+        var section = new StandInSection();
+        var store = new FakeManuscriptStore([Paper()], AuthorFile());
+        Page page = Page.Over(store, Paper(), section);
+
+        Assert.IsFalse(page.Frame.Open(Guid.Parse("4d1f4b0e-0000-4000-8000-0000000000ff")), "The page opened a record the library does not hold.");
+
+        Assert.AreEqual("This manuscript is no longer in the library.", page.Frame.LoadProblem);
+        Assert.IsFalse(page.Frame.IsLoaded);
+        Assert.IsNull(page.Frame.Header);
+        Assert.AreEqual(0, section.Attaches);
+        Assert.AreEqual(0, store.Reads, "The author file was read for a record that is gone.");
+        Assert.IsTrue(await page.Frame.SaveAsync());
+        Assert.AreEqual(0, store.Writes);
+    }
+
     [TestMethod]
     public void ADiscardThatCannotReadTheAuthorFileKeepsTheLibraryAndSaysSo()
     {
