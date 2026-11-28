@@ -7,13 +7,17 @@ namespace PaperRoute.Desktop.Tests.CoreSurface;
 
 // The Friend scan (build 5, #420; plan section 2, point 5). Before v1.1 ships,
 // every Friend type and member of the core that the interface calls becomes
-// Public or moves behind the library session, so the C# interface does not
-// depend on a friend grant. This lists them. It reads what the compiled
-// assemblies reference, not names in the source: the source can pass two
-// arguments where the compiled call goes to a four-parameter Friend
-// constructor (DiskLibrarySession's ManuscriptRepository). It also keeps
-// working once the app takes the assembly name PaperRouteTracker, which
-// already holds the core's grant, so the compiler stops refusing Friend uses.
+// Public, moves behind the library session, or goes with the trial mode that
+// calls it, so the C# interface does not depend on a friend grant. This lists
+// them. It reads what the compiled assemblies reference, not names in the
+// source: the source can pass two arguments where the compiled call goes to a
+// four-parameter Friend constructor (DiskLibrarySession's ManuscriptRepository).
+// It also keeps working once the app takes the assembly name PaperRouteTracker,
+// which already holds the core's grant, so the compiler stops refusing Friend
+// uses. It cannot see constants: the compiler copies a Const's value (an enum
+// member's too) into the calling code, so no reference to a Friend Const is
+// left to read. Only removing the core's grants to PaperRoute.ViewModels and
+// the app, or a source check for Friend Const names, catches those.
 // Nothing here makes anything Public; the issue named on each line does.
 [TestClass]
 public sealed partial class FriendUseTests
@@ -98,6 +102,10 @@ public sealed partial class FriendUseTests
         Assert.IsEmpty(problems, ListName + " is malformed:" + Environment.NewLine + string.Join(Environment.NewLine, problems));
     }
 
+    // This depends on that constructor staying Friend. The list's fate for it
+    // is "make Public (#421)"; when #421 does that, this test fails, and #421
+    // points it at another Friend overload the interface reaches or replaces
+    // it with an assembly built in memory for the purpose.
     [TestMethod]
     public void TheFriendReaderSeesAFriendConstructorOverload()
     {

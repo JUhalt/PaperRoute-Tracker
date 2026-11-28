@@ -12,8 +12,11 @@
 #   fate          make Public: the issue makes it Public in the core.
 #                 behind the session: the issue moves the call behind a Public member, and the item stays Friend.
 #                 trial-only: goes with --<mode>: the call belongs to a trial mode, and goes when the issue removes that mode.
+# Constants are not seen: the compiler copies a Const's value (an enum member's too) into the calling code, so a Friend Const the
+# interface uses leaves no reference here.
 # Nothing is made Public by this list. Each issue named changes its items; #436 (build 21, parity sign-off) empties the list before
-# v1.1 ships and adds the test NoFriendUseIsLeftForRelease.
+# v1.1 ships and adds the test NoFriendUseIsLeftForRelease, together with removing the core's InternalsVisibleTo grants to
+# PaperRoute.ViewModels and the app (or a source check for Friend Const names), so the compiler catches the constants.
 F:ManuscriptPipeline.Services.StorageEnvironment.DefaultRootUses;PaperRoute.Core/Services/StorageEnvironment.vb:25;trial-only: goes with --self-check (#421)
 M:ManuscriptPipeline.Services.AppSettingsService.#ctor(System.String);PaperRoute.Core/Services/AppSettingsService.vb:29;make Public (#421)
 M:ManuscriptPipeline.Services.AuthorLibraryRepository.#ctor(System.String,System.Func{System.String,System.IO.Stream});PaperRoute.Core/Services/AuthorLibraryRepository.vb:33;make Public (#421)
