@@ -330,6 +330,23 @@ public sealed partial class LiftedBanTests
         return lines;
     }
 
+    // The owner column of the list, each file by its path in the repository,
+    // once each: the one list of the files that may lift a ban, which
+    // OnlyTheSessionDisablesTheSaveBan reads too. EachLiftedBanHasOneOwner
+    // checks the lines themselves.
+    internal static IReadOnlyList<string> OwnerFiles()
+    {
+        string path = Path.Combine(AppContext.BaseDirectory, "CoreSurface", ListName);
+        Assert.IsTrue(File.Exists(path), $"{path} was not copied to the test output.");
+        return [.. File.ReadLines(path)
+            .Select(line => line.Trim())
+            .Where(line => line.Length > 0 && !line.StartsWith('#'))
+            .Select(line => line.Split(';'))
+            .Where(fields => fields.Length == 3)
+            .Select(fields => fields[1].Trim())
+            .Distinct(StringComparer.Ordinal)];
+    }
+
     // An owner's path in the repository to its copy in the test output.
     private static string? OwnerPath(string owner)
     {

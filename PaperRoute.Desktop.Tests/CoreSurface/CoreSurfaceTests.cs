@@ -122,17 +122,24 @@ public sealed class CoreSurfaceTests
     }
 
     // The save ban (BannedSymbols.txt, RS0030) is lifted only where lock 3
-    // allows a write: TrialStartup.cs (the example's seed) and
-    // DiskLibrarySession.cs (the settings save, shell design 2.5), each with
-    // its reason in a comment on the line above. A pragma cannot hide a new
-    // banned call, because TrialReferencesOnlyTheListedCoreSurface pins every
-    // core reference. A bare "#pragma warning disable" lifts the ban too.
+    // allows a write: in the view models' files that lifted-bans.txt names as
+    // owners (the one list, start-up design 2.8; today TrialStartup.cs for
+    // the example's seed and DiskLibrarySession.cs for the settings save),
+    // each with its reason in a comment on the line above. A pragma cannot
+    // hide a new banned call, because TrialReferencesOnlyTheListedCoreSurface
+    // pins every core reference. A bare "#pragma warning disable" lifts the
+    // ban too. Which ban each owner may lift, and the ban turned off without
+    // a pragma, are EachLiftedBanHasOneOwner's to check.
     [TestMethod]
     public void OnlyTheSessionDisablesTheSaveBan()
     {
         string folder = Path.Combine(AppContext.BaseDirectory, "ViewModelSources");
         Assert.IsTrue(Directory.Exists(folder), $"{folder} was not copied to the test output.");
-        string[] allowed = ["Session/TrialStartup.cs", "Session/DiskLibrarySession.cs"];
+        const string project = "PaperRoute.ViewModels/";
+        string[] allowed = [.. LiftedBanTests.OwnerFiles()
+            .Where(owner => owner.StartsWith(project, StringComparison.Ordinal))
+            .Select(owner => owner[project.Length..])];
+        Assert.IsNotEmpty(allowed, "lifted-bans.txt names no owner in the view models: the reader is broken.");
         string[] files = [.. Directory.GetFiles(folder, "*.cs", SearchOption.AllDirectories).Order(StringComparer.Ordinal)];
         Assert.IsTrue(files.Any(file => Path.GetRelativePath(folder, file).Replace('\\', '/') == "Session/DiskLibrarySession.cs"),
             "The view models' sources were not copied to the test output.");
@@ -153,7 +160,7 @@ public sealed class CoreSurfaceTests
                 found++;
                 if (!allowed.Contains(name, StringComparer.Ordinal))
                 {
-                    problems.Add($"{name}:{i + 1} lifts the save ban (RS0030) outside {string.Join(" and ", allowed)}.");
+                    problems.Add($"{name}:{i + 1} lifts the save ban (RS0030) outside the owners lifted-bans.txt names ({string.Join(", ", allowed)}).");
                 }
                 else if (!HasReasonAbove(lines, i))
                 {
@@ -164,7 +171,7 @@ public sealed class CoreSurfaceTests
 
         Assert.IsEmpty(problems, string.Join(Environment.NewLine, problems));
         Assert.IsGreaterThanOrEqualTo(allowed.Length, found,
-            "The scan found fewer pragmas than the two allowed writes have: the scan is broken.");
+            "The scan found fewer pragmas than lifted-bans.txt has owners in the view models: the scan is broken.");
     }
 
     private static bool LiftsTheSaveBan(string line) => IsSaveBanPragma(line, "disable");
