@@ -20,12 +20,15 @@ namespace PaperRoute.Desktop.Tests.Styles;
 // scan does not look at them.
 internal static partial class LiteralScan
 {
-    // The files the scan does not judge, and why. Nothing else is exempt.
+    // The files the scan does not judge, and why. Nothing else is exempt, and
+    // an exempt file must hold a literal, so an exemption cannot outlive its
+    // reason. The design also names the contrast code (ContrastTheme.cs,
+    // SystemContrastColors.cs), but it writes its colours with Color.FromRgb,
+    // which the scan does not read as a literal, so it needs no exemption; a
+    // hex colour written there fails like any other.
     public static readonly IReadOnlyDictionary<string, string> ExemptFiles = new Dictionary<string, string>(StringComparer.Ordinal)
     {
         ["Styles/Tokens.axaml"] = "the token file, the one place the values are written",
-        ["Styles/ContrastTheme.cs"] = "the contrast code: it gives every token its system colour under a contrast theme; those colours are the system's, not PaperRoute's",
-        ["Styles/SystemContrastColors.cs"] = "the contrast code: Windows' own contrast colour sets, and the stand-in set used off Windows",
     };
 
     private static readonly Rule[] s_rules =

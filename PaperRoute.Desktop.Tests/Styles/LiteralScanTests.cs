@@ -9,12 +9,13 @@ public sealed class LiteralScanTests
 {
     public TestContext TestContext { get; set; } = null!;
 
-    // No .axaml or .cs file of PaperRoute.Desktop, outside Tokens.axaml and
-    // the contrast code, writes a colour, a font family, a font size, a
-    // non-zero corner radius, a duration or a numeric font weight of its own.
-    // A literal fails here by file and line. The scan must also have read the
-    // app's files and the token file's own values, and every exempt file must
-    // still exist, so an exemption cannot outlive its file.
+    // No .axaml or .cs file of PaperRoute.Desktop outside Tokens.axaml writes
+    // a colour, a font family, a font size, a non-zero corner radius, a
+    // duration or a numeric font weight of its own. A literal fails here by
+    // file and line. The scan must also have read the app's files and the
+    // token file's own values, and every exempt file must still exist and
+    // still hold a literal, so an exemption cannot outlive its file or its
+    // reason.
     [TestMethod]
     public void NoViewOrStyleNamesALiteral()
     {
@@ -28,6 +29,7 @@ public sealed class LiteralScanTests
         foreach (string path in LiteralScan.ExemptFiles.Keys)
         {
             Assert.IsTrue(files.Any(file => file.Path == path), $"The exemption names {path}, which the app no longer has.");
+            Assert.IsGreaterThan(0, exempt.GetValueOrDefault(path), $"The exemption of {path} exempts nothing: the file holds no literal, so the exemption is stale; remove it.");
         }
 
         Assert.IsGreaterThan(100, exempt["Styles/Tokens.axaml"], "The scan should see the token file's own colours, about two for each themed brush.");
