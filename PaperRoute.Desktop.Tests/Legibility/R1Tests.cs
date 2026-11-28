@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.RegularExpressions;
 using PaperRoute.Desktop.Tests.Styles;
 
@@ -8,7 +9,9 @@ namespace PaperRoute.Desktop.Tests.Legibility;
 // with R2's theme cases). The trial's T1 and T2 grew into the first two tests
 // here; R1_FailsADeliberatelyLowContrastToken (RuleTeethTests.cs) gives R1
 // its teeth through the same reader and the same rule. A failure listed in
-// KnownFailures.tsv does not fail these runs (KnownFailuresAreCurrent).
+// KnownFailures.tsv does not fail these runs (KnownFailuresAreCurrent). Each
+// run writes every ratio R1 measures to legibility-R1-<case>.txt beside the
+// pictures, passing pairs included, so a reviewer reads the margins.
 // Limits of headless: HeadlessLimits.md
 [TestClass]
 public sealed partial class R1Tests
@@ -32,6 +35,9 @@ public sealed partial class R1Tests
         ["SubtleBorderBrush"] = "the 1 px line inside a card (Card.axaml, Border.divider)",
     };
 
+    // The columns of legibility-R1-<case>.txt.
+    private static readonly string[] s_ratioColumns = ["theme case", "pair", "ratio", "where"];
+
     public TestContext TestContext { get; set; } = null!;
 
     // Was T1_EveryTextPairTheBoardUsesHasItsContrast.
@@ -48,6 +54,7 @@ public sealed partial class R1Tests
         int checkedPairs = 0;
         foreach (string variant in Variants)
         {
+            TestContext.WriteLine("R1's ratios: " + Path.GetFileName(WriteRatios(Pictures.Directory(), variant)));
             findings.AddRange(Rules.R1(variant, TokenFile.Colors(variant), TokenPairs.Text).Where(finding => !KnownFailures.Lists(known, finding)));
             checkedPairs += TokenPairs.Text.Count;
         }
@@ -66,12 +73,70 @@ public sealed partial class R1Tests
         var findings = new List<Finding>();
         foreach (string variant in Variants)
         {
+            TestContext.WriteLine("R1's ratios: " + Path.GetFileName(WriteRatios(Pictures.Directory(), variant)));
             findings.AddRange(Rules.R1(variant, TokenFile.Colors(variant), TokenPairs.StagesAndTags).Where(finding => !KnownFailures.Lists(known, finding)));
         }
 
         Assert.AreEqual(16, TokenPairs.StagesAndTags.Count, "Eight stages and eight tag palettes.");
         Assert.IsEmpty(findings, "Pairs under 4.5:1:" + Environment.NewLine + string.Join(Environment.NewLine, findings));
     }
+
+    // The numbers file (the harness design, part 2.1): legibility-R1-<case>.txt
+    // holds every pair R1 judges in that case, one line each, with its ratio
+    // in the invariant culture (here written under a culture with a decimal
+    // comma), from the thinnest margin up; a second write replaces the first.
+    [TestMethod]
+    public void R1_WritesEveryRatioItMeasures()
+    {
+        string folder = Path.Combine(AssemblySetup.StorageRoot, "r1-ratios-" + Guid.NewGuid().ToString("N"));
+        int pairCount = TokenPairs.All.Count();
+        var lines = new Dictionary<string, string[]>(StringComparer.Ordinal);
+        CultureInfo before = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("de-DE");
+            foreach (string variant in Variants)
+            {
+                WriteRatios(folder, variant);
+                string path = WriteRatios(folder, variant);
+                Assert.AreEqual($"legibility-R1-{variant}.txt", Path.GetFileName(path));
+                lines[variant] = File.ReadAllLines(path);
+            }
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = before;
+        }
+
+        foreach ((string variant, string[] file) in lines)
+        {
+            Assert.AreEqual(string.Join('\t', s_ratioColumns), file[0], "The first line names the columns.");
+            Assert.HasCount(pairCount + 1, file, $"{variant}: one line per pair, once, after two writes.");
+            string[][] rows = file.Skip(1).Select(line => line.Split('\t')).ToArray();
+            Assert.IsTrue(rows.All(cells => cells.Length == 4 && cells[0] == variant), $"{variant}: every line has four cells and names its theme case.");
+            double[] ratios = rows.Select(cells => double.Parse(cells[2], NumberStyles.Float, CultureInfo.InvariantCulture)).ToArray();
+            CollectionAssert.AreEqual(ratios.Order().ToArray(), ratios, $"{variant}: the lines run from the thinnest margin up.");
+        }
+
+        // Two of the thin margins the design names (part 2.4), as the file writes them.
+        CollectionAssert.Contains(lines["Light"], "Light\tMutedTextBrush on BoardBackgroundBrush\t4.64\ttext on a page, card or header");
+        CollectionAssert.Contains(lines["Dark"], "Dark\tMutedTextBrush on CardBackgroundBrush\t4.60\ttext on a page, card or header");
+    }
+
+    // Writes every ratio R1 measures in one theme case, over all its pairs and
+    // sorted from the thinnest margin up, to legibility-R1-<case>.txt in the
+    // folder, and returns the file's path. Both runs write the whole file, the
+    // same each time, so either run alone leaves it complete.
+    private static string WriteRatios(string folder, string variant) =>
+        Measurements.Write(
+            folder,
+            "R1",
+            variant,
+            s_ratioColumns,
+            Rules.R1Ratios(variant, TokenFile.Colors(variant), TokenPairs.All)
+                .OrderBy(measured => measured.Ratio)
+                .Select(measured => (IReadOnlyList<string>)
+                    [measured.ThemeCase, $"{measured.Pair.Ink} on {measured.Pair.Surface}", Measurements.Number(measured.Ratio), measured.Pair.Where]));
 
     // The completeness guard: every token an .axaml file uses as an ink
     // (Foreground, PlaceholderForeground, SelectionForegroundBrush) is the ink
