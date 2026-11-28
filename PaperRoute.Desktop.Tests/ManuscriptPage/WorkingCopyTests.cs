@@ -9,8 +9,8 @@ using PaperRoute.ViewModels.ManuscriptPage;
 
 namespace PaperRoute.Desktop.Tests.ManuscriptPage;
 
-// Build 9's W1 (the design's tests W-1 to W-15): the manuscript page's working
-// copy, with no window. Every record is built in memory; nothing is read from
+// Build 9's W1 (the design's tests W-1 to W-15, and L-9 brought forward from
+// R1): the manuscript page's working copy, with no window. Every record is built in memory; nothing is read from
 // or written to disk, under the assembly's storage guard.
 [TestClass]
 public sealed partial class WorkingCopyTests : Board.StorageCheckedTests
@@ -19,6 +19,7 @@ public sealed partial class WorkingCopyTests : Board.StorageCheckedTests
     private static readonly Guid Ada = Guid.Parse("4d1f4b0e-0000-4000-8000-000000000001");
     private static readonly Guid Grace = Guid.Parse("4d1f4b0e-0000-4000-8000-000000000002");
     private static readonly Guid University = Guid.Parse("4d1f4b0e-0000-4000-8000-000000000003");
+    private static readonly Guid Institute = Guid.Parse("4d1f4b0e-0000-4000-8000-000000000004");
 
     // W-1
     [TestMethod]
@@ -91,6 +92,46 @@ public sealed partial class WorkingCopyTests : Board.StorageCheckedTests
         Assert.IsFalse(copy.IsRecovered);
         Assert.AreEqual(original.Title, copy.Working.Title);
         Assert.IsFalse(copy.HasUnsavedChanges(), "A discarded draft leaves nothing unsaved.");
+    }
+
+    // L-9, brought forward from R1 because W1's Load already joins a draft's
+    // records: a draft's people and affiliations join the library only where
+    // the disk lacks their id, the delta holds only those, and its tag
+    // colours are set.
+    [TestMethod]
+    public void ADraftsRecordsJoinOnlyWhenNotOnDisk()
+    {
+        Manuscript original = Paper();
+        RecoveryDraft draft = Draft(original, title: original.Title);
+        draft.UnsavedLibrary = new RecoveryDraftLibrary
+        {
+            Authors =
+            [
+                new AuthorRecord { Id = Ada, GivenName = "Ada", FamilyName = "Byron" },
+                new AuthorRecord { Id = Grace, GivenName = "Grace", FamilyName = "Hopper" },
+            ],
+            Affiliations =
+            [
+                new AffiliationRecord { Id = University, Institution = "Another University" },
+                new AffiliationRecord { Id = Institute, Institution = "Example Institute" },
+            ],
+            TagColors = [new TagColor { Tag = "methods", Color = TagPalette.Violet }],
+        };
+        AuthorLibraryData onDisk = Library();
+        AuthorRecord adaOnDisk = onDisk.Authors[0];
+        AffiliationRecord universityOnDisk = onDisk.Affiliations[0];
+        var copy = new WorkingCopy();
+
+        copy.Load(original, onDisk, draft);
+
+        Assert.AreSame(adaOnDisk, copy.Library.Authors.Single(author => author.Id == Ada), "The draft's record of a person on disk replaced the disk's.");
+        Assert.AreEqual("Hopper", copy.Library.Authors.Single(author => author.Id == Grace).FamilyName, "The draft's new person is not in the library the pickers read.");
+        CollectionAssert.AreEqual(new[] { Grace }, copy.Delta.Authors.Select(author => author.Id).ToArray(), "The delta holds a person the disk has, or lacks the new one.");
+        Assert.AreSame(universityOnDisk, copy.Library.Affiliations.Single(affiliation => affiliation.Id == University), "The draft's record of an affiliation on disk replaced the disk's.");
+        Assert.IsTrue(copy.Library.Affiliations.Any(affiliation => affiliation.Id == Institute), "The draft's new affiliation is not in the library.");
+        CollectionAssert.AreEqual(new[] { Institute }, copy.Delta.Affiliations.Select(affiliation => affiliation.Id).ToArray(), "The delta holds an affiliation the disk has, or lacks the new one.");
+        Assert.AreEqual(TagPalette.Violet, WorkTypeService.ColorOf("methods", copy.Library), "The draft's tag colour is not set in the library.");
+        Assert.HasCount(1, copy.Delta.TagColors, "The draft's tag colour is not in the delta.");
     }
 
     // W-5
