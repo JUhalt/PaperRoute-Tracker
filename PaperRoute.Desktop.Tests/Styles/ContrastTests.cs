@@ -273,6 +273,13 @@ public sealed class ContrastTests
         Assert.AreEqual(SystemContrastColors.NightSky.Window, night["WarningChipHoverBrush"], "A toned chip's hover is the window colour: no hover fill.");
         Assert.AreEqual(ThemeTokens.Blend(SystemContrastColors.NightSky.Highlight, Colors.Black, 0.1F), night["AccentHoverBrush"],
             "The primary hover darkens towards black, since IsDark is never true under contrast (ActionButton.vb:224).");
+
+        // The pressed shade lightens on a dark set and darkens on a light one
+        // (the harness design's question 10).
+        Assert.AreEqual(ThemeTokens.Blend(SystemContrastColors.NightSky.Highlight, Colors.White, 0.2F), night["AccentPressedBrush"],
+            "On a dark set the primary button's pressed shade lightens towards white.");
+        Assert.AreEqual(ThemeTokens.Blend(SystemContrastColors.Desert.Highlight, Colors.Black, 0.2F), ContrastTheme.Colors(SystemContrastColors.Desert)["AccentPressedBrush"],
+            "On a light set the primary button's pressed shade darkens towards black, as before.");
     }
 
     // The colour arithmetic of SystemContrastColors and the preference's event.

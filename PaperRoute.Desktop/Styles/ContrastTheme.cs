@@ -80,6 +80,14 @@ public static class ContrastTheme
             result[derived.Key] = derived.Value;
         }
 
+        // Except its pressed shade on a dark set, which lightens instead (the
+        // harness design's question 10): darkened, the selected text on it fell
+        // to 4.75:1 on hc1; lightened, it is 8.45:1. The hover keeps darkening.
+        if (colors.IsDark)
+        {
+            result[ThemeTokens.AccentPressedBrush] = ThemeTokens.Blend(colors.Highlight, Avalonia.Media.Colors.White, 0.2F);
+        }
+
         return result;
     }
 
