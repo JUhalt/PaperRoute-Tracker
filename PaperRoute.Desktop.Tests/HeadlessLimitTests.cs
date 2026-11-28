@@ -108,22 +108,35 @@ public sealed partial class HeadlessLimitTests
     // offers no text-size setting to follow. The public types of every
     // Avalonia assembly the app loads (PaperRoute.Desktop's references,
     // followed through the Avalonia assemblies, so the Windows, X11 and
-    // macOS back ends are among them) hold no type or member named like
-    // one. The test fails when an upgrade adds one, so that the text-size
-    // statement (HeadlessLimits.md row 8, the plan's section 9) is read
-    // again then. Its teeth: the same scan over a type that has such
-    // members must name each of them.
+    // macOS back ends are among them), and of Avalonia.Headless, the
+    // platform these tests run on, which the app itself does not load, hold
+    // no type or member named like one. The test fails when an upgrade adds
+    // one, so that the text-size statement (HeadlessLimits.md row 8, the
+    // plan's section 9) is read again then. Its teeth: the same walk over
+    // the real types with a word they must hold ("FontSize") names two
+    // members it must find, so a scan that reads nothing fails; and the
+    // scan over a type that has text-size members must name each of them.
     [TestMethod]
     public void AvaloniaOffersNoTextSizeSetting()
     {
-        IReadOnlyList<Assembly> assemblies = AvaloniaAssembliesTheAppLoads();
+        IReadOnlyList<Assembly> assemblies = [.. AvaloniaAssembliesTheAppLoads(), typeof(HeadlessWindowExtensions).Assembly];
         List<Type> types = assemblies.SelectMany(assembly => assembly.GetExportedTypes()).ToList();
         TestContext.WriteLine($"Scanned {types.Count} public types in {assemblies.Count} assemblies: " +
             string.Join(", ", assemblies.Select(assembly => assembly.GetName().Name + " " + assembly.GetName().Version)));
         List<string> names = assemblies.Select(assembly => assembly.GetName().Name!).ToList();
-        foreach (string needed in new[] { "Avalonia.Base", "Avalonia.Controls", "Avalonia.Win32", "Avalonia.X11", "Avalonia.Native" })
+        foreach (string needed in new[] { "Avalonia.Base", "Avalonia.Controls", "Avalonia.Win32", "Avalonia.X11", "Avalonia.Native", "Avalonia.Headless" })
         {
             CollectionAssert.Contains(names, needed, $"The scan does not reach {needed}.");
+        }
+
+        // The scan reads the real types and their members: Avalonia 12.1.6
+        // has about 1,600 public types in these assemblies, and the same walk
+        // with the word "FontSize" finds the two members named here.
+        Assert.IsGreaterThanOrEqualTo(1000, types.Count, $"The scan read only {types.Count} public types, so it cannot show an absence.");
+        List<string> fontSize = MembersNamedLike(types, ["FontSize"]);
+        foreach (string member in new[] { "Avalonia.Controls.TextBlock.FontSize", "Avalonia.Controls.Documents.TextElement.FontSizeProperty" })
+        {
+            CollectionAssert.Contains(fontSize, member, $"The same walk with the word \"FontSize\" does not find {member}, so it does not read the real members.");
         }
 
         List<string> found = TextSizeMembers(types);
@@ -350,12 +363,16 @@ public sealed partial class HeadlessLimitTests
         return [.. found.Values];
     }
 
+    // Every type and member whose name holds one of the words of a
+    // text-size setting, as "Type.Member", sorted.
+    private static List<string> TextSizeMembers(IEnumerable<Type> types) =>
+        MembersNamedLike(types, ["TextScal", "FontScal", "TextSizeFactor"]);
+
     // Every type and member (accessors left out, as their property or event
-    // is named) whose name holds one of the words of a text-size setting,
-    // as "Type.Member", sorted.
-    private static List<string> TextSizeMembers(IEnumerable<Type> types)
+    // is named) whose name holds one of the words, ignoring case, as
+    // "Type.Member", sorted.
+    private static List<string> MembersNamedLike(IEnumerable<Type> types, IReadOnlyList<string> words)
     {
-        string[] words = ["TextScal", "FontScal", "TextSizeFactor"];
         bool Named(string name) => words.Any(word => name.Contains(word, StringComparison.OrdinalIgnoreCase));
         var found = new List<string>();
         foreach (Type type in types)
