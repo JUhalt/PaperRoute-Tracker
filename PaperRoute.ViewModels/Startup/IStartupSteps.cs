@@ -53,8 +53,15 @@ public interface IStartupSteps
     void EndSession();
 
     // "no-window-message": tells the person, before any window can exist,
-    // why PaperRoute stops (map:377): the system's message box on Windows,
-    // standard error elsewhere.
+    // why PaperRoute stops (map:377): the system's message box (user32
+    // MessageBoxW) on Windows, the same words on standard error on Linux and
+    // macOS. The sequence calls it only from step 4, so it is one of the
+    // real steps 1 to 6 that I3 builds: I3's DesktopStartupSteps owns this
+    // split and its test, which shows the form each system gets without
+    // opening a box (for example, a child process on Ubuntu and macOS whose
+    // data-root step fails, with exit code 1 and the exact sentence on
+    // standard error, and a test that the Windows form is the box). The
+    // sequence's own tests show only that the step is called with the text.
     void NoWindowMessage(string text);
 }
 
