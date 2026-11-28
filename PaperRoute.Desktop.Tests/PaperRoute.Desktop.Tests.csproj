@@ -39,6 +39,8 @@
     <None Update="HeadlessLimits.md" CopyToOutputDirectory="PreserveNewest" />
     <!-- Real faults the legibility rules find, each with its issue until fixed (KnownFailuresTests reads it). -->
     <None Update="Legibility\KnownFailures.tsv" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The User Guide, whose keyboard section names the keys the chord parser must accept (KeyboardHelperTests). -->
+    <None Include="..\docs\USER_GUIDE.md" Link="Input\USER_GUIDE.md" CopyToOutputDirectory="PreserveNewest" />
     <!-- The app's .axaml files as text, for the token tests (R1, its completeness guard, T3) to read the values and uses themselves. Content, not None: Avalonia's build removes every None item named *.axaml. -->
     <Content Include="..\PaperRoute.Desktop\**\*.axaml" Exclude="..\PaperRoute.Desktop\bin\**;..\PaperRoute.Desktop\obj\**" LinkBase="Axaml" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>

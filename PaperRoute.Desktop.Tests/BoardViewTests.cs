@@ -12,6 +12,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using ManuscriptPipeline.Models;
 using PaperRoute.Desktop.Tests.Board;
+using PaperRoute.Desktop.Tests.Input;
 using PaperRoute.TestFixtures;
 using PaperRoute.ViewModels;
 using PaperRoute.ViewModels.Board;
@@ -135,18 +136,11 @@ public sealed class BoardViewTests : StorageCheckedTests
             {
                 Dispatcher.UIThread.RunJobs();
                 box.Focus(NavigationMethod.Tab);
-                void Press(Key key, PhysicalKey physical, RawInputModifiers modifiers = RawInputModifiers.None)
-                {
-                    window.KeyPress(key, modifiers, physical, null);
-                    window.KeyRelease(key, modifiers, physical, null);
-                    Dispatcher.UIThread.RunJobs();
-                }
-
-                Press(Key.Down, PhysicalKey.ArrowDown, RawInputModifiers.Alt);
-                Press(Key.Down, PhysicalKey.ArrowDown);
-                Press(Key.Down, PhysicalKey.ArrowDown);
+                Keyboard.Press(window, Key.Down, RawInputModifiers.Alt);
+                Keyboard.Press(window, Key.Down);
+                Keyboard.Press(window, Key.Down);
                 int afterArrows = box.SelectedIndex;
-                Press(Key.Escape, PhysicalKey.Escape);
+                Keyboard.Press(window, Key.Escape);
                 return (afterArrows, box.SelectedIndex, box.IsDropDownOpen);
             }
             finally
@@ -1095,34 +1089,14 @@ internal sealed class BoardWindow : IDisposable
     public TextBlock EmptyMessage(string shelf) =>
         Shelf(shelf).FindControl<TextBlock>("EmptyMessage") ?? throw new AssertFailedException($"{shelf} has no empty message.");
 
-    public object? Focused() => Window.FocusManager?.GetFocusedElement();
+    public object? Focused() => FocusWalk.Focused(Window);
 
     // What a key on the Board could change, in one line.
     public string State() =>
         $"search \"{Board.SearchText}\", stage {Board.SelectedStageIndex}, sort {Board.SelectedSortIndex}, chip {Board.ActiveFilter}, " +
         $"shelf {Board.SelectedShelfIndex}, stage list {Board.IsStageListOpen}, sort list {Board.IsSortListOpen}, renders {Board.RenderCount}, notice \"{Shell.Notice}\"";
 
-    public void Press(Key key, RawInputModifiers modifiers = RawInputModifiers.None)
-    {
-        PhysicalKey physical = key switch
-        {
-            Key.Down => PhysicalKey.ArrowDown,
-            Key.Up => PhysicalKey.ArrowUp,
-            Key.Left => PhysicalKey.ArrowLeft,
-            Key.Right => PhysicalKey.ArrowRight,
-            Key.Home => PhysicalKey.Home,
-            Key.End => PhysicalKey.End,
-            Key.Enter => PhysicalKey.Enter,
-            Key.Escape => PhysicalKey.Escape,
-            Key.Space => PhysicalKey.Space,
-            Key.Tab => PhysicalKey.Tab,
-            Key.F => PhysicalKey.F,
-            _ => throw new ArgumentOutOfRangeException(nameof(key), key, "No physical key mapped."),
-        };
-        Window.KeyPress(key, modifiers, physical, null);
-        Window.KeyRelease(key, modifiers, physical, null);
-        Dispatcher.UIThread.RunJobs();
-    }
+    public void Press(Key key, RawInputModifiers modifiers = RawInputModifiers.None) => Keyboard.Press(Window, key, modifiers);
 
     public void Click(Control control)
     {
