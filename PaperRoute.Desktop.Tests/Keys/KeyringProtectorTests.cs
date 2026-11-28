@@ -534,6 +534,28 @@ public sealed class KeyringProtectorTests
         Assert.AreEqual(2, keyring.GetCalls, "The keyring was not asked again after the minute.");
     }
 
+    // A probe that said no is a failed fetch too: no keyring was running when
+    // the app started, and one starts later. It is asked again at the next use
+    // after a minute, not before.
+    [TestMethod]
+    public void AProbeThatSaidNoIsAskedAgainAfterAMinute()
+    {
+        var clock = new ManualClock();
+        var keyring = new FakeKeyring { WhyNot = NoKeyring };
+        KeyringSecretProtector protector = Protector(keyring, clock: clock);
+        byte[] clear = Encoding.UTF8.GetBytes(NewKey());
+
+        Assert.ThrowsExactly<InvalidOperationException>(() => protector.Protect(clear), "A save went ahead with no keyring running.");
+        keyring.WhyNot = null;
+        clock.Advance(TimeSpan.FromSeconds(59));
+        Assert.ThrowsExactly<InvalidOperationException>(() => protector.Protect(clear), "The probe's no was forgotten within the minute.");
+        Assert.AreEqual(1, keyring.ProbeCalls, "The probe was asked again within a minute of saying no.");
+
+        clock.Advance(TimeSpan.FromSeconds(2));
+        Assert.IsTrue(protector.Unprotect(protector.Protect(clear)).AsSpan().SequenceEqual(clear), "After the minute, a keyring that started late was not used.");
+        Assert.AreEqual(2, keyring.ProbeCalls, "The probe was not asked again after the minute.");
+    }
+
     private static KeyringSecretProtector Protector(
         FakeKeyring keyring,
         bool onInterfaceThread = false,
