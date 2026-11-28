@@ -453,6 +453,22 @@ jobs:
       - name: Publish the trial for Linux
         run: dotnet publish PaperRoute.Desktop/PaperRoute.Desktop.csproj --configuration Release --runtime linux-x64 --self-contained --output "$RUNNER_TEMP/board-trial"
 
+      # The published trial as a download, so a person can try this very
+      # build on an Ubuntu desktop. It is a tar file because an artifact's
+      # own zip does not keep the mark that makes the program file runnable.
+      # An interim build for testing: never a release.
+      - name: Pack the published trial as a download
+        run: |
+          mkdir -p "$RUNNER_TEMP/trial-app"
+          tar -czf "$RUNNER_TEMP/trial-app/paperroute-board-trial-linux-x64.tar.gz" -C "$RUNNER_TEMP" board-trial
+
+      - name: Upload the published trial
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: PaperRoute-trial-app-linux-x64
+          path: ${{ runner.temp }}/trial-app/
+          if-no-files-found: error
+          retention-days: 14
       # The 500-manuscript TEST library, written by the manual test that
       # exists for the real-window run. It lands in TestResults/v11-trial.
       # A filter that matches no test still ends with exit code 0, so the
@@ -848,6 +864,29 @@ jobs:
           if ($counts.failed -gt 0) { exit 1 }
           exit 0
 
+      # The published trial as a download, packed straight after the signing
+      # step and before anything runs it, so a person can try this very build
+      # on a real Mac. It is a tar file because an artifact's own zip does not
+      # keep the mark that makes the program file runnable. An interim build
+      # for testing: never a release.
+      - name: Pack the published trial as a download
+        id: pack
+        if: steps.publish.outcome == 'success'
+        continue-on-error: true
+        timeout-minutes: 5
+        run: |
+          mkdir -p "$RUNNER_TEMP/trial-app"
+          tar -czf "$RUNNER_TEMP/trial-app/paperroute-board-trial-${{ matrix.rid }}.tar.gz" -C "$RUNNER_TEMP" board-trial
+
+      - name: Upload the published trial
+        if: steps.pack.outcome == 'success'
+        continue-on-error: true
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: PaperRoute-trial-app-${{ matrix.rid }}
+          path: ${{ runner.temp }}/trial-app/
+          if-no-files-found: warn
+          retention-days: 14
       # The self-check waits 120 s, as in the Linux window job, well inside the
       # step's limit, so a hang is stopped and written down here.
       - name: Run the self-check
