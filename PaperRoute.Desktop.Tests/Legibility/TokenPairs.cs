@@ -69,15 +69,18 @@ internal static class TokenPairs
     }
 
     // The success and info tones (Appendix C.1, the harness design's part 3.1):
-    // each ink on the board, on a card and on its own muted fill, as a pill or
-    // a callout will draw it. No view draws them yet.
+    // each ink on the board, on a card and on a header, as today's pair list
+    // has them, and on its own muted fill, as a pill or a callout will draw it.
+    // No view draws them yet.
     private static IEnumerable<TokenPair> TonePairs()
     {
         yield return new("success text on a page (no view yet)", "SuccessBrush", "BoardBackgroundBrush");
         yield return new("success text on a card (no view yet)", "SuccessBrush", "CardBackgroundBrush");
+        yield return new("success text on a header (no view yet)", "SuccessBrush", "HeaderBackgroundBrush");
         yield return new("a success pill or callout (no view yet)", "SuccessBrush", "SuccessMutedBackgroundBrush");
         yield return new("info text on a page (no view yet)", "InfoBrush", "BoardBackgroundBrush");
         yield return new("info text on a card (no view yet)", "InfoBrush", "CardBackgroundBrush");
+        yield return new("info text on a header (no view yet)", "InfoBrush", "HeaderBackgroundBrush");
         yield return new("an info pill or callout (no view yet)", "InfoBrush", "InfoMutedBackgroundBrush");
     }
 }
