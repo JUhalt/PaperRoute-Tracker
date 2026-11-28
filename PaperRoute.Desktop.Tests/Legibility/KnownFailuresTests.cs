@@ -32,6 +32,12 @@ public sealed partial class KnownFailuresTests
         KnownFailure listed = Entry("R1\tMutedTextBrush on CardBackgroundBrush\tLight\t#1\ta muted ink too light on the card");
         Assert.IsEmpty(Problems([listed], 1, [stillFails]), "An entry the rule still reports, with its issue, is current.");
 
+        // What the R1 runs leave out (KnownFailures.Lists): the listed finding,
+        // and not the same pair in another theme case.
+        var otherCase = stillFails with { ThemeCase = "Dark", Line = "Dark: MutedTextBrush on CardBackgroundBrush is 1.84:1" };
+        Assert.IsTrue(KnownFailures.Lists([listed], stillFails), "A listed finding must be left out of its rule's run.");
+        Assert.IsFalse(KnownFailures.Lists([listed], otherCase), "The same pair in a theme case the list does not name must still be reported.");
+
         KnownFailure noIssue = Entry("R1\tMutedTextBrush on CardBackgroundBrush\tLight\t\ta muted ink too light on the card");
         Assert.AreEqual(
             "Line 10: R1, MutedTextBrush on CardBackgroundBrush, Light has no issue number (\"#\" and its number).",
