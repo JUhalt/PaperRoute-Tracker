@@ -704,7 +704,8 @@ public sealed class BoardBudgetTests : StorageCheckedTests
     private static void NoSlowStop(BoardView view) => view.Preparer.SlowSliceLimit = TimeSpan.FromHours(1);
 
     // The pairs script knows the sides IdleSides knows, in the same order,
-    // each in its scenario, and the scaling scenario as headless only.
+    // each in its scenario, the scaling scenario as headless only, and each
+    // scenario's side without preparation (its first).
     [TestMethod]
     public void ThePairsScriptKnowsEverySideAndItsScenario()
     {
@@ -724,6 +725,12 @@ public sealed class BoardBudgetTests : StorageCheckedTests
 
         string[] headlessOnly = IdleSides.All.Where(IdleSides.HeadlessOnly).Select(IdleSides.ScenarioOf).Distinct().ToArray();
         Assert.Contains($"$HeadlessOnlyScenarios = @({string.Join(", ", headlessOnly.Select(name => $"'{name}'"))})", script, "The pairs script refuses the headless-only scenarios in a window.");
+
+        // The side without preparation of each scenario is its first side;
+        // a sitting whose after side is one of them is read as reversed.
+        string[] without = IdleSides.All.GroupBy(IdleSides.ScenarioOf).Select(scenario => scenario.First()).ToArray();
+        Assert.IsTrue(without.Where(side => IdleSides.ScenarioOf(side) != IdleSides.SearchScenario).All(side => !IdleSides.Prepares(side)), "The first side of every scenario but search prepares nothing.");
+        Assert.Contains($"$IdleWithoutSides = @({string.Join(", ", without.Select(name => $"'{name}'"))})", script, "The pairs script knows each scenario's side without preparation.");
     }
 
     // CheckLastRows, on canned rows: it passes on the order the measurement

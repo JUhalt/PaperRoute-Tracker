@@ -151,6 +151,20 @@ $HeadlessOnlyScenarios = @('scaling')
 # RefreshRows): they read about 0 on a side that does not prepare or
 # refresh, by design, so they are reported and never block.
 $PreparationRows = @('prepare-published-idle', 'prepare-published-longest-step', 'refresh-published-timer', 'refresh-published-after-search', 'refresh-published-after-clear', 'refresh-published-after-theme')
+# In a sitting of idle sides, the rows the idle design reports and never
+# judges: its row 9, a theme change while Published is prepared (its rule
+# for shipping, design section 11, step 7, covers rows 6 to 8 and 10 to 12;
+# restyling the prepared hidden views may cost more by design). Reported
+# apart; never watch rows.
+$IdleReportOnlyRows = @('theme-change')
+# The side without preparation of each scenario, the first of its sides
+# (IdleSides.All). A sitting whose after side is one of these is reversed:
+# the side expected lower is the one without preparation, as for the rows
+# a step is expected to make dearer (the keystroke that meets a step, the
+# switch on mid-step). Its count on the primary row then shows the harm of
+# preparation, and a watch row is flagged when the side with preparation,
+# before, is higher.
+$IdleWithoutSides = @('none', 'key-none', 'timer-none', 'search-pending', 'maximise-none', 'scaling-none', 'theme-none')
 
 function Get-Field($object, [string] $name) {
     if ($null -eq $object) { return $null }
@@ -398,7 +412,8 @@ function Read-Sitting([string] $folder) {
 # The verdict rule of the method's section 7, in force since November 27,
 # 2026, for one build of one sitting: the median UI of 5 runs that are not
 # disturbed, from at most 10 tries, against the budget. A report-only row is
-# compared only between builds: the primary row, when it is one, is printed
+# compared only between builds (in a sitting of idle sides, between the two
+# sides of the sitting): the primary row, when it is one, is printed
 # without a budget verdict, and the other report-only rows are left out. Run
 # UI (not validated) is printed beside, and never read for a verdict.
 function Get-VerdictLines($sitting, [string] $name, [string] $primary) {
@@ -412,6 +427,7 @@ function Get-VerdictLines($sitting, [string] $name, [string] $primary) {
         return $lines
     }
     $lines.Add("  ${name}: the first 5 runs not disturbed, of $($tries.Count) tried ($unknown with load unknown). Median UI against the budget:")
+    $between = if ([string] (Get-Field $sitting.Record 'beforeIdle') -or [string] (Get-Field $sitting.Record 'afterIdle')) { 'between the two sides of the sitting' } else { 'between builds' }
     $first = $usable[0]
     $multiplier = [double] (Get-Field $first.Json 'budgetMultiplier')
     if ($multiplier -le 0) { $multiplier = 1 }
@@ -422,7 +438,7 @@ function Get-VerdictLines($sitting, [string] $name, [string] $primary) {
         $ui = Get-Median (Get-Values $usable $id 'uiMs')
         $beside = "Beside it: Run UI (not validated) $(Format-MsUnit (Get-Median (Get-Values $usable $id 'runUiMs'))), fast-core share $(Format-Number (Get-Median (Get-Values $usable $id 'perfCoreShare')) '0.00'), GC $(Format-MsUnit (Get-Median (Get-Values $usable $id 'gcPauseMs'))), compilation $(Format-MsUnit (Get-Median (Get-Values $usable $id 'jitMs')))."
         if ($reportOnly) {
-            $lines.Add("    ${id}: UI $(Format-MsUnit $ui). Report-only: compared only between builds, never with a budget. $beside")
+            $lines.Add("    ${id}: UI $(Format-MsUnit $ui). Report-only: compared only $between, never with a budget. $beside")
             continue
         }
         $budget = [double] (Get-Field $row 'budgetMs') * $multiplier
@@ -478,6 +494,13 @@ function Get-Summary($sittings) {
     if ($bIdle -or $aIdle) {
         $scenario = if ($IdleScenarios.Contains($aIdle)) { " Scenario: $($IdleScenarios[$aIdle])." } else { '' }
         $lines.Add("Idle sides: $bName runs with --after-idle $bIdle, $aName with --after-idle $aIdle.$scenario Both wait alike before the first switch (preparation done, the scenario's rows, a fixed idle period, one frame; a maximise or a scaling change and its frame after it). With the same build on both sides, the counts compare the sides.")
+    }
+    # A reversed sitting (IdleWithoutSides): every count is read for the
+    # side with preparation, before.
+    $reversed = [bool] ($bIdle -and $aIdle -and $IdleWithoutSides -contains $aIdle -and $IdleWithoutSides -notcontains $bIdle)
+    $gainWord = if ($reversed) { 'harm' } else { 'gain' }
+    if ($reversed) {
+        $lines.Add("Reversed sitting: $aName (--after-idle $aIdle) is the side without preparation, named after as the side expected lower. The rule's count on the primary row shows the harm of $bName's preparation, not a gain, and a watch row is flagged when $bName, the side with preparation, is higher.")
     }
     $lines.Add("Primary row (named before the runs): $primary, expected lower. Expected to rise: $(if ($rise.Count) { $rise -join ', ' } else { 'none' }).")
     $lines.Add('The deciding sitting is the one the pull request named before the runs; every sitting is listed in it.')
@@ -543,7 +566,7 @@ function Get-Summary($sittings) {
     $result.MedianDifferenceMs = $difference; $result.FloorMs = $floor
     $lines.Add("  medians: $bName $(Format-MsUnit $beforeMedian), $aName $(Format-MsUnit $afterMedian).")
     $seenText = if ($count.Pairs -gt 0) { " (P of at least $($count.Count) = $(Format-Number (Get-UpperTail $count.Pairs $count.Count) '0.000'))" } else { '' }
-    $needText = if ($null -ne $count.Need) { "a gain needs $($count.Need) of $($count.Pairs) (P = $(Format-Number (Get-UpperTail $count.Pairs $count.Need) '0.000'))" } else { "a decision needs at least $MinimumPairs pairs" }
+    $needText = if ($null -ne $count.Need) { "a $gainWord needs $($count.Need) of $($count.Pairs) (P = $(Format-Number (Get-UpperTail $count.Pairs $count.Need) '0.000'))" } else { "a decision needs at least $MinimumPairs pairs" }
     $lines.Add("  $aName lower in $($count.Count) of $($count.Pairs) pairs$seenText; $needText.")
     $lines.Add("  median difference ($bName - $aName) $(Format-MsUnit $difference); size floor $(Format-MsUnit $floor) (the larger of 2 ms and 3% of $bName's median).")
     if ($ratios.Count -ge 4) {
@@ -571,13 +594,13 @@ function Get-Summary($sittings) {
         $lines.Add("Verdict: not decided. $($count.Pairs) pairs; a decision needs at least $MinimumPairs.")
     } elseif (-not $count.Reached) {
         $result.Verdict = 'not shown'
-        $lines.Add("Verdict: gain not shown. $aName lower in $($count.Count) of $($count.Pairs); $($count.Need) needed.")
+        $lines.Add("Verdict: $gainWord not shown. $aName lower in $($count.Count) of $($count.Pairs); $($count.Need) needed.")
     } elseif ($difference -lt $floor) {
         $result.Verdict = 'not shown'
-        $lines.Add("Verdict: gain not shown. The count is reached, but the median difference $(Format-Ms $difference) ms is under the floor of $(Format-Ms $floor) ms.")
+        $lines.Add("Verdict: $gainWord not shown. The count is reached, but the median difference $(Format-Ms $difference) ms is under the floor of $(Format-Ms $floor) ms.")
     } else {
-        $result.Verdict = 'gain shown'
-        $lines.Add("Verdict: gain shown on $primary.")
+        $result.Verdict = "$gainWord shown"
+        $lines.Add("Verdict: $gainWord shown on $primary.$(if ($reversed) { " $bName, the side with preparation, is higher by the count." })")
     }
 
     # Watch rows: each sitting on its own. Higher once: a new sitting for that
@@ -587,22 +610,33 @@ function Get-Summary($sittings) {
     # switch, before it, so they read about 0 on a side that does not
     # prepare or refresh and more on one that does, by design; they are
     # reported and never block (the longest step is judged on its own, in a
-    # real window, against the UI thread budget).
+    # real window, against the UI thread budget). The theme change, the
+    # idle design's row 9, is reported apart the same way and never blocks.
+    # In a reversed sitting every row is read for the side with preparation,
+    # before: a row is higher when before is higher.
     $preparationRows = if ($bIdle -or $aIdle) { $PreparationRows } else { @() }
+    $idleReportOnly = if ($bIdle -or $aIdle) { $IdleReportOnlyRows } else { @() }
+    $higherName = if ($reversed) { $bName } else { $aName }
+    $watchDirection = if ($reversed) { 'lower' } else { 'higher' }
     $lines.Add('')
-    $lines.Add('Watch rows (every row not named; UI higher after, ties count against):')
+    $lines.Add($(if ($reversed) { "Watch rows (every row not named; UI higher on $bName, the side with preparation, ties count against):" } else { 'Watch rows (every row not named; UI higher after, ties count against):' }))
     $flagged = 0
     foreach ($id in $ids) {
         if ($id -eq $primary) { continue }
-        $higherIn = @(foreach ($sitting in $counted) { $c = Get-Count $sitting.Kept $id 'uiMs' 'higher'; if ($c.Reached) { "$($c.Count) of $($c.Pairs)" } })
+        $higherIn = @(foreach ($sitting in $counted) { $c = Get-Count $sitting.Kept $id 'uiMs' $watchDirection; if ($c.Reached) { "$($c.Count) of $($c.Pairs)" } })
         if ($rise -contains $id) {
-            $c = Get-Count $pairs $id 'uiMs' 'higher'
-            $lines.Add("  ${id} (expected to rise): $aName higher in $($c.Count) of $($c.Pairs) pairs. Reported; it does not block.")
+            $c = Get-Count $pairs $id 'uiMs' $watchDirection
+            $lines.Add("  ${id} (expected to rise): $higherName higher in $($c.Count) of $($c.Pairs) pairs. Reported; it does not block.")
             continue
         }
         if ($preparationRows -contains $id) {
-            $c = Get-Count $pairs $id 'uiMs' 'higher'
-            $lines.Add("  ${id} (idle preparation, before the switch): $aName higher in $($c.Count) of $($c.Pairs) pairs. Reported; it does not block.")
+            $c = Get-Count $pairs $id 'uiMs' $watchDirection
+            $lines.Add("  ${id} (idle preparation, before the switch): $higherName higher in $($c.Count) of $($c.Pairs) pairs. Reported; it does not block.")
+            continue
+        }
+        if ($idleReportOnly -contains $id) {
+            $c = Get-Count $pairs $id 'uiMs' $watchDirection
+            $lines.Add("  ${id} (report-only, the idle design's row 9): $higherName higher in $($c.Count) of $($c.Pairs) pairs. Reported; it does not block.")
             continue
         }
         if ($higherIn.Count -eq 0) { continue }
