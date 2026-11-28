@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Documents;
+using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Shapes;
 using Avalonia.Input;
@@ -19,10 +20,14 @@ namespace PaperRoute.Desktop.Tests.Styles;
 // trial cannot show it to a user, because the app does not contain it.
 //
 // States a pointer would make (hovered, pressed) are set as pseudo-classes:
-// nothing moves the pointer in a headless window, so they stay. Focus is real,
-// from the keyboard, and only one control can hold it: the button named
-// "Focused". The text box and drop-down shown "focused" carry the
-// pseudo-classes their focus styles select on.
+// nothing moves the pointer in a headless window, so they stay, except that
+// a button sets :pressed from its IsPressed when its template is applied,
+// which clears it while nothing holds the button down, so a pressed specimen
+// sets it again each time its template has been applied, and takes its
+// face's transition away first (Pressed). Focus is real, from the keyboard,
+// and only one control can hold it: the button named "Focused". The text box
+// and drop-down shown "focused" carry the pseudo-classes their focus styles
+// select on.
 //
 // Every specimen has a name of its own, and so do the labels and captions
 // beside them, so the sweeps (Legibility/Sweep.cs) key each element by the
@@ -103,7 +108,7 @@ internal sealed class StyleGallery : UserControl
             Place(grid, new TextBlock { Name = "Role" + role, Classes = { "meta" }, Text = role, VerticalAlignment = VerticalAlignment.Center }, row + 1, 0);
             Place(grid, Spaced(MakeButton(role + "AtRest", roles[row].Text, roles[row].Classes)), row + 1, 1);
             Place(grid, Spaced(With(MakeButton(role + "Hovered", roles[row].Text, roles[row].Classes), ":pointerover")), row + 1, 2);
-            Place(grid, Spaced(With(MakeButton(role + "Pressed", roles[row].Text, roles[row].Classes), ":pointerover", ":pressed")), row + 1, 3);
+            Place(grid, Spaced(Pressed(MakeButton(role + "Pressed", roles[row].Text, roles[row].Classes))), row + 1, 3);
             Button off = MakeButton(role + "Off", roles[row].Text, roles[row].Classes);
             off.IsEnabled = false;
             Place(grid, Spaced(off), row + 1, 4);
@@ -118,7 +123,7 @@ internal sealed class StyleGallery : UserControl
         more.Children.Add(Spaced(With(MakeButton("QuietIconHovered", "⋯", ["quiet", "icon"]), ":pointerover")));
         more.Children.Add(Spaced(MakeButton("Link", "View in Deadlines →", ["link"])));
         more.Children.Add(Spaced(With(MakeButton("LinkHovered", "Hovered link", ["link"]), ":pointerover")));
-        more.Children.Add(Spaced(With(MakeButton("LinkPressed", "Pressed link", ["link"]), ":pointerover", ":pressed")));
+        more.Children.Add(Spaced(Pressed(MakeButton("LinkPressed", "Pressed link", ["link"]))));
         host.Children.Add(more);
     }
 
@@ -468,5 +473,36 @@ internal sealed class StyleGallery : UserControl
         }
 
         return control;
+    }
+
+    // A pressed specimen: hovered and pressed. Avalonia's Button sets :pressed
+    // from its IsPressed when its template is applied (Button.OnApplyTemplate
+    // at 12.1.6). IsPressed cannot be set from outside and nothing presses a
+    // button in a headless window, so a :pressed set here alone is cleared at
+    // the first layout, once the window is shown, and the specimen drew as
+    // hovered (#463). So :pressed is set again each time the template has been
+    // applied.
+    //
+    // The face's transitions are taken away first. A face that goes from
+    // hovered to pressed after it is shown eases its background
+    // (Button.axaml), and in a headless window nothing a picture does can be
+    // relied on to finish that: a picture or a sweep then reads a shade in
+    // between, or the hovered shade itself. Without the transition the face
+    // holds its pressed brush from the moment its template is applied
+    // (GalleryStateTests.EveryPressedSpecimenDrawsItsPressedBrush and
+    // NoStateSpecimenEasesIntoItsState).
+    private static Button Pressed(Button button)
+    {
+        With(button, ":pointerover", ":pressed");
+        button.TemplateApplied += (_, e) =>
+        {
+            if (e.NameScope.Find<ContentPresenter>("PART_ContentPresenter") is { } face)
+            {
+                face.Transitions = null;
+            }
+
+            ((IPseudoClasses)button.Classes).Set(":pressed", true);
+        };
+        return button;
     }
 }

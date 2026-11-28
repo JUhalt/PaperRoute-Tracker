@@ -41,10 +41,12 @@ internal sealed record SweepFrame(string Subject, string ThemeCase, IReadOnlyLis
 
 // The sweeps (the harness design, part 2.1): one rule run over every surface
 // the harness can build, in its theme cases. Sweep shows a subject in a
-// window, in a theme case, lets its transitions finish, saves its picture
-// (sweep-<subject>-<case>.png), reads the frame and walks the window's visual
-// tree, handing each rule its inputs. The rules (Rules.R5, Rules.R7,
-// Rules.R8, Rules.R9) judge; the sweep only reads.
+// window, in a theme case, saves its picture (sweep-<subject>-<case>.png),
+// reads the frame and walks the window's visual tree, handing each rule its
+// inputs. Saving the picture draws frames, which cannot be relied on to
+// finish a transition (Pictures.Save), so nothing a sweep shows may be
+// easing. The rules (Rules.R5, Rules.R7, Rules.R8, Rules.R9) judge; the sweep
+// only reads.
 //
 // The subjects are every built target surface (TargetSurfaceCatalog, today
 // the Board on the example library) and the style gallery (part 2.4).
