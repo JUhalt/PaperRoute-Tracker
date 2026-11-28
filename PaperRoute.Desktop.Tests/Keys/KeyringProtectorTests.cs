@@ -20,7 +20,6 @@ public sealed class KeyringProtectorTests
     private const string Name = ProtectedKeyStore.OpenAlex;
     private const string NoKeyring = "PaperRoute can't keep keys on this computer: no keyring is running.";
     private static readonly TimeSpan s_wait = TimeSpan.FromSeconds(10);
-    private static readonly TimeSpan s_shortProbe = TimeSpan.FromMilliseconds(200);
 
     // Gates a test closed; all are opened at the end, so no worker stays blocked.
     private readonly List<ManualResetEventSlim> _gates = [];
@@ -115,9 +114,11 @@ public sealed class KeyringProtectorTests
     {
         FakeKeyring keyring = Failing(how);
         string folder = NewFolder();
-        var store = new ProtectedKeyStore(folder, Protector(keyring, probeLimit: s_shortProbe));
+        var clock = new ManualClock();
+        var store = new ProtectedKeyStore(folder, Protector(keyring, clock: clock));
 
-        Assert.Throws<InvalidOperationException>(() => store.Save(Name, NewKey()), $"A save through a keyring that is {how} did not fail.");
+        Exception? failed = FastForward(clock, () => Catch(() => store.Save(Name, NewKey())));
+        Assert.IsInstanceOfType<InvalidOperationException>(failed, $"A save through a keyring that is {how} did not fail.");
 
         Assert.AreEqual(0, keyring.SetCalls, $"A keyring that is {how} got a new master key.");
         Assert.IsEmpty(FilesIn(folder), $"A save through a keyring that is {how} left a file.");
@@ -144,10 +145,11 @@ public sealed class KeyringProtectorTests
         Assert.IsTrue(new ProtectedKeyStore(folder, Protector(good)).HasKey(Name), "The key file made for this test does not read with its own master key.");
 
         FakeKeyring keyring = Failing(how);
-        var store = new ProtectedKeyStore(folder, Protector(keyring, probeLimit: s_shortProbe));
+        var clock = new ManualClock();
+        var store = new ProtectedKeyStore(folder, Protector(keyring, clock: clock));
 
-        Assert.IsTrue(store.Load(Name) is null, $"The key 'openalex' was read through a keyring that is {how}.");
-        Assert.IsFalse(store.HasKey(Name), $"The key 'openalex' was reported kept through a keyring that is {how}.");
+        Assert.IsTrue(FastForward(clock, () => store.Load(Name)) is null, $"The key 'openalex' was read through a keyring that is {how}.");
+        Assert.IsFalse(FastForward(clock, () => store.HasKey(Name)), $"The key 'openalex' was reported kept through a keyring that is {how}.");
     }
 
     [TestMethod]
@@ -437,39 +439,49 @@ public sealed class KeyringProtectorTests
         Assert.AreEqual(1, keyring.GetCalls, "The interface thread's calls started more than one fetch.");
     }
 
-    // The lookup has no time limit: here it answers far past the probe's
-    // limit, as a person typing at an unlock prompt would, and still counts.
+    // The lookup has no time limit: here the keyring answers only after two
+    // minutes on the protector's clock, twelve times the probe's limit, as a
+    // person typing at an unlock prompt would, and the answer still counts.
+    // The probe's limit runs on that clock too, so the minutes pass at once
+    // and a slow runner cannot cut the probe short.
     [TestMethod]
     public void AKeyringPromptIsNotCutOff()
     {
         byte[] master = RandomNumberGenerator.GetBytes(KeyFileCipher.KeySize);
         var keyring = new FakeKeyring { GetGate = Gate() };
         keyring.Hold(Account, master);
-        KeyringSecretProtector protector = Protector(keyring, probeLimit: TimeSpan.FromMilliseconds(50));
+        var clock = new ManualClock();
+        KeyringSecretProtector protector = Protector(keyring, clock: clock);
         byte[] clear = Encoding.UTF8.GetBytes(NewKey());
         byte[] file = KeyFileCipher.Encrypt(master, clear);
 
         Task<byte[]> reading = Task.Run(() => protector.Unprotect(file));
         Assert.IsTrue(keyring.GetEntered.Wait(s_wait), "The keyring was not asked.");
-        Assert.IsFalse(Finished(reading, TimeSpan.FromSeconds(1)), "The lookup ended while the keyring was still answering: it was cut off.");
+        clock.Advance(TimeSpan.FromMinutes(2));
+        Assert.IsFalse(Finished(reading, TimeSpan.FromSeconds(1)), "The lookup ended while the keyring was still answering two minutes on: it was cut off.");
         keyring.GetGate!.Set();
 
         Assert.IsTrue(Finished(reading, s_wait), "The lookup did not finish once the keyring answered.");
         Assert.IsTrue(reading.Result.AsSpan().SequenceEqual(clear), "The key file did not read with the master key that came late.");
     }
 
-    // The limit is ten seconds; here a probe that never answers meets a short
-    // limit, and is read as not available without the keyring being asked.
+    // The protector as the app makes it, with only a test clock: a probe that
+    // never answers is still waited for at 9.9 seconds, and at ten it is read
+    // as not available, without the keyring being asked for the master key.
     [TestMethod]
     public void TheProbeGivesUpAfterTenSeconds()
     {
-        Assert.AreEqual(TimeSpan.FromSeconds(10), KeyringSecretProtector.ProbeLimit, "The availability probe's limit is not ten seconds.");
         var keyring = new FakeKeyring { ProbeGate = Gate() };
-        KeyringSecretProtector protector = Protector(keyring, probeLimit: s_shortProbe);
+        var clock = new ManualClock();
+        var protector = new KeyringSecretProtector(keyring, () => false, Account, clock);
 
         Task<string?> why = Task.Run(() => protector.WhyNotAvailable);
-        Assert.IsTrue(Finished(why, s_wait), "The probe did not give up at its limit.");
-        Assert.IsNotNull(why.Result, "A keyring that did not answer was said to be available.");
+        Assert.IsTrue(SpinWait.SpinUntil(() => clock.Pending > 0, s_wait), "The probe was given no time limit.");
+        clock.Advance(TimeSpan.FromSeconds(9.9));
+        Assert.IsFalse(Finished(why, TimeSpan.FromMilliseconds(500)), "The probe gave up before ten seconds.");
+        clock.Advance(TimeSpan.FromSeconds(0.1));
+        Assert.IsTrue(Finished(why, s_wait), "The probe did not give up at ten seconds.");
+        Assert.Contains("did not answer", why.Result ?? string.Empty, "A keyring that did not answer was not said to be silent.");
         Assert.IsFalse(protector.IsAvailable, "A keyring that did not answer was said to be available.");
         Task<Exception?> save = Task.Run(() => Catch(() => protector.Protect([1, 2, 3])));
         Assert.IsTrue(Finished(save, s_wait), "Protect waited for a probe that did not answer.");
@@ -525,10 +537,9 @@ public sealed class KeyringProtectorTests
     private static KeyringSecretProtector Protector(
         FakeKeyring keyring,
         bool onInterfaceThread = false,
-        TimeSpan? probeLimit = null,
         TimeProvider? clock = null)
     {
-        var protector = new KeyringSecretProtector(keyring, () => onInterfaceThread, Account, clock, probeLimit);
+        var protector = new KeyringSecretProtector(keyring, () => onInterfaceThread, Account, clock);
         protector.AllowMasterKeyCreation();
         return protector;
     }
@@ -572,6 +583,25 @@ public sealed class KeyringProtectorTests
 
     private static bool Finished(Task task, TimeSpan limit) => Task.WhenAny(task, Task.Delay(limit)).GetAwaiter().GetResult() == task;
 
+    // Runs the action on a worker while the clock runs fast, a second every ten
+    // milliseconds, so a probe that never answers meets its limit at once.
+    private static T FastForward<T>(ManualClock clock, Func<T> action)
+    {
+        Task<T> running = Task.Run(action);
+        var watch = Stopwatch.StartNew();
+        while (!Finished(running, TimeSpan.FromMilliseconds(10)))
+        {
+            if (watch.Elapsed > s_wait)
+            {
+                throw new AssertFailedException("The keyring protector did not answer, even past its time limit.");
+            }
+
+            clock.Advance(TimeSpan.FromSeconds(1));
+        }
+
+        return running.GetAwaiter().GetResult();
+    }
+
     private static Exception? Catch(Action action)
     {
         try
@@ -583,14 +613,5 @@ public sealed class KeyringProtectorTests
         {
             return ex;
         }
-    }
-
-    private sealed class ManualClock : TimeProvider
-    {
-        private DateTimeOffset _now = new(2026, 11, 28, 12, 0, 0, TimeSpan.Zero);
-
-        public override DateTimeOffset GetUtcNow() => _now;
-
-        public void Advance(TimeSpan by) => _now += by;
     }
 }

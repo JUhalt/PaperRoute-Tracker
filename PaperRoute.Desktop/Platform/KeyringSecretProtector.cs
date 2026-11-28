@@ -24,7 +24,8 @@ namespace PaperRoute.Desktop.Platform;
 //   never make one, because a new key would orphan every key file written.
 // - Two time limits: the availability probe gets ten seconds, and no answer
 //   means not available; the lookup and the store get none, because a locked
-//   keyring may be showing its own unlock prompt. Both run on a worker.
+//   keyring may be showing its own unlock prompt. Both run on a worker, and
+//   the probe's limit runs on the protector's clock.
 // - The interface thread never waits for the keyring: there, when the master
 //   key is not in memory yet, Unprotect reads as no key and Protect says the
 //   keyring is being asked, the fetch starts on a worker, and MasterKeyReady
@@ -54,7 +55,6 @@ public sealed class KeyringSecretProtector : ISecretProtector, IExplainsAvailabi
     private readonly IKeyring _keyring;
     private readonly Func<bool> _isInterfaceThread;
     private readonly TimeProvider _clock;
-    private readonly TimeSpan _probeLimit;
     private readonly object _gate = new();
 
     private byte[]? _masterKey;
@@ -66,14 +66,13 @@ public sealed class KeyringSecretProtector : ISecretProtector, IExplainsAvailabi
     private DateTimeOffset _probedAt;
     private int _readyRaised;
 
-    // The account, the clock and the probe's limit are for tests; the app
-    // passes the keyring and Dispatcher.UIThread.CheckAccess only.
+    // The account and the clock are for tests; the app passes the keyring and
+    // Dispatcher.UIThread.CheckAccess only.
     public KeyringSecretProtector(
         IKeyring keyring,
         Func<bool> isInterfaceThread,
         string? account = null,
-        TimeProvider? clock = null,
-        TimeSpan? probeLimit = null)
+        TimeProvider? clock = null)
     {
         ArgumentNullException.ThrowIfNull(keyring);
         ArgumentNullException.ThrowIfNull(isInterfaceThread);
@@ -81,7 +80,6 @@ public sealed class KeyringSecretProtector : ISecretProtector, IExplainsAvailabi
         _isInterfaceThread = isInterfaceThread;
         Account = account ?? StorageEnvironment.DataFolderName();
         _clock = clock ?? TimeProvider.System;
-        _probeLimit = probeLimit ?? ProbeLimit;
     }
 
     // Raised once, on a worker, when the master key is first in memory, so a
@@ -303,15 +301,20 @@ public sealed class KeyringSecretProtector : ISecretProtector, IExplainsAvailabi
         }
     }
 
-    private string? RunProbe()
+    // The limit runs on the clock, and nothing waits for the probe here: a
+    // probe that never answers holds only its own worker.
+    private async Task<string?> RunProbe()
     {
         string? whyNot;
         try
         {
-            Task<string?> asking = Task.Run(_keyring.WhyNotReachable);
-            whyNot = asking.Wait(_probeLimit) ? asking.Result : NoAnswer;
+            whyNot = await Task.Run(_keyring.WhyNotReachable).WaitAsync(ProbeLimit, _clock).ConfigureAwait(false);
         }
-        catch (AggregateException)
+        catch (TimeoutException)
+        {
+            whyNot = NoAnswer;
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             whyNot = CouldNotAsk;
         }
