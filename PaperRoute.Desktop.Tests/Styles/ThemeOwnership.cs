@@ -17,10 +17,14 @@ internal static partial class ThemeOwnership
         // (plain or ??=), an object initializer, an XAML attribute, a style's
         // Setter (Property="RequestedThemeVariant"), XAML's property-element
         // form, or the property object itself (SetValue, Bind, SetCurrentValue).
-        new("sets a theme variant", WriterPattern(), ["Styles/AppTheme.cs"]),
+        // The one exception: the measurement's window shows the variant it
+        // measures, whatever AppTheme says (BoardMeasurement, d1 7.3).
+        new("sets a theme variant", WriterPattern(), ["Styles/AppTheme.cs", "Measurement/BoardMeasurement.cs"]),
 
-        // Avalonia's report of the system's theme and contrast preference, and its change event.
-        new("reads the system's colour values", ColourValuesPattern(), ["Styles/AppTheme.cs", "Styles/ContrastPreference.cs"]),
+        // Avalonia's report of the system's theme and contrast preference, and
+        // its change event: ContrastPreference, which AppTheme follows, and the
+        // platform check, which only records it (PlatformCheckWindow.FactsFor).
+        new("reads the system's colour values", ColourValuesPattern(), ["Styles/ContrastPreference.cs", "Platform/PlatformCheckWindow.cs"]),
 
         // The reader of those values that AppTheme follows (declared in ContrastPreference.cs).
         new("makes a contrast preference from the platform", FromPlatformPattern(), ["Styles/AppTheme.cs", "Styles/ContrastPreference.cs"]),
@@ -30,6 +34,11 @@ internal static partial class ThemeOwnership
     ];
 
     public static string SourceRoot => Path.Combine(AppContext.BaseDirectory, "Source");
+
+    // Every allowed use, in Scan's "path: what it does" form, so a test can
+    // fail on an exception that no longer matches anything.
+    public static IReadOnlyList<string> Exceptions =>
+        s_rules.SelectMany(rule => rule.AllowedIn.Select(path => $"{path}: {rule.What}")).ToList();
 
     // Every .cs and .axaml file of PaperRoute.Desktop, with its path relative
     // to the project folder ('/' separated) and its text.

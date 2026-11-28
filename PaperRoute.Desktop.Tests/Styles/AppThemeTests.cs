@@ -168,8 +168,10 @@ public sealed class AppThemeTests
 
     // One owner means one: no code of PaperRoute.Desktop but AppTheme sets a
     // theme variant, and none but AppTheme and the two readers it uses reads
-    // the system's contrast state. A second writer or reader fails here, by
-    // file and line.
+    // the system's contrast state, except the two uses ThemeOwnership names
+    // (the measurement's pinned window and the platform check's record). A
+    // second writer or reader fails here, by file and line, and so does a
+    // named exception that no longer matches anything.
     [TestMethod]
     public void OnlyAppThemeSetsTheVariantOrReadsTheSystemContrast()
     {
@@ -180,6 +182,7 @@ public sealed class AppThemeTests
         Assert.IsTrue(files.Any(file => file.Path == "App.axaml.cs") && files.Any(file => file.Path == "App.axaml"), "The scan did not read the app's own files.");
         Assert.Contains("Styles/AppTheme.cs: sets a theme variant", allowed, "The scan did not find AppTheme's own write.");
         Assert.Contains("Styles/AppTheme.cs: makes a contrast preference from the platform", allowed, "The scan did not find AppTheme's own reading.");
+        CollectionAssert.AreEquivalent(ThemeOwnership.Exceptions.ToList(), allowed, "Every named exception must still match a use, and no use may be allowed without one. Allowed: " + string.Join("; ", allowed));
         Assert.IsEmpty(findings, "Code other than AppTheme sets a theme variant or reads the system's contrast state:" + Environment.NewLine + string.Join(Environment.NewLine, findings));
     }
 

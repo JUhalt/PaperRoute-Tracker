@@ -5,7 +5,6 @@ using Avalonia.Controls;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using ManuscriptPipeline.Models;
-using PaperRoute.Desktop.Styles;
 using PaperRoute.ViewModels;
 using PaperRoute.ViewModels.Board;
 using PaperRoute.ViewModels.Measurement;
@@ -207,7 +206,10 @@ public sealed class BoardMeasurement
             window = new MainWindow { DataContext = shell, Width = width, Height = height };
             if (variant is not null)
             {
-                AppTheme.PinForMeasurement(window, variant);
+                // The one window that does not follow AppTheme: it shows the
+                // variant it measures (d1 7.3), a named exception in
+                // ThemeOwnership.
+                window.RequestedThemeVariant = variant;
             }
 
             window.Show();

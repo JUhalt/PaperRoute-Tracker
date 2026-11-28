@@ -2,7 +2,6 @@ using System.Runtime.CompilerServices;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
-using Avalonia.Platform;
 using Avalonia.Styling;
 using Avalonia.Threading;
 
@@ -100,21 +99,6 @@ public sealed class AppTheme
             Appearance.System => ThemeVariant.Default,
             _ => throw new ArgumentOutOfRangeException(nameof(appearance), appearance, null),
         };
-    }
-
-    // What the platform reports of the system's theme, for the platform
-    // check's record only (PlatformCheckWindow.FactsFor).
-    public static PlatformColorValues? SystemColorValues(Application? application) =>
-        application?.PlatformSettings?.GetColorValues();
-
-    // The measurement's window shows the one variant it measures, whatever
-    // the appearance and a contrast theme say (d1 7.3): the one window that
-    // does not follow the application.
-    public static void PinForMeasurement(Window window, ThemeVariant variant)
-    {
-        ArgumentNullException.ThrowIfNull(window);
-        ArgumentNullException.ThrowIfNull(variant);
-        window.RequestedThemeVariant = variant;
     }
 
     // Follows the running platform's contrast preference from now on (d1 5.2):
