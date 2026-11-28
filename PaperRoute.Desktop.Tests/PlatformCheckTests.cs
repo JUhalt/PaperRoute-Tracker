@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Text.Json;
 using Avalonia.Controls;
+using Avalonia.Headless;
 using Avalonia.Threading;
 using PaperRoute.Desktop.Platform;
 using PaperRoute.Desktop.Tests.Board;
@@ -794,6 +795,157 @@ public sealed class PlatformCheckTests : StorageCheckedTests
             "Still running when the window was closed: no outcome came back. The second copy was still running; it was stopped.",
             restart.GetProperty("detail").GetString());
         Assert.DoesNotContain(ChosenName, File.ReadAllText(path));
+    }
+
+    // ---- Whether the system's text size reaches the window ----
+
+    // The check records what the system says of its text size, the window's
+    // render scaling, and the heights in device pixels of a 13 px body line
+    // in Inter and a fixed box 100 layout units high (the harness design,
+    // part 3.5), so a run at a larger system text size tells which happened:
+    // text grows (the line grows, the box stays), everything grows (both
+    // grow with the render scaling), or nothing changes. Here with fake
+    // readers, in the trial's window and
+    // in a window whose render scaling a test sets; then a reader that
+    // fails or is missing, and the real reader's reading of what Windows'
+    // registry and Linux's tools give. The real reader runs in
+    // TheRealTextSizeReaderAnswersOnThisSystem, the Xvfb job and the guest
+    // runs.
+    [TestMethod]
+    public void ThePlatformCheckRecordsTextScaleScalingAndLineHeight()
+    {
+        string path = Path.Combine(_root, "platform.json");
+        var fake = new SystemTextSetting(1.5, "fake: Text size 150 %", 144);
+        (int code, PlatformFacts atOne, PlatformFacts atTwo, PlatformFacts failing, PlatformFacts missing, double interLine, double interLineAt16) = Headless.Run(() =>
+        {
+            double inter = InterLineHeight(PlatformCheckWindow.BodyLineFontSize);
+            double interAt16 = InterLineHeight(16);
+            int exit;
+            using (BoardWindow board = BoardWindow.Show(new MemorySession([], Papers.Today)))
+            {
+                Task<int> run = PlatformCheckWindow.RunAsync(board.Window, board.Shell, path, new StandInActions(), Target(),
+                    new PrivacyScrubber(null, null, null, null, null), TextWriter.Null, TimeSpan.FromSeconds(5), _ => null, systemText: () => fake);
+                Dispatcher.UIThread.RunJobs();
+                exit = run.IsCompleted ? run.Result : -1;
+            }
+
+            var window = new Window { Width = 400, Height = 200 };
+            window.Show();
+            try
+            {
+                Dispatcher.UIThread.RunJobs();
+                PlatformFacts one = PlatformCheckWindow.FactsFor(window, _ => null, () => fake);
+                window.SetRenderScaling(2);
+                PlatformFacts two = PlatformCheckWindow.FactsFor(window, _ => null, () => fake);
+                PlatformFacts fails = PlatformCheckWindow.FactsFor(window, _ => null, () => throw new InvalidOperationException("No settings here."));
+                PlatformFacts none = PlatformCheckWindow.FactsFor(window, _ => null);
+                return (exit, one, two, fails, none, inter, interAt16);
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
+
+        // The trial's window writes the four fields into its JSON.
+        Assert.AreEqual(0, code, "The check ran to its end.");
+        using (JsonDocument document = JsonDocument.Parse(File.ReadAllBytes(path)))
+        {
+            JsonElement root = document.RootElement;
+            Assert.AreEqual(1.5, root.GetProperty("systemTextScale").GetDouble(), "The system's text scale, from the reader.");
+            Assert.AreEqual("fake: Text size 150 %", root.GetProperty("systemTextScaleSource").GetString());
+            Assert.AreEqual(144, root.GetProperty("xftDpi").GetDouble());
+            Assert.AreEqual(1.0, root.GetProperty("renderScaling").GetDouble(), "Headless renders at scale 1.");
+            Assert.AreEqual(Math.Round(interLine, 2), root.GetProperty("bodyLinePixels").GetDouble(),
+                "At scale 1 the body line is as high as a 13 px line of Inter, the window's font.");
+            Assert.AreEqual(PlatformCheckWindow.BoxSize, root.GetProperty("boxPixels").GetDouble(), "At scale 1 the fixed box is 100 pixels high.");
+        }
+
+        // The body line is a 13 px line of Inter: the same text measured here
+        // in Inter at 13, and not at 16 (the reference has teeth).
+        Assert.IsTrue(interLine > PlatformCheckWindow.BodyLineFontSize && interLine < 2 * PlatformCheckWindow.BodyLineFontSize,
+            $"A 13 px line of Inter lays out taller than 13 and shorter than 26, not {interLine}.");
+        Assert.AreNotEqual(interLine, interLineAt16, "A 16 px line of Inter is as high as a 13 px one, so the comparison shows nothing.");
+        Assert.AreEqual(interLine, atOne.BodyLinePixels, "The body line is not a 13 px line of Inter.");
+
+        // A render scaling of 2 is recorded, and both heights double in
+        // pixels: that is "everything grows", which the fixed box shows.
+        Assert.AreEqual(1.0, atOne.RenderScaling);
+        Assert.AreEqual(2.0, atTwo.RenderScaling, "The window's render scaling is read when the facts are taken.");
+        Assert.AreEqual((double?)PlatformCheckWindow.BoxSize, atOne.BoxPixels, "At scale 1 the fixed box is 100 pixels high.");
+        Assert.AreEqual((double?)(2 * PlatformCheckWindow.BoxSize), atTwo.BoxPixels, "At scale 2 the fixed box is 200 pixels high.");
+        Assert.AreEqual(2 * atOne.BodyLinePixels, atTwo.BodyLinePixels, "At scale 2 the body line is twice as many pixels high.");
+        Assert.AreEqual(fake, atTwo.SystemText);
+
+        // A reader that throws or is missing is a fact, never a broken check.
+        Assert.AreEqual(new SystemTextSetting(null, "not read: the reader failed (InvalidOperationException)", null), failing.SystemText);
+        Assert.AreEqual(new SystemTextSetting(null, "not read: no reader was given", null), missing.SystemText);
+        Assert.AreEqual((double?)(2 * PlatformCheckWindow.BoxSize), failing.BoxPixels, "The heights are still recorded.");
+        using (JsonDocument document = JsonDocument.Parse(new PlatformCheckReport { TakenAt = new DateTime(2026, 11, 27), Facts = failing }.ToJson()))
+        {
+            Assert.AreEqual(JsonValueKind.Null, document.RootElement.GetProperty("systemTextScale").ValueKind);
+            Assert.AreEqual(JsonValueKind.Null, document.RootElement.GetProperty("xftDpi").ValueKind);
+            Assert.AreEqual("not read: the reader failed (InvalidOperationException)", document.RootElement.GetProperty("systemTextScaleSource").GetString());
+        }
+
+        // Facts taken outside a window carry no text-size fields: each is null.
+        using (JsonDocument document = JsonDocument.Parse(Json(Run(new StandInActions(), Target()).Outcomes)))
+        {
+            foreach (string name in new[] { "systemTextScale", "systemTextScaleSource", "xftDpi", "bodyLinePixels", "boxPixels" })
+            {
+                Assert.AreEqual(JsonValueKind.Null, document.RootElement.GetProperty(name).ValueKind, name);
+            }
+        }
+
+        // Windows: TextScaleFactor is a whole percentage, left out at 100 %.
+        Assert.AreEqual(1.5, SystemTextSettings.FromWindowsValue(150).Scale);
+        StringAssert.StartsWith(SystemTextSettings.FromWindowsValue(150).Source, "Windows: TextScaleFactor under HKEY_CURRENT_USER\\Software\\Microsoft\\Accessibility");
+        Assert.AreEqual(1.0, SystemTextSettings.FromWindowsValue(null).Scale, "Windows leaves TextScaleFactor out at its default, 100 %.");
+        StringAssert.Contains(SystemTextSettings.FromWindowsValue(null).Source, "is not set");
+        Assert.IsNull(SystemTextSettings.FromWindowsValue("150").Scale, "A value of another type is not read as a percentage.");
+        Assert.IsNull(SystemTextSettings.FromWindowsValue(0).Scale);
+        Assert.IsNull(SystemTextSettings.FromWindowsValue(150).XftDpi, "Windows has no Xft.dpi.");
+
+        // Linux: gsettings writes the factor; xrdb -query writes the X resources.
+        SystemTextSetting gnome = SystemTextSettings.FromLinuxOutput("1.5\n", "Xft.antialias:\t1\nXft.dpi:\t144\nXft.hinting:\t1\n");
+        Assert.AreEqual(1.5, gnome.Scale);
+        Assert.AreEqual(144.0, gnome.XftDpi);
+        Assert.AreEqual("GNOME: text-scaling-factor (gsettings, org.gnome.desktop.interface); Xft.dpi from xrdb -query", gnome.Source);
+        SystemTextSetting bare = SystemTextSettings.FromLinuxOutput(null, "Xft.antialias:\t1\n");
+        Assert.IsNull(bare.Scale);
+        Assert.IsNull(bare.XftDpi, "No Xft.dpi line: not set.");
+        Assert.AreEqual("GNOME: text-scaling-factor not read (gsettings did not answer); Xft.dpi not set (xrdb -query)", bare.Source);
+        SystemTextSetting odd = SystemTextSettings.FromLinuxOutput("1,5", null);
+        Assert.IsNull(odd.Scale, "Only a number written the invariant way is read.");
+        Assert.AreEqual("GNOME: gsettings gave no number for text-scaling-factor; Xft.dpi not read (xrdb did not answer)", odd.Source);
+    }
+
+    // The laid-out height of the check's body line in Inter, the app's one
+    // embedded font, at the size given; on the UI thread.
+    private static double InterLineHeight(double size)
+    {
+        var line = new TextBlock { Text = PlatformCheckWindow.BodyLineText, FontSize = size, FontFamily = new Avalonia.Media.FontFamily("fonts:Inter#Inter") };
+        line.Measure(Avalonia.Size.Infinity);
+        return line.DesiredSize.Height;
+    }
+
+    // The real reader (SystemTextSettings.Read, what the app hands the
+    // check) on whichever system runs the tests: it answers without
+    // throwing, from where that system keeps the setting (Windows' registry;
+    // on Linux gsettings and xrdb, either of which may be missing or find no
+    // display on a runner), or says that nothing is read there.
+    [TestMethod]
+    public void TheRealTextSizeReaderAnswersOnThisSystem()
+    {
+        SystemTextSetting setting = SystemTextSettings.Read();
+        string described = $"scale {setting.Scale}, Xft.dpi {setting.XftDpi}, source \"{setting.Source}\"";
+        string expected = OperatingSystem.IsWindows() ? "Windows:" : OperatingSystem.IsLinux() ? "GNOME:" : SystemTextSettings.NotReadHere;
+        StringAssert.StartsWith(setting.Source, expected, described);
+        Assert.IsTrue(setting.Scale is null || setting.Scale > 0, described);
+        if (!OperatingSystem.IsLinux())
+        {
+            Assert.IsNull(setting.XftDpi, "Xft.dpi is read on Linux only: " + described);
+        }
     }
 
     // ---- The real start of a second program (it opens nothing) ----

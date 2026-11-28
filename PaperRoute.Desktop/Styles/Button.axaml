@@ -20,7 +20,7 @@
   <Style Selector="Button">
     <Setter Property="CornerRadius" Value="{DynamicResource ControlRadius}" />
     <Setter Property="Padding" Value="14,5" />
-    <Setter Property="MinHeight" Value="32" />
+    <Setter Property="MinHeight" Value="{DynamicResource ControlMinHeight}" />
     <Setter Property="FontSize" Value="{DynamicResource BodyFontSize}" />
     <Setter Property="HorizontalContentAlignment" Value="Center" />
     <Setter Property="VerticalContentAlignment" Value="Center" />
@@ -30,7 +30,7 @@
     <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}" />
     <Setter Property="FocusAdorner">
       <FocusAdornerTemplate>
-        <Border Margin="2" BorderThickness="2" CornerRadius="6"
+        <Border Margin="2" BorderThickness="2" CornerRadius="{DynamicResource FocusRingRadius}"
                 BorderBrush="{DynamicResource AccentSecondaryBrush}" />
       </FocusAdornerTemplate>
     </Setter>
@@ -38,7 +38,7 @@
   <Style Selector="Button /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Transitions">
       <Transitions>
-        <BrushTransition Property="Background" Duration="0:0:0.1" />
+        <BrushTransition Property="Background" Duration="{DynamicResource HoverDuration}" />
       </Transitions>
     </Setter>
   </Style>
@@ -64,7 +64,7 @@
     <Setter Property="Foreground" Value="{DynamicResource OnAccentTextBrush}" />
     <Setter Property="FocusAdorner">
       <FocusAdornerTemplate>
-        <Border Margin="2" BorderThickness="2" CornerRadius="6"
+        <Border Margin="2" BorderThickness="2" CornerRadius="{DynamicResource FocusRingRadius}"
                 BorderBrush="{DynamicResource OnAccentTextBrush}" />
       </FocusAdornerTemplate>
     </Setter>
@@ -113,11 +113,11 @@
   <!-- Sizes: compact for row actions, icon for the "⋯" buttons (values proposed by inventory C.2; today's ⋯ is at least 26 px tall, Form1.vb:3150). -->
   <Style Selector="Button.compact">
     <Setter Property="Padding" Value="10,3" />
-    <Setter Property="MinHeight" Value="26" />
+    <Setter Property="MinHeight" Value="{DynamicResource CompactMinHeight}" />
   </Style>
   <Style Selector="Button.icon">
     <Setter Property="Padding" Value="0" />
-    <Setter Property="MinHeight" Value="26" />
+    <Setter Property="MinHeight" Value="{DynamicResource CompactMinHeight}" />
     <Setter Property="Width" Value="32" />
     <Setter Property="Height" Value="26" />
   </Style>

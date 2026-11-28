@@ -13,8 +13,9 @@ namespace PaperRoute.ViewModels.Platform;
 // value; whether the trial ran from it is the restart's startedFrom, since
 // APPIMAGE is passed down to every program an AppImage starts), the Linux
 // session type (XDG_SESSION_TYPE's value, and only
-// whether WAYLAND_DISPLAY and DISPLAY are set), the window's render scaling
-// and the theme Avalonia reports. No names of people, computers or files.
+// whether WAYLAND_DISPLAY and DISPLAY are set), the window's render scaling,
+// the theme Avalonia reports, and the system's text size with what the
+// window lays out. No names of people, computers or files.
 public sealed record PlatformFacts(
     string OperatingSystem,
     string RuntimeIdentifier,
@@ -35,6 +36,20 @@ public sealed record PlatformFacts(
 
     public string? Build { get; init; }
 
+    // Whether the system's text size reaches the window (the harness design,
+    // part 3.5): what the system says of its text size, and the heights, in
+    // the window's device pixels (the laid-out height times RenderScaling),
+    // of one 13 px body line in the window's font and one fixed box 100
+    // layout units high. A reader can tell which happened: text grows (the
+    // line grows, the box stays), everything grows (both grow with the
+    // render scaling), or nothing changes. In layout units the box would
+    // always be 100, so pixels are what show it. Null when not known.
+    public SystemTextSetting? SystemText { get; init; }
+
+    public double? BodyLinePixels { get; init; }
+
+    public double? BoxPixels { get; init; }
+
     // The facts for this process, with the environment read through
     // environment (tests give their own) and the window's figures given.
     public static PlatformFacts Read(Func<string, string?> environment, double renderScaling, string themeVariant, string contrastPreference)
@@ -54,6 +69,15 @@ public sealed record PlatformFacts(
             contrastPreference ?? string.Empty);
     }
 }
+
+// What the system says of its text size, as the platform check reads it.
+// Scale is the text size as a factor (Windows' Text size of 150 % is 1.5;
+// GNOME's text-scaling-factor as it stands), or null when nothing was read.
+// Source says where it was read, or why nothing was, in fixed words. XftDpi
+// is the X resource Xft.dpi, or null when it is not set or not read (off
+// Linux). Numbers and fixed words only: no names of people, computers or
+// files.
+public sealed record SystemTextSetting(double? Scale, string Source, double? XftDpi);
 
 // The JSON "--platform-check" writes: the mode and the format's version,
 // the time, the trial's version and configuration (null when not known),
@@ -113,6 +137,11 @@ public sealed class PlatformCheckReport
             json.WriteNumber("renderScaling", Math.Round(Facts.RenderScaling, 3));
             json.WriteString("themeVariant", Facts.ThemeVariant);
             json.WriteString("contrastPreference", Facts.ContrastPreference);
+            WriteNumberOrNull(json, "systemTextScale", Facts.SystemText?.Scale, 3);
+            json.WriteString("systemTextScaleSource", Facts.SystemText?.Source);
+            WriteNumberOrNull(json, "xftDpi", Facts.SystemText?.XftDpi, 2);
+            WriteNumberOrNull(json, "bodyLinePixels", Facts.BodyLinePixels, 2);
+            WriteNumberOrNull(json, "boxPixels", Facts.BoxPixels, 2);
             if (Outcomes is not null)
             {
                 Write(json, "fileDialog", Outcomes.Dialog);
@@ -188,6 +217,18 @@ public sealed class PlatformCheckReport
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {
             return false;
+        }
+    }
+
+    private static void WriteNumberOrNull(Utf8JsonWriter json, string name, double? value, int decimals)
+    {
+        if (value is { } number && double.IsFinite(number))
+        {
+            json.WriteNumber(name, Math.Round(number, decimals));
+        }
+        else
+        {
+            json.WriteNull(name);
         }
     }
 

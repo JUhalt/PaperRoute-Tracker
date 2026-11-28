@@ -383,6 +383,9 @@ public sealed class BoardMeasurement
             window = new MainWindow { DataContext = shell, Width = width, Height = height };
             if (variant is not null)
             {
+                // The one window that does not follow AppTheme: it shows the
+                // variant it measures (d1 7.3), a named exception in
+                // ThemeOwnership.
                 window.RequestedThemeVariant = variant;
             }
 

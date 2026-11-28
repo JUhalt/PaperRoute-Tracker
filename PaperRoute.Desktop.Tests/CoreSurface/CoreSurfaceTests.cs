@@ -121,6 +121,92 @@ public sealed class CoreSurfaceTests
             Environment.NewLine + string.Join(Environment.NewLine, stale));
     }
 
+    // The save ban (BannedSymbols.txt, RS0030) is lifted only where lock 3
+    // allows a write: in the view models' files that lifted-bans.txt names as
+    // owners (the one list, start-up design 2.8; today TrialStartup.cs for
+    // the example's seed and DiskLibrarySession.cs for the settings save),
+    // each with its reason in a comment on the line above. A pragma cannot
+    // hide a new banned call, because TrialReferencesOnlyTheListedCoreSurface
+    // pins every core reference. A bare "#pragma warning disable" lifts the
+    // ban too. Which ban each owner may lift, and the ban turned off without
+    // a pragma, are EachLiftedBanHasOneOwner's to check.
+    [TestMethod]
+    public void OnlyTheSessionDisablesTheSaveBan()
+    {
+        string folder = Path.Combine(AppContext.BaseDirectory, "ViewModelSources");
+        Assert.IsTrue(Directory.Exists(folder), $"{folder} was not copied to the test output.");
+        const string project = "PaperRoute.ViewModels/";
+        string[] allowed = [.. LiftedBanTests.OwnerFiles()
+            .Where(owner => owner.StartsWith(project, StringComparison.Ordinal))
+            .Select(owner => owner[project.Length..])];
+        Assert.IsNotEmpty(allowed, "lifted-bans.txt names no owner in the view models: the reader is broken.");
+        string[] files = [.. Directory.GetFiles(folder, "*.cs", SearchOption.AllDirectories).Order(StringComparer.Ordinal)];
+        Assert.IsTrue(files.Any(file => Path.GetRelativePath(folder, file).Replace('\\', '/') == "Session/DiskLibrarySession.cs"),
+            "The view models' sources were not copied to the test output.");
+
+        var problems = new List<string>();
+        int found = 0;
+        foreach (string file in files)
+        {
+            string name = Path.GetRelativePath(folder, file).Replace('\\', '/');
+            string[] lines = File.ReadAllLines(file);
+            for (int i = 0; i < lines.Length; i++)
+            {
+                if (!LiftsTheSaveBan(lines[i]))
+                {
+                    continue;
+                }
+
+                found++;
+                if (!allowed.Contains(name, StringComparer.Ordinal))
+                {
+                    problems.Add($"{name}:{i + 1} lifts the save ban (RS0030) outside the owners lifted-bans.txt names ({string.Join(", ", allowed)}).");
+                }
+                else if (!HasReasonAbove(lines, i))
+                {
+                    problems.Add($"{name}:{i + 1} lifts the save ban (RS0030) with no reason in a comment on the line above.");
+                }
+            }
+        }
+
+        Assert.IsEmpty(problems, string.Join(Environment.NewLine, problems));
+        Assert.IsGreaterThanOrEqualTo(allowed.Length, found,
+            "The scan found fewer pragmas than lifted-bans.txt has owners in the view models: the scan is broken.");
+    }
+
+    private static bool LiftsTheSaveBan(string line) => IsSaveBanPragma(line, "disable");
+
+    // "#pragma warning <verb>" naming RS0030, or naming no code at all.
+    internal static bool IsSaveBanPragma(string line, string verb)
+    {
+        string text = line.Trim();
+        string pragma = "#pragma warning " + verb;
+        if (!text.StartsWith(pragma, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        string codes = text[pragma.Length..];
+        int comment = codes.IndexOf("//", StringComparison.Ordinal);
+        codes = (comment < 0 ? codes : codes[..comment]).Trim();
+        return codes.Length == 0 || codes.Split([',', ' '], StringSplitOptions.RemoveEmptyEntries).Contains("RS0030", StringComparer.Ordinal);
+    }
+
+    // The nearest line above that is not blank is a // comment.
+    internal static bool HasReasonAbove(string[] lines, int index)
+    {
+        for (int i = index - 1; i >= 0; i--)
+        {
+            string text = lines[i].Trim();
+            if (text.Length > 0)
+            {
+                return text.StartsWith("//", StringComparison.Ordinal);
+            }
+        }
+
+        return false;
+    }
+
     // "M:Ns.Type.Member(args)" or "F:Ns.Type.Field" to "T:Ns.Type".
     private static string MemberTypeId(string memberId)
     {

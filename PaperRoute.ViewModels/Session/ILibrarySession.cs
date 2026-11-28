@@ -1,13 +1,15 @@
 namespace PaperRoute.ViewModels.Session;
 
-// The library session: the read-only subset of the plan's application-services
-// object (d1 3.1). It loads; it never saves. There is deliberately no save,
-// backup or restore member (lock 3 of d1 1.3), and a test pins that.
+// The library session: the plan's application-services object as far as
+// build 5 takes it (d1 3.1; shell design 2.5). It loads, and it saves the
+// settings it loaded; it never saves the library. There is deliberately no
+// library save, backup or restore member (lock 3 of d1 1.3), and tests pin
+// that: SaveSettingsAsync is its one save member.
 public interface ILibrarySession : IDisposable
 {
     LibraryKind Kind { get; }
 
-    // Always true in the trial.
+    // Always true until the library save comes: the library cannot be saved.
     bool IsReadOnly { get; }
 
     // Fixed when the session starts; tests pass their own.
@@ -37,6 +39,35 @@ public interface ILibrarySession : IDisposable
     event EventHandler? LibraryChanged;
 
     // Reads the library off the interface thread and returns to the caller's
-    // context to publish it.
-    Task LoadAsync(CancellationToken cancel);
+    // context to publish it. A load is library work, because
+    // ManuscriptRepository.Load can write (it creates the data folder,
+    // recovers staged moves and can rebuild the main file from its backup), so
+    // it runs one at a time: while one runs, another returns false at once and
+    // reads and writes nothing.
+    Task<bool> LoadAsync(CancellationToken cancel);
+
+    // Writes Settings through the settings service that loaded them, so a
+    // settings.json that load could not read is set aside as
+    // settings.unreadable.json, never kept as settings.bak over the good
+    // backup. On the interface thread, as today (Form1.Shell.vb:201-204): at
+    // once on the caller's thread, returning a finished task, unless a load
+    // runs; then the request is held, and one write runs on the caller's
+    // context when the load ends. The write reads Settings when it runs, so
+    // quick requests remember the last. A load replaces Settings with what it
+    // read, so a change made to Settings while a load runs is lost, and a save
+    // held during that load writes the loaded settings: a caller changes
+    // Settings after LibraryChanged, or applies its change again then. False,
+    // with nothing written, when the write fails (an IOException or
+    // UnauthorizedAccessException, as Form1.Online.vb:117 catches), for a
+    // snapshot, and before a load has read settings to save.
+    Task<bool> SaveSettingsAsync();
+
+    // Blocks until a running worker ends, with no time limit, as today's
+    // shutdown waits for library work (Form1.LibraryWork.vb:180-190). It waits
+    // on the worker itself, never on the task the interface awaits, so it
+    // cannot deadlock on the interface thread. True when a worker was running.
+    // For the shutdown path only. A settings save held during that load is
+    // written later, on the caller's context, which the shutdown path is
+    // blocking: B5 writes it itself after this wait, or accepts its loss.
+    bool WaitForWork();
 }

@@ -45,7 +45,7 @@
   <Style Selector="Button.chip /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.chip /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Transitions">
       <Transitions>
-        <BrushTransition Property="Background" Duration="0:0:0.1" />
+        <BrushTransition Property="Background" Duration="{DynamicResource HoverDuration}" />
       </Transitions>
     </Setter>
   </Style>

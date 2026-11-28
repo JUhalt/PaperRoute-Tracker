@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Documents;
+using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Shapes;
 using Avalonia.Input;
@@ -19,17 +20,29 @@ namespace PaperRoute.Desktop.Tests.Styles;
 // trial cannot show it to a user, because the app does not contain it.
 //
 // States a pointer would make (hovered, pressed) are set as pseudo-classes:
-// nothing moves the pointer in a headless window, so they stay. Focus is real,
-// from the keyboard, and only one control can hold it: the button named
-// "Focused". The text box and drop-down shown "focused" carry the
-// pseudo-classes their focus styles select on.
+// nothing moves the pointer in a headless window, so they stay, except that
+// a button sets :pressed from its IsPressed when its template is applied,
+// which clears it while nothing holds the button down, so a pressed specimen
+// sets it again each time its template has been applied, and takes its
+// face's transition away first (Pressed). Focus is real, from the keyboard,
+// and only one control can hold it: the button named "Focused". The text box
+// and drop-down shown "focused" carry the pseudo-classes their focus styles
+// select on.
+//
+// Every specimen has a name of its own, and so do the labels and captions
+// beside them, so the sweeps (Legibility/Sweep.cs) key each element by the
+// specimen it belongs to (StyleGallery/Button#PrimaryHovered/AccessText), not
+// by its place in the page: a row added later renumbers nothing else, and no
+// listed known failure goes stale by it
+// (SweepTests.EveryGalleryElementIsKeyedByItsSpecimensName). Only the page
+// itself is not named, because a named page would prefix every key.
 internal sealed class StyleGallery : UserControl
 {
     private readonly Button _focused;
 
     public StyleGallery()
     {
-        _focused = MakeButton("Focused", []);
+        _focused = MakeButton("Focused", "Focused", []);
 
         var columns = new Grid
         {
@@ -41,7 +54,7 @@ internal sealed class StyleGallery : UserControl
         columns.Children.Add(left);
         columns.Children.Add(right);
 
-        left.Children.Add(new TextBlock { Classes = { "page-title" }, Text = "Style gallery" });
+        left.Children.Add(new TextBlock { Name = "PageTitle", Classes = { "page-title" }, Text = "Style gallery" });
         AddButtons(left);
         AddCards(left);
 
@@ -70,16 +83,16 @@ internal sealed class StyleGallery : UserControl
 
     private void AddButtons(StackPanel host)
     {
-        host.Children.Add(Caption("BUTTONS"));
+        host.Children.Add(Caption("CaptionButtons", "BUTTONS"));
         var grid = new Grid
         {
             ColumnDefinitions = new ColumnDefinitions("80,Auto,Auto,Auto,Auto"),
             RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto,Auto"),
         };
-        string[] heads = ["At rest", "Hovered", "Pressed", "Off"];
+        (string Name, string Text)[] heads = [("AtRest", "At rest"), ("Hovered", "Hovered"), ("Pressed", "Pressed"), ("Off", "Off")];
         for (int column = 0; column < heads.Length; column++)
         {
-            Place(grid, new TextBlock { Classes = { "meta" }, Text = heads[column], Margin = new Thickness(0, 0, 12, 2) }, 0, column + 1);
+            Place(grid, new TextBlock { Name = "Head" + heads[column].Name, Classes = { "meta" }, Text = heads[column].Text, Margin = new Thickness(0, 0, 12, 2) }, 0, column + 1);
         }
 
         (string Role, string Text, string[] Classes)[] roles =
@@ -91,11 +104,12 @@ internal sealed class StyleGallery : UserControl
         ];
         for (int row = 0; row < roles.Length; row++)
         {
-            Place(grid, new TextBlock { Classes = { "meta" }, Text = roles[row].Role, VerticalAlignment = VerticalAlignment.Center }, row + 1, 0);
-            Place(grid, Spaced(MakeButton(roles[row].Text, roles[row].Classes)), row + 1, 1);
-            Place(grid, Spaced(With(MakeButton(roles[row].Text, roles[row].Classes), ":pointerover")), row + 1, 2);
-            Place(grid, Spaced(With(MakeButton(roles[row].Text, roles[row].Classes), ":pointerover", ":pressed")), row + 1, 3);
-            Button off = MakeButton(roles[row].Text, roles[row].Classes);
+            string role = roles[row].Role;
+            Place(grid, new TextBlock { Name = "Role" + role, Classes = { "meta" }, Text = role, VerticalAlignment = VerticalAlignment.Center }, row + 1, 0);
+            Place(grid, Spaced(MakeButton(role + "AtRest", roles[row].Text, roles[row].Classes)), row + 1, 1);
+            Place(grid, Spaced(With(MakeButton(role + "Hovered", roles[row].Text, roles[row].Classes), ":pointerover")), row + 1, 2);
+            Place(grid, Spaced(Pressed(MakeButton(role + "Pressed", roles[row].Text, roles[row].Classes))), row + 1, 3);
+            Button off = MakeButton(role + "Off", roles[row].Text, roles[row].Classes);
             off.IsEnabled = false;
             Place(grid, Spaced(off), row + 1, 4);
         }
@@ -104,31 +118,32 @@ internal sealed class StyleGallery : UserControl
 
         var more = new WrapPanel { Orientation = Orientation.Horizontal };
         more.Children.Add(Spaced(_focused));
-        more.Children.Add(Spaced(MakeButton("Compact", ["compact"])));
-        more.Children.Add(Spaced(MakeButton("⋯", ["quiet", "icon"])));
-        more.Children.Add(Spaced(With(MakeButton("⋯", ["quiet", "icon"]), ":pointerover")));
-        more.Children.Add(Spaced(MakeButton("View in Deadlines →", ["link"])));
-        more.Children.Add(Spaced(With(MakeButton("Hovered link", ["link"]), ":pointerover")));
-        more.Children.Add(Spaced(With(MakeButton("Pressed link", ["link"]), ":pointerover", ":pressed")));
+        more.Children.Add(Spaced(MakeButton("Compact", "Compact", ["compact"])));
+        more.Children.Add(Spaced(MakeButton("QuietIcon", "⋯", ["quiet", "icon"])));
+        more.Children.Add(Spaced(With(MakeButton("QuietIconHovered", "⋯", ["quiet", "icon"]), ":pointerover")));
+        more.Children.Add(Spaced(MakeButton("Link", "View in Deadlines →", ["link"])));
+        more.Children.Add(Spaced(With(MakeButton("LinkHovered", "Hovered link", ["link"]), ":pointerover")));
+        more.Children.Add(Spaced(Pressed(MakeButton("LinkPressed", "Pressed link", ["link"]))));
         host.Children.Add(more);
     }
 
     private static void AddCards(StackPanel host)
     {
-        host.Children.Add(Caption("CARDS"));
+        host.Children.Add(Caption("CaptionCards", "CARDS"));
         var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12 };
         row.Children.Add(SampleCard(
-            "UNDER REVIEW", "stage-under-review", "Waiting 95 days", "warning",
+            "CardAtRest", "UNDER REVIEW", "stage-under-review", "Waiting 95 days", "warning",
             "Soil microbiomes under drought: a two-site comparison of recovery", "Journal of Examples", "secondary",
             ["closed", "closed", "current"], "3rd journal · 2 rejections", hovered: false));
         row.Children.Add(SampleCard(
-            "REVISION", "stage-revision", "Revision overdue by 3 days", "danger",
+            "CardHovered", "REVISION", "stage-revision", "Revision overdue by 3 days", "danger",
             "Hovered card: a title long enough to need its second line", "No target journal yet", "warning",
             ["closed", "accepted"], "2nd journal · major revision", hovered: true));
         host.Children.Add(row);
 
         var callout = new Border
         {
+            Name = "CalloutCard",
             Classes = { "card", "callout" },
             Margin = new Thickness(0, 6, 0, 0),
             Child = new TextBlock
@@ -141,6 +156,7 @@ internal sealed class StyleGallery : UserControl
 
         var plain = new Border
         {
+            Name = "PlainCard",
             Classes = { "card" },
             Margin = new Thickness(0, 6, 0, 0),
             Child = new StackPanel
@@ -148,23 +164,25 @@ internal sealed class StyleGallery : UserControl
                 Spacing = 8,
                 Children =
                 {
-                    new TextBlock { Text = "Plain card, with a divider below this line." },
-                    new Border { Classes = { "divider" } },
-                    new TextBlock { Classes = { "meta" }, Text = "Meta text under the divider" },
+                    new TextBlock { Name = "PlainCardText", Text = "Plain card, with a divider below this line." },
+                    new Border { Name = "PlainCardDivider", Classes = { "divider" } },
+                    new TextBlock { Name = "PlainCardMeta", Classes = { "meta" }, Text = "Meta text under the divider" },
                 },
             },
         };
         host.Children.Add(plain);
     }
 
+    // A card as the Board draws one; name prefixes the names of its parts.
     private static Border SampleCard(
-        string stage, string stageClass, string status, string statusTone, string title,
+        string name, string stage, string stageClass, string status, string statusTone, string title,
         string journal, string journalTone, string[] dots, string route, bool hovered)
     {
         var top = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto") };
-        top.Children.Add(Pill(stage, stageClass));
+        top.Children.Add(Pill(name + "Stage", stage, stageClass));
         var statusText = new TextBlock
         {
+            Name = name + "Status",
             Classes = { "status", statusTone },
             Text = status,
             Margin = new Thickness(8, 0, 4, 0),
@@ -172,12 +190,13 @@ internal sealed class StyleGallery : UserControl
         };
         Grid.SetColumn(statusText, 1);
         top.Children.Add(statusText);
-        Button more = MakeButton("⋯", ["quiet", "icon"]);
+        Button more = MakeButton(name + "More", "⋯", ["quiet", "icon"]);
         Grid.SetColumn(more, 2);
         top.Children.Add(more);
 
         var titleButton = new Button
         {
+            Name = name + "Title",
             Classes = { "link", "card-title" },
             Margin = new Thickness(0, 8, 0, 0),
             Height = 40,
@@ -186,10 +205,10 @@ internal sealed class StyleGallery : UserControl
         };
 
         var journalRow = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Margin = new Thickness(0, 4, 0, 0) };
-        journalRow.Children.Add(new TextBlock { Classes = { "journal", journalTone }, Text = journal, VerticalAlignment = VerticalAlignment.Center });
+        journalRow.Children.Add(new TextBlock { Name = name + "Journal", Classes = { "journal", journalTone }, Text = journal, VerticalAlignment = VerticalAlignment.Center });
         var tags = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
-        tags.Children.Add(TagChip("soil", "tag-teal"));
-        tags.Children.Add(TagChip("+2", "tag-slate"));
+        tags.Children.Add(TagChip(name + "TagSoil", "soil", "tag-teal"));
+        tags.Children.Add(TagChip(name + "TagMore", "+2", "tag-slate"));
         Grid.SetColumn(tags, 1);
         journalRow.Children.Add(tags);
 
@@ -201,16 +220,17 @@ internal sealed class StyleGallery : UserControl
         }
 
         footer.Children.Add(dotRow);
-        var routeText = new TextBlock { Classes = { "meta" }, Text = route, Margin = new Thickness(8, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center };
+        var routeText = new TextBlock { Name = name + "Route", Classes = { "meta" }, Text = route, Margin = new Thickness(8, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center };
         Grid.SetColumn(routeText, 1);
         footer.Children.Add(routeText);
-        Button view = MakeButton("View route →", ["link"]);
+        Button view = MakeButton(name + "ViewRoute", "View route →", ["link"]);
         view.VerticalAlignment = VerticalAlignment.Center;
         Grid.SetColumn(view, 2);
         footer.Children.Add(view);
 
         var card = new Border
         {
+            Name = name,
             Classes = { "card", "interactive" },
             Width = 314,
             Child = new StackPanel
@@ -220,7 +240,7 @@ internal sealed class StyleGallery : UserControl
                     top,
                     titleButton,
                     journalRow,
-                    new Border { Classes = { "divider" }, Margin = new Thickness(0, 12, 0, 0) },
+                    new Border { Name = name + "Divider", Classes = { "divider" }, Margin = new Thickness(0, 12, 0, 0) },
                     footer,
                 },
             },
@@ -230,7 +250,7 @@ internal sealed class StyleGallery : UserControl
 
     private static void AddPills(StackPanel host)
     {
-        host.Children.Add(Caption("PILLS"));
+        host.Children.Add(Caption("CaptionPills", "PILLS"));
         var row = new WrapPanel();
         (string Text, string Class)[] stages =
         [
@@ -239,42 +259,42 @@ internal sealed class StyleGallery : UserControl
         ];
         foreach ((string text, string cls) in stages)
         {
-            row.Children.Add(Spaced(Pill(text, cls)));
+            row.Children.Add(Spaced(Pill("Pill" + Pascal(cls), text, cls)));
         }
 
-        row.Children.Add(Spaced(Pill("3", "count")));
-        row.Children.Add(Spaced(Pill("ACCENT", "accent")));
-        row.Children.Add(Spaced(Pill("2", "count", "warning")));
-        row.Children.Add(Spaced(Pill("1", "count", "danger")));
+        row.Children.Add(Spaced(Pill("PillCount", "3", "count")));
+        row.Children.Add(Spaced(Pill("PillAccent", "ACCENT", "accent")));
+        row.Children.Add(Spaced(Pill("PillCountWarning", "2", "count", "warning")));
+        row.Children.Add(Spaced(Pill("PillCountDanger", "1", "count", "danger")));
         host.Children.Add(row);
     }
 
     private static void AddChips(StackPanel host)
     {
-        host.Children.Add(Caption("CHIPS (AT REST, THEN HOVERED)"));
-        (string Text, string[] Classes)[] chips =
+        host.Children.Add(Caption("CaptionChips", "CHIPS (AT REST, THEN HOVERED)"));
+        (string Name, string Text, string[] Classes)[] chips =
         [
-            ("1 no target journal", []),
-            ("2 revisions due soon", ["warning"]),
-            ("1 rejected in last 30 days", ["danger"]),
-            ("1 waiting 90+ days", ["warning", "active"]),
+            ("ChipNoTarget", "1 no target journal", []),
+            ("ChipRevisionsDue", "2 revisions due soon", ["warning"]),
+            ("ChipRejected", "1 rejected in last 30 days", ["danger"]),
+            ("ChipWaiting", "1 waiting 90+ days", ["warning", "active"]),
         ];
         var rest = new WrapPanel();
         var hovered = new WrapPanel();
-        foreach ((string text, string[] classes) in chips)
+        foreach ((string name, string text, string[] classes) in chips)
         {
-            rest.Children.Add(Spaced(Chip(text, classes)));
-            hovered.Children.Add(Spaced(With(Chip(text, classes), ":pointerover")));
+            rest.Children.Add(Spaced(Chip(name, text, classes)));
+            hovered.Children.Add(Spaced(With(Chip(name + "Hovered", text, classes), ":pointerover")));
         }
 
         host.Children.Add(rest);
         host.Children.Add(hovered);
 
         var others = new WrapPanel();
-        var toggled = new ToggleButton { Classes = { "chip" }, Content = "Toggle chip, checked", IsChecked = true };
+        var toggled = new ToggleButton { Name = "ToggleChipChecked", Classes = { "chip" }, Content = "Toggle chip, checked", IsChecked = true };
         others.Children.Add(Spaced(toggled));
-        others.Children.Add(Spaced(new ToggleButton { Classes = { "chip" }, Content = "Toggle chip" }));
-        Button off = Chip("Off chip", []);
+        others.Children.Add(Spaced(new ToggleButton { Name = "ToggleChip", Classes = { "chip" }, Content = "Toggle chip" }));
+        Button off = Chip("ChipOff", "Off chip", []);
         off.IsEnabled = false;
         others.Children.Add(Spaced(off));
         host.Children.Add(others);
@@ -282,44 +302,48 @@ internal sealed class StyleGallery : UserControl
 
     private static void AddTags(StackPanel host)
     {
-        host.Children.Add(Caption("TAGS"));
+        host.Children.Add(Caption("CaptionTags", "TAGS"));
         var row = new WrapPanel();
         foreach (string palette in new[] { "teal", "blue", "violet", "rose", "amber", "green", "slate", "orange" })
         {
-            row.Children.Add(Spaced(TagChip(palette, "tag-" + palette)));
+            row.Children.Add(Spaced(TagChip("Tag" + Pascal(palette), palette, "tag-" + palette)));
         }
 
-        row.Children.Add(Spaced(TagChip("+3", "tag-slate")));
+        row.Children.Add(Spaced(TagChip("TagSlateCount", "+3", "tag-slate")));
         host.Children.Add(row);
     }
 
     private static void AddTabs(StackPanel host)
     {
-        host.Children.Add(Caption("TABS (PUBLISHED HOVERED)"));
-        var strip = new TabStrip();
-        strip.Items.Add(Tab("Pipeline", "3 of 167"));
-        strip.Items.Add(With(Tab("Published", "272"), ":pointerover"));
-        strip.Items.Add(Tab("File Drawer", "61"));
+        host.Children.Add(Caption("CaptionTabs", "TABS (PUBLISHED HOVERED, THE LAST OFF)"));
+        var strip = new TabStrip { Name = "Tabs" };
+        strip.Items.Add(Tab("TabPipeline", "Pipeline", "3 of 167"));
+        strip.Items.Add(With(Tab("TabPublishedHovered", "Published", "272"), ":pointerover"));
+        strip.Items.Add(Tab("TabFileDrawer", "File Drawer", "61"));
+        // Off: the tab family's off look (Tabs.axaml), for R8's off column.
+        TabStripItem off = Tab("TabOff", "Off", "0");
+        off.IsEnabled = false;
+        strip.Items.Add(off);
         strip.SelectedIndex = 0;
         var bar = new Grid();
-        bar.Children.Add(new Border { Classes = { "hairline" } });
+        bar.Children.Add(new Border { Name = "TabsHairline", Classes = { "hairline" } });
         bar.Children.Add(strip);
         host.Children.Add(bar);
     }
 
     private static void AddInputs(StackPanel host)
     {
-        host.Children.Add(Caption("INPUTS (REST, FOCUSED, OFF)"));
+        host.Children.Add(Caption("CaptionInputs", "INPUTS (REST, FOCUSED, OFF)"));
         var boxes = new WrapPanel();
-        boxes.Children.Add(Spaced(new TextBox { Width = 220, PlaceholderText = "Search titles, journals, authors" }));
-        boxes.Children.Add(Spaced(With(new TextBox { Width = 120, Text = "drought" }, ":focus", ":focus-within")));
-        boxes.Children.Add(Spaced(new TextBox { Width = 90, Text = "Off", IsEnabled = false }));
+        boxes.Children.Add(Spaced(new TextBox { Name = "TextBoxAtRest", Width = 220, PlaceholderText = "Search titles, journals, authors" }));
+        boxes.Children.Add(Spaced(With(new TextBox { Name = "TextBoxFocused", Width = 120, Text = "drought" }, ":focus", ":focus-within")));
+        boxes.Children.Add(Spaced(new TextBox { Name = "TextBoxOff", Width = 90, Text = "Off", IsEnabled = false }));
         host.Children.Add(boxes);
 
         var lists = new WrapPanel();
-        lists.Children.Add(Spaced(Combo("All stages (7)")));
-        lists.Children.Add(Spaced(With(Combo("Sort: Current order"), ":focus-within", ":focus")));
-        ComboBox off = Combo("Off list");
+        lists.Children.Add(Spaced(Combo("ComboAtRest", "All stages (7)")));
+        lists.Children.Add(Spaced(With(Combo("ComboFocused", "Sort: Current order"), ":focus-within", ":focus")));
+        ComboBox off = Combo("ComboOff", "Off list");
         off.IsEnabled = false;
         lists.Children.Add(Spaced(off));
         host.Children.Add(lists);
@@ -327,20 +351,20 @@ internal sealed class StyleGallery : UserControl
 
     private static void AddBoardText(StackPanel host)
     {
-        host.Children.Add(Caption("BOARD TEXT"));
+        host.Children.Add(Caption("CaptionBoardText", "BOARD TEXT"));
         var title = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 16 };
-        title.Children.Add(new TextBlock { Classes = { "page-title" }, Text = "Board" });
-        title.Children.Add(new TextBlock { Classes = { "caption" }, Text = "NEEDS ATTENTION", VerticalAlignment = VerticalAlignment.Center });
+        title.Children.Add(new TextBlock { Name = "BoardTitle", Classes = { "page-title" }, Text = "Board" });
+        title.Children.Add(new TextBlock { Name = "BoardCaption", Classes = { "caption" }, Text = "NEEDS ATTENTION", VerticalAlignment = VerticalAlignment.Center });
         host.Children.Add(title);
 
         var statuses = new WrapPanel();
-        statuses.Children.Add(Spaced(new TextBlock { Classes = { "status", "danger" }, Text = "Revision overdue by 3 days" }));
-        statuses.Children.Add(Spaced(new TextBlock { Classes = { "status", "warning" }, Text = "Waiting 95 days" }));
-        statuses.Children.Add(Spaced(new TextBlock { Classes = { "status", "muted" }, Text = "12 days" }));
-        statuses.Children.Add(Spaced(new TextBlock { Classes = { "journal", "secondary" }, Text = "Journal of Examples" }));
-        statuses.Children.Add(Spaced(new TextBlock { Classes = { "journal", "warning" }, Text = "No target journal yet" }));
-        statuses.Children.Add(Spaced(new TextBlock { Classes = { "journal", "muted" }, Text = "No target journal" }));
-        statuses.Children.Add(Spaced(new TextBlock { Classes = { "meta" }, Text = "Not yet submitted" }));
+        statuses.Children.Add(Spaced(new TextBlock { Name = "StatusDanger", Classes = { "status", "danger" }, Text = "Revision overdue by 3 days" }));
+        statuses.Children.Add(Spaced(new TextBlock { Name = "StatusWarning", Classes = { "status", "warning" }, Text = "Waiting 95 days" }));
+        statuses.Children.Add(Spaced(new TextBlock { Name = "StatusMuted", Classes = { "status", "muted" }, Text = "12 days" }));
+        statuses.Children.Add(Spaced(new TextBlock { Name = "JournalSecondary", Classes = { "journal", "secondary" }, Text = "Journal of Examples" }));
+        statuses.Children.Add(Spaced(new TextBlock { Name = "JournalWarning", Classes = { "journal", "warning" }, Text = "No target journal yet" }));
+        statuses.Children.Add(Spaced(new TextBlock { Name = "JournalMuted", Classes = { "journal", "muted" }, Text = "No target journal" }));
+        statuses.Children.Add(Spaced(new TextBlock { Name = "MetaText", Classes = { "meta" }, Text = "Not yet submitted" }));
         host.Children.Add(statuses);
 
         var dots = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
@@ -351,71 +375,78 @@ internal sealed class StyleGallery : UserControl
 
         var dotRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
         dotRow.Children.Add(dots);
-        dotRow.Children.Add(new TextBlock { Classes = { "meta" }, Text = "Route dots: closed, closed, current, accepted" });
+        dotRow.Children.Add(new TextBlock { Name = "RouteDotsLabel", Classes = { "meta" }, Text = "Route dots: closed, closed, current, accepted" });
         host.Children.Add(dotRow);
 
         // A shelf's empty message, as the Board draws it: a plain label on the board background (Form1.vb CreateEmptyLabel).
-        host.Children.Add(new TextBlock { Classes = { "empty" }, Text = "Nothing in progress. Choose + Add Manuscript to start one." });
+        host.Children.Add(new TextBlock { Name = "EmptyMessage", Classes = { "empty" }, Text = "Nothing in progress. Choose + Add Manuscript to start one." });
         host.Children.Add(new Border
         {
+            Name = "Banner",
             Classes = { "banner" },
             Child = new TextBlock { Text = "Example library: a fictional research group's manuscripts, to explore and to teach with." },
         });
         host.Children.Add(new Border
         {
+            Name = "NoticeStrip",
             Classes = { "notice-strip" },
             Child = new TextBlock { Text = "Notice strip: Loaded 7 manuscript(s)." },
         });
     }
 
-    private static TextBlock Caption(string text) =>
-        new() { Classes = { "caption" }, Text = text, Margin = new Thickness(0, 8, 0, 2) };
+    private static TextBlock Caption(string name, string text) =>
+        new() { Name = name, Classes = { "caption" }, Text = text, Margin = new Thickness(0, 8, 0, 2) };
 
-    private static Button MakeButton(string text, string[] classes)
+    private static Button MakeButton(string name, string text, string[] classes)
     {
-        var button = new Button { Content = text };
+        var button = new Button { Name = name, Content = text };
         button.Classes.AddRange(classes);
         return button;
     }
 
-    private static Button Chip(string text, string[] classes)
+    private static Button Chip(string name, string text, string[] classes)
     {
-        Button chip = MakeButton(text, ["chip"]);
+        Button chip = MakeButton(name, text, ["chip"]);
         chip.Classes.AddRange(classes);
         return chip;
     }
 
-    private static Border Pill(string text, params string[] classes)
+    private static Border Pill(string name, string text, params string[] classes)
     {
-        var pill = new Border { Child = new TextBlock { Text = text } };
+        var pill = new Border { Name = name, Child = new TextBlock { Text = text } };
         pill.Classes.Add("pill");
         pill.Classes.AddRange(classes);
         return pill;
     }
 
-    private static Border TagChip(string text, string palette) =>
-        new() { Classes = { "tag", palette }, Child = new TextBlock { Text = text }, VerticalAlignment = VerticalAlignment.Center };
+    private static Border TagChip(string name, string text, string palette) =>
+        new() { Name = name, Classes = { "tag", palette }, Child = new TextBlock { Text = text }, VerticalAlignment = VerticalAlignment.Center };
 
-    private static TabStripItem Tab(string name, string count) => new()
+    private static TabStripItem Tab(string name, string label, string count) => new()
     {
+        Name = name,
         Content = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             Children =
             {
-                new TextBlock { Text = name },
-                new TextBlock { Classes = { "tab-count" }, Text = count },
+                new TextBlock { Name = name + "Label", Text = label },
+                new TextBlock { Name = name + "Count", Classes = { "tab-count" }, Text = count },
             },
         },
     };
 
-    private static ComboBox Combo(string item)
+    private static ComboBox Combo(string name, string item)
     {
-        var combo = new ComboBox { Width = 190 };
+        var combo = new ComboBox { Name = name, Width = 190 };
         combo.Items.Add(item);
         combo.SelectedIndex = 0;
         return combo;
     }
+
+    // A class name as a part of a specimen's name: "stage-in-press" gives "StageInPress".
+    private static string Pascal(string name) =>
+        string.Concat(name.Split('-').Select(word => char.ToUpperInvariant(word[0]) + word[1..]));
 
     private static void Place(Grid grid, Control control, int row, int column)
     {
@@ -442,5 +473,36 @@ internal sealed class StyleGallery : UserControl
         }
 
         return control;
+    }
+
+    // A pressed specimen: hovered and pressed. Avalonia's Button sets :pressed
+    // from its IsPressed when its template is applied (Button.OnApplyTemplate
+    // at 12.1.6). IsPressed cannot be set from outside and nothing presses a
+    // button in a headless window, so a :pressed set here alone is cleared at
+    // the first layout, once the window is shown, and the specimen drew as
+    // hovered (#463). So :pressed is set again each time the template has been
+    // applied.
+    //
+    // The face's transitions are taken away first. A face that goes from
+    // hovered to pressed after it is shown eases its background
+    // (Button.axaml), and in a headless window nothing a picture does can be
+    // relied on to finish that: a picture or a sweep then reads a shade in
+    // between, or the hovered shade itself. Without the transition the face
+    // holds its pressed brush from the moment its template is applied
+    // (GalleryStateTests.EveryPressedSpecimenDrawsItsPressedBrush and
+    // NoStateSpecimenEasesIntoItsState).
+    private static Button Pressed(Button button)
+    {
+        With(button, ":pointerover", ":pressed");
+        button.TemplateApplied += (_, e) =>
+        {
+            if (e.NameScope.Find<ContentPresenter>("PART_ContentPresenter") is { } face)
+            {
+                face.Transitions = null;
+            }
+
+            ((IPseudoClasses)button.Classes).Set(":pressed", true);
+        };
+        return button;
     }
 }

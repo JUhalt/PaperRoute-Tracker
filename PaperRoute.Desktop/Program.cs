@@ -1,7 +1,9 @@
 using Avalonia;
+using PaperRoute.Desktop.Platform;
 using PaperRoute.ViewModels.Measurement;
 using PaperRoute.ViewModels.Platform;
 using PaperRoute.ViewModels.Session;
+using Velopack;
 
 namespace PaperRoute.Desktop;
 
@@ -11,8 +13,9 @@ internal static class Program
     // a bad argument); nothing was opened.
     private const int RefusedExitCode = 2;
 
-    // Lock 1 of the trial design (d1 1.3): the isolated storage session is the
-    // first thing Main does, before any other call into PaperRoute.Core, so no
+    // Lock 1 of the trial design (d1 1.3): the isolated storage session starts
+    // before any call into PaperRoute.Core that could resolve a storage folder
+    // (registering the platform's parts only sets three services), so no
     // default root can reach the user's own library. The library is the
     // example, or with "--snapshot-from <folder>" a read-only copy of the
     // library in that folder (step 11b), refused before anything is read when
@@ -36,9 +39,21 @@ internal static class Program
     // a restart once each, writes each outcome as JSON and exits 0, or 1 if
     // the check itself broke. Its file is refused by the same rule as the
     // measurement's, before anything is opened.
+    //
+    // Velopack comes before all of it, as in today's Program.vb:39 (start-up
+    // design 2.4, step 0; MainCallsVelopackFirst): it may answer an install,
+    // update or uninstall hook named by its own first argument (only
+    // Velopack's installer passes one), or, inside an installed copy, apply a
+    // downloaded update, and end the process. Otherwise it writes a few lines
+    // to its own log and returns. It comes before the command line is read,
+    // so Velopack's own arguments never reach TrialOptions. The platform's
+    // parts are registered after the command line is accepted and before the
+    // session starts (step 2).
     [STAThread]
     public static int Main(string[] args)
     {
+        VelopackApp.Build().Run();
+
         if (!TrialOptions.TryParse(args, out TrialOptions? options, out string? error))
         {
             Console.Error.WriteLine(error);
@@ -56,6 +71,8 @@ internal static class Program
             Console.Error.WriteLine(checkRefusal);
             return RefusedExitCode;
         }
+
+        DesktopPlatform.Register();
 
         ILibrarySession session;
         if (options.SnapshotFrom is { } folder)

@@ -1,11 +1,8 @@
-using System.Runtime.CompilerServices;
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Markup.Xaml;
 using Avalonia.Markup.Xaml.Styling;
 using Avalonia.Media;
 using Avalonia.Styling;
-using Avalonia.Threading;
 
 namespace PaperRoute.Desktop.Styles;
 
@@ -24,13 +21,14 @@ namespace PaperRoute.Desktop.Styles;
 //
 // When the system colours change, the brushes keep their identity and take
 // the new colours, so everything bound to them repaints at once; when the
-// contrast theme goes on or off, the application's RequestedThemeVariant moves
-// between the contrast variant and the one the app had, and every
-// DynamicResource follows: no restart, where today a Board built before the
-// switch keeps its colours until one (r1 5.1). Contrast.axaml, the few rules
-// a token cannot carry (a pressed chip in the selection colours, an outlined
-// quiet button, focus rings in the text colour, no motion), is added to the
-// application's styles while a contrast theme is on.
+// contrast theme goes on or off, AppTheme, the one owner of the variant,
+// moves the application's RequestedThemeVariant between the contrast variant
+// and the appearance chosen, and every DynamicResource follows: no restart,
+// where today a Board built before the switch keeps its colours until one
+// (r1 5.1). Contrast.axaml, the few rules a token cannot carry (a pressed
+// chip in the selection colours, an outlined quiet button, focus rings in the
+// text colour, no motion), holds inside every top level that shows a contrast
+// variant (AppTheme.ContrastClass).
 public static class ContrastTheme
 {
     public static ThemeVariant HighContrastDark { get; } = new("HighContrastDark", ThemeVariant.Dark);
@@ -40,10 +38,6 @@ public static class ContrastTheme
     // The system colour each token takes under a contrast theme: UiTheme.vb's
     // contrast branches (lines 95-623), TagChips.vb:40, 54, and d1 5.1's table.
     public static IReadOnlyDictionary<string, SystemColorRole> TokenRoles { get; } = BuildTokenRoles();
-
-    private static readonly Uri s_contrastStyles = new("avares://PaperRoute.Desktop/Styles/Contrast.axaml");
-
-    private static readonly ConditionalWeakTable<Application, Follower> s_followers = new();
 
     public static bool IsContrast(ThemeVariant? variant) =>
         variant is not null && (variant.Key.Equals(HighContrastDark.Key) || variant.Key.Equals(HighContrastLight.Key));
@@ -78,6 +72,14 @@ public static class ContrastTheme
         foreach (KeyValuePair<string, Color> derived in ThemeTokens.DerivedColors(key => result[key], dark: false))
         {
             result[derived.Key] = derived.Value;
+        }
+
+        // Except its pressed shade on a dark set, which lightens instead (the
+        // harness design's question 10): darkened, the selected text on it fell
+        // to 4.75:1 on hc1; lightened, it is 8.45:1. The hover keeps darkening.
+        if (colors.IsDark)
+        {
+            result[ThemeTokens.AccentPressedBrush] = ThemeTokens.Blend(colors.Highlight, Avalonia.Media.Colors.White, 0.2F);
         }
 
         return result;
@@ -120,24 +122,6 @@ public static class ContrastTheme
 
         FillDictionary(dictionary, colors);
         return variant;
-    }
-
-    // Makes the application follow a contrast preference from now on: at once,
-    // and on every Changed. The variant the app has when this is called is the
-    // one it returns to when the contrast theme goes off.
-    public static void Follow(Application application, ContrastPreference preference)
-    {
-        ArgumentNullException.ThrowIfNull(application);
-        ArgumentNullException.ThrowIfNull(preference);
-        if (s_followers.TryGetValue(application, out Follower? old))
-        {
-            old.Stop();
-            s_followers.Remove(application);
-        }
-
-        var follower = new Follower(application, preference);
-        s_followers.Add(application, follower);
-        follower.Apply();
     }
 
     private static void FillDictionary(IResourceDictionary dictionary, SystemContrastColors colors)
@@ -199,6 +183,13 @@ public static class ContrastTheme
             ["WarningBrush"] = SystemColorRole.WindowText,
             ["DangerBrush"] = SystemColorRole.WindowText,
 
+            // The success and info tones (Appendix C.1): the ink the window text,
+            // its muted fill the window (:411-473).
+            ["SuccessBrush"] = SystemColorRole.WindowText,
+            ["SuccessMutedBackgroundBrush"] = SystemColorRole.Window,
+            ["InfoBrush"] = SystemColorRole.WindowText,
+            ["InfoMutedBackgroundBrush"] = SystemColorRole.Window,
+
             // Quiet text and dividers: the inactive text (:95-125).
             ["SubtleBorderBrush"] = SystemColorRole.GrayText,
             ["MutedTextBrush"] = SystemColorRole.GrayText,
@@ -224,63 +215,6 @@ public static class ContrastTheme
         }
 
         return roles;
-    }
-
-    // Keeps one application on one preference.
-    private sealed class Follower
-    {
-        private readonly Application _application;
-        private readonly ContrastPreference _preference;
-        private readonly ThemeVariant? _baseVariant;
-        private IStyle? _contrastStyles;
-
-        public Follower(Application application, ContrastPreference preference)
-        {
-            _application = application;
-            _preference = preference;
-            ThemeVariant? current = application.RequestedThemeVariant;
-            _baseVariant = IsContrast(current) ? ThemeVariant.Default : current;
-            _preference.Changed += OnChanged;
-        }
-
-        public void Stop() => _preference.Changed -= OnChanged;
-
-        public void Apply()
-        {
-            if (_preference.IsHigh)
-            {
-                ThemeVariant variant = Fill(_application.Resources, _preference.Colors);
-                if (_contrastStyles is null)
-                {
-                    _contrastStyles = (IStyle)AvaloniaXamlLoader.Load(s_contrastStyles);
-                    _application.Styles.Add(_contrastStyles);
-                }
-
-                _application.RequestedThemeVariant = variant;
-            }
-            else
-            {
-                if (_contrastStyles is not null)
-                {
-                    _application.Styles.Remove(_contrastStyles);
-                    _contrastStyles = null;
-                }
-
-                _application.RequestedThemeVariant = _baseVariant;
-            }
-        }
-
-        private void OnChanged(object? sender, EventArgs e)
-        {
-            if (Dispatcher.UIThread.CheckAccess())
-            {
-                Apply();
-            }
-            else
-            {
-                Dispatcher.UIThread.Post(Apply);
-            }
-        }
     }
 }
 

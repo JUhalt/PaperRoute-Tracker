@@ -90,9 +90,10 @@ public sealed class ContrastTests
         {
             var problems = new List<string>();
             Application app = Application.Current!;
-            app.RequestedThemeVariant = ThemeVariant.Light;
+            AppTheme theme = AppTheme.Of(app);
+            theme.Appearance = Appearance.Light;
             var preference = new ContrastPreference(false, SystemContrastColors.Fallback);
-            ContrastTheme.Follow(app, preference);
+            theme.Follow(preference);
 
             using BoardWindow board = BoardWindow.Show(session);
             CardView card = board.Cards("PipelineShelf")[0];
@@ -170,9 +171,10 @@ public sealed class ContrastTests
             {
                 string set = colors.IsDark ? "Night sky" : "Desert";
                 Application app = Application.Current!;
-                app.RequestedThemeVariant = ThemeVariant.Light;
+                AppTheme theme = AppTheme.Of(app);
+                theme.Appearance = Appearance.Light;
                 var preference = new ContrastPreference(false, SystemContrastColors.Fallback);
-                ContrastTheme.Follow(app, preference);
+                theme.Follow(preference);
                 (Window window, List<Border> pills, List<Border> tags, List<Button> chips) = ShowFamilies();
                 try
                 {
@@ -273,6 +275,13 @@ public sealed class ContrastTests
         Assert.AreEqual(SystemContrastColors.NightSky.Window, night["WarningChipHoverBrush"], "A toned chip's hover is the window colour: no hover fill.");
         Assert.AreEqual(ThemeTokens.Blend(SystemContrastColors.NightSky.Highlight, Colors.Black, 0.1F), night["AccentHoverBrush"],
             "The primary hover darkens towards black, since IsDark is never true under contrast (ActionButton.vb:224).");
+
+        // The pressed shade lightens on a dark set and darkens on a light one
+        // (the harness design's question 10).
+        Assert.AreEqual(ThemeTokens.Blend(SystemContrastColors.NightSky.Highlight, Colors.White, 0.2F), night["AccentPressedBrush"],
+            "On a dark set the primary button's pressed shade lightens towards white.");
+        Assert.AreEqual(ThemeTokens.Blend(SystemContrastColors.Desert.Highlight, Colors.Black, 0.2F), ContrastTheme.Colors(SystemContrastColors.Desert)["AccentPressedBrush"],
+            "On a light set the primary button's pressed shade darkens towards black, as before.");
     }
 
     // The colour arithmetic of SystemContrastColors and the preference's event.
@@ -310,7 +319,7 @@ public sealed class ContrastTests
         List<string> failures = Headless.Run(() =>
         {
             var problems = new List<string>();
-            ContrastTheme.Follow(Application.Current!, new ContrastPreference(true, colors));
+            AppTheme.Of(Application.Current!).Follow(new ContrastPreference(true, colors));
             var combo = new ComboBox { Width = 200 };
             combo.Items.Add("All stages");
             combo.Items.Add("Draft");
@@ -386,7 +395,7 @@ public sealed class ContrastTests
     {
         string path = Headless.Run(() =>
         {
-            ContrastTheme.Follow(Application.Current!, new ContrastPreference(true, colors));
+            AppTheme.Of(Application.Current!).Follow(new ContrastPreference(true, colors));
             var gallery = new StyleGallery();
             var window = new Window { Width = 1280, Height = 900, Content = gallery };
             window.Bind(Window.BackgroundProperty, window.GetResourceObservable("BoardBackgroundBrush"));
@@ -419,7 +428,7 @@ public sealed class ContrastTests
 
         string path = Headless.Run(() =>
         {
-            ContrastTheme.Follow(Application.Current!, new ContrastPreference(true, colors));
+            AppTheme.Of(Application.Current!).Follow(new ContrastPreference(true, colors));
             using BoardWindow board = BoardWindow.Show(session);
             return Pictures.Save(board.Window, name, TestContext);
         });
@@ -433,7 +442,7 @@ public sealed class ContrastTests
         var session = new MemorySession(Showcase(), Papers.Today);
         string path = Headless.Run(() =>
         {
-            ContrastTheme.Follow(Application.Current!, new ContrastPreference(true, colors));
+            AppTheme.Of(Application.Current!).Follow(new ContrastPreference(true, colors));
             using BoardWindow board = BoardWindow.Show(session, height: 1000);
             Assert.IsTrue(board.Shelf("PipelineShelf").FocusFirstCard(), "The shelf shows a card.");
             Dispatcher.UIThread.RunJobs();

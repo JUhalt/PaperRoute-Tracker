@@ -41,7 +41,7 @@ internal static partial class Rules
     }
 
     // What R1 measures: every pair's ratio in one theme case, passing or not.
-    // The R1 runs write these to legibility-R1-<case>.txt (Measurements).
+    // The R1 runs write these to legibility-r1-<case>.txt (Measurements).
     public static IReadOnlyList<PairRatio> R1Ratios(string themeCase, IReadOnlyDictionary<string, Color> colors, IEnumerable<TokenPair> pairs) =>
         pairs.Select(pair => new PairRatio(themeCase, pair, Contrast.ContrastRatio(colors[pair.Ink], colors[pair.Surface]))).ToList();
 }
