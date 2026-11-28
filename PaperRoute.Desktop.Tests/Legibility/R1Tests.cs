@@ -81,6 +81,23 @@ public sealed partial class R1Tests
         Assert.IsEmpty(findings, "Pairs under 4.5:1:" + Environment.NewLine + string.Join(Environment.NewLine, findings));
     }
 
+    // Today's pair list puts every text ink on the board, a card and a header
+    // (WorkflowThemeKeyboardSmokeTests.DrawnPairs), so R1 does too: an ink
+    // paired as text on one of the three surfaces is paired on all three, or
+    // the Avalonia R1 would check less than the WinForms check it replaces.
+    [TestMethod]
+    public void R1_EveryTextInkIsPairedOnTheBoardACardAndAHeader()
+    {
+        string[] surfaces = ["BoardBackgroundBrush", "CardBackgroundBrush", "HeaderBackgroundBrush"];
+        var paired = TokenPairs.Text.Select(pair => (pair.Ink, pair.Surface)).ToHashSet();
+        List<string> inks = TokenPairs.Text.Where(pair => surfaces.Contains(pair.Surface)).Select(pair => pair.Ink).Distinct().Order(StringComparer.Ordinal).ToList();
+        List<string> missing =
+            [.. inks.SelectMany(ink => surfaces.Where(surface => !paired.Contains((ink, surface))).Select(surface => $"{ink} has no pair on {surface}."))];
+
+        Assert.IsGreaterThanOrEqualTo(9, inks.Count, "Too few text inks were found: the seven Board inks, success and info.");
+        Assert.IsEmpty(missing, "Inks not paired on all three surfaces:" + Environment.NewLine + string.Join(Environment.NewLine, missing));
+    }
+
     // The numbers file (the harness design, part 2.1): legibility-r1-<case>.txt
     // holds every pair R1 judges in that case, one line each, with its ratio
     // in the invariant culture (here written under a culture with a decimal
