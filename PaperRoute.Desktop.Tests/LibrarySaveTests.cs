@@ -315,6 +315,31 @@ public sealed class LibrarySaveTests
         CollectionAssert.AreEquivalent(before.ToArray(), FileState(_root).ToArray(), "The refused save wrote a file.");
     }
 
+    // The same rule in the one place it can be broken: a session that read a
+    // good library, and then reloaded one it could not read (the backup gone,
+    // so nothing rebuilds it), keeps no repository from the first load. Its
+    // save is refused, and the damaged file stays byte for byte as it was
+    // rather than being replaced and turned into the backup.
+    [TestMethod]
+    public async Task ASaveAfterAReloadThatFailedIsRefused()
+    {
+        LargeLibraryFixture.Create(_root, 3);
+        using DiskLibrarySession session = await LoadedSession();
+        Assert.IsNotEmpty(session.Manuscripts, "The fixture's library did not load.");
+        const string damaged = "{ this is not a library";
+        await File.WriteAllTextAsync(LibraryFile, damaged);
+        File.Delete(Path.Combine(DataDirectory, "manuscripts.bak"));
+
+        Assert.IsTrue(await session.LoadAsync(CancellationToken.None), "The reload was refused.");
+        Assert.AreEqual("Library could not be loaded safely.", session.StartupNotice);
+        IReadOnlyDictionary<string, string> before = FileState(_root);
+
+        Assert.AreEqual(SaveOutcomeKind.Refused, (await session.SaveAsync(CancellationToken.None)).Kind,
+            "A library a reload could not read was saved over through the repository of the load before it.");
+        CollectionAssert.AreEquivalent(before.ToArray(), FileState(_root).ToArray(), "The refused save wrote a file.");
+        Assert.AreEqual(damaged, await File.ReadAllTextAsync(LibraryFile), "The library file the reload could not read was changed.");
+    }
+
     // A token cancelled before the call throws, and nothing starts.
     [TestMethod]
     public async Task ACancelledSaveWritesNothing()
