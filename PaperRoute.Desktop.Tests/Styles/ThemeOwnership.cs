@@ -91,8 +91,9 @@ internal static partial class ThemeOwnership
         return (findings, allowed.Distinct(StringComparer.Ordinal).ToList());
     }
 
-    // The text with its comments blanked, keeping every line where it was.
-    private static string WithoutComments(string path, string text)
+    // The text with its comments blanked, keeping every line where it was
+    // (LiteralScan reads the files the same way).
+    public static string WithoutComments(string path, string text)
     {
         string normal = text.Replace("\r\n", "\n", StringComparison.Ordinal);
         Regex block = path.EndsWith(".axaml", StringComparison.OrdinalIgnoreCase) ? XmlCommentPattern() : BlockCommentPattern();

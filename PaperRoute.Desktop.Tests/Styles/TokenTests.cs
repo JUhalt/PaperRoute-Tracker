@@ -183,6 +183,9 @@ public sealed partial class TokenTests
         ("CardRadius", "10"),
         ("ControlRadius", "8"),
         ("FullRadius", "999"),
+        ("FocusRingRadius", "6"),
+        ("LinkFocusRadius", "4"),
+        ("RailItemRadius", "7"),
         ("SpaceXs", "4"),
         ("SpaceSm", "8"),
         ("SpaceMd", "12"),
@@ -191,6 +194,8 @@ public sealed partial class TokenTests
         ("SpaceSmPad", "8"),
         ("SpaceLgPad", "16"),
         ("CardPadding", "14"),
+        ("ControlMinHeight", "32"),
+        ("CompactMinHeight", "26"),
         ("BodyFontSize", "13"),
         ("PageTitleFontSize", "21"),
         ("CardTitleFontSize", "14"),
@@ -198,7 +203,12 @@ public sealed partial class TokenTests
         ("MetaFontSize", "12"),
         ("BadgeFontSize", "11"),
         ("CaptionFontSize", "11"),
+        ("BrandFontSize", "17"),
+        ("RailSmallFontSize", "11"),
+        ("CardTitleLineHeight", "18"),
+        ("CardTitleHeight", "36"),
         ("ControlContentThemeFontSize", "13"),
+        ("HoverDuration", "0:0:0.1"),
     ];
 
     // The themed tokens: key, Light value, Dark value, as written.
