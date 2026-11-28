@@ -1,4 +1,5 @@
 using System.Globalization;
+using Avalonia;
 using Avalonia.Media;
 
 namespace PaperRoute.Desktop.Tests.Legibility;
@@ -20,13 +21,16 @@ internal readonly record struct PatternMeasure(string ThemeCase, string One, str
 // two swatches share a pattern when under 10 % or over 90 % of positions
 // differ; a pair fails when it shares a pattern and either a contrast theme is
 // on (the colours are the user's) or its commonest colours are under 3:1.
-// Input: swatches of equal size. Output: findings (Rules.cs), one line each,
-// whose subject is the pair, "<one> and <other>".
+// Input: one frame and each kind's slot in it, all of one size. The pattern
+// arithmetic is FramePixels' (PatternDifference, CommonestOwnColour,
+// SharesPattern), which PrimitiveTests checks on bitmaps made in code.
+// Output: findings (Rules.cs), one line each, whose subject is the pair,
+// "<one> and <other>".
 // Limits of headless: HeadlessLimits.md
 internal static partial class Rules
 {
-    public static List<Finding> R3Findings(string themeCase, IReadOnlyList<(string Name, Color[] Pixels)> swatches, bool contrast) =>
-        R3Findings(R3Measures(themeCase, swatches), contrast);
+    public static List<Finding> R3Findings(string themeCase, FramePixels frame, IReadOnlyList<(string Name, PixelRect Area)> slots, bool contrast) =>
+        R3Findings(R3Measures(themeCase, frame, slots), contrast);
 
     // R3's findings from its measurements: the pairs that share a pattern,
     // under a contrast theme or under 3:1.
@@ -36,8 +40,7 @@ internal static partial class Rules
         var findings = new List<Finding>();
         foreach (PatternMeasure measured in measures)
         {
-            bool same = measured.Differing < Thresholds.R3SamePatternUnder || measured.Differing > Thresholds.R3SamePatternOver;
-            if (same && (contrast || measured.Ratio < Thresholds.R3Colours))
+            if (FramePixels.SharesPattern(measured.Differing) && (contrast || measured.Ratio < Thresholds.R3Colours))
             {
                 findings.Add(new Finding("R3", measured.ThemeCase, $"{measured.One} and {measured.Other}",
                     measured.Line + (contrast ? ": the same pattern under a contrast theme" : ": the same pattern and under 3:1")));
@@ -47,50 +50,28 @@ internal static partial class Rules
         return findings;
     }
 
-    // What R3 measures: every pair of swatches, in order, passing or not. The
-    // R3 run writes these to legibility-r3-<case>.txt (Measurements).
-    public static IReadOnlyList<PatternMeasure> R3Measures(string themeCase, IReadOnlyList<(string Name, Color[] Pixels)> swatches)
+    // What R3 measures: every pair of slots, in order, passing or not. The R3
+    // run writes these to legibility-r3-<case>.txt (Measurements).
+    public static IReadOnlyList<PatternMeasure> R3Measures(string themeCase, FramePixels frame, IReadOnlyList<(string Name, PixelRect Area)> slots)
     {
-        ArgumentNullException.ThrowIfNull(swatches);
+        ArgumentNullException.ThrowIfNull(frame);
+        ArgumentNullException.ThrowIfNull(slots);
         var measures = new List<PatternMeasure>();
-        for (int first = 0; first < swatches.Count - 1; first++)
+        for (int first = 0; first < slots.Count - 1; first++)
         {
-            for (int second = first + 1; second < swatches.Count; second++)
+            for (int second = first + 1; second < slots.Count; second++)
             {
-                (string oneName, Color[] one) = swatches[first];
-                (string otherName, Color[] other) = swatches[second];
-                if (one.Length != other.Length || one.Length == 0)
-                {
-                    throw new ArgumentException($"The swatches of {oneName} ({one.Length} pixels) and {otherName} ({other.Length}) are not one size.", nameof(swatches));
-                }
-
-                measures.Add(new PatternMeasure(themeCase, oneName, otherName, R3Differing(one, other), Contrast.ContrastRatio(Commonest(one), Commonest(other))));
+                (string oneName, PixelRect one) = slots[first];
+                (string otherName, PixelRect other) = slots[second];
+                double ratio = Contrast.ContrastRatio(Commonest(frame, one, oneName), Commonest(frame, other, otherName));
+                measures.Add(new PatternMeasure(themeCase, oneName, otherName, FramePixels.PatternDifference(frame, one, frame, other), ratio));
             }
         }
 
         return measures;
     }
 
-    // The share of positions in one swatch's pattern and not the other's, or
-    // the other way round.
-    private static double R3Differing(Color[] one, Color[] other)
-    {
-        Color oneColour = Commonest(one);
-        Color otherColour = Commonest(other);
-        int differing = 0;
-        for (int index = 0; index < one.Length; index++)
-        {
-            bool inOne = Contrast.ContrastRatio(one[index], oneColour) < Thresholds.R3InPattern;
-            bool inOther = Contrast.ContrastRatio(other[index], otherColour) < Thresholds.R3InPattern;
-            if (inOne != inOther)
-            {
-                differing++;
-            }
-        }
-
-        return differing / (double)one.Length;
-    }
-
-    private static Color Commonest(Color[] pixels) =>
-        pixels.GroupBy(pixel => pixel).OrderByDescending(group => group.Count()).First().Key;
+    // A slot's commonest colour; a slot with no children always has one.
+    private static Color Commonest(FramePixels frame, PixelRect slot, string name) =>
+        frame.CommonestOwnColour(slot, []) ?? throw new InvalidOperationException($"No colour in the slot of {name}.");
 }

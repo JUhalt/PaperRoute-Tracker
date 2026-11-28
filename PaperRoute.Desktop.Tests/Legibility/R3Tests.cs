@@ -3,7 +3,6 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Layout;
-using Avalonia.Media;
 using Avalonia.Threading;
 using ManuscriptPipeline.Services;
 
@@ -37,8 +36,8 @@ public sealed class R3Tests
         var findings = new List<Finding>();
         foreach (ThemeCase themeCase in ThemeCase.All)
         {
-            List<(string Name, Color[] Pixels)> swatches = Draw(themeCase, RouteKinds.All, "rules-r3-" + themeCase.Name.ToLowerInvariant(), TestContext);
-            IReadOnlyList<PatternMeasure> measures = Rules.R3Measures(themeCase.Name, swatches);
+            (FramePixels frame, List<(string Name, PixelRect Area)> slots) = Draw(themeCase, RouteKinds.All, "rules-r3-" + themeCase.Name.ToLowerInvariant(), TestContext);
+            IReadOnlyList<PatternMeasure> measures = Rules.R3Measures(themeCase.Name, frame, slots);
             findings.AddRange(Rules.R3Findings(measures, themeCase.Contrast is not null).Where(finding => !KnownFailures.Lists(known, finding)));
             string path = Measurements.Write(
                 Pictures.Directory(),
@@ -76,8 +75,8 @@ public sealed class R3Tests
     {
         RouteKind accepted = RouteKinds.All.Single(kind => kind.Name == "accepted");
 
-        List<(string Name, Color[] Pixels)> swatches = Draw(ThemeCase.Light, [ClosedAtTenPixels, accepted], "rules-r3-teeth-light", TestContext);
-        IReadOnlyList<PatternMeasure> measures = Rules.R3Measures(ThemeCase.Light.Name, swatches);
+        (FramePixels frame, List<(string Name, PixelRect Area)> slots) = Draw(ThemeCase.Light, [ClosedAtTenPixels, accepted], "rules-r3-teeth-light", TestContext);
+        IReadOnlyList<PatternMeasure> measures = Rules.R3Measures(ThemeCase.Light.Name, frame, slots);
         List<Finding> findings = Rules.R3Findings(measures, contrast: false);
         string measured = string.Join(Environment.NewLine, measures.Select(measure => measure.Line));
         TestContext.WriteLine(measured);
@@ -93,14 +92,18 @@ public sealed class R3Tests
     // its picture.
     internal static IReadOnlyList<Finding> CurrentFindings(IReadOnlyList<RouteKind> kinds) =>
         ThemeCase.All
-            .SelectMany(themeCase => Rules.R3Findings(themeCase.Name, Draw(themeCase, kinds, picture: null, context: null), themeCase.Contrast is not null))
+            .SelectMany(themeCase =>
+            {
+                (FramePixels frame, List<(string Name, PixelRect Area)> slots) = Draw(themeCase, kinds, picture: null, context: null);
+                return Rules.R3Findings(themeCase.Name, frame, slots, themeCase.Contrast is not null);
+            })
             .ToList();
 
     // Draws each kind alone in its slot, on CardBackgroundBrush, at render
     // scale 4, saves the picture (unless none is named, when the frame is
-    // settled as Pictures.Save settles it) and returns each slot's pixels,
-    // read through FramePixels.
-    private static List<(string Name, Color[] Pixels)> Draw(ThemeCase themeCase, IReadOnlyList<RouteKind> kinds, string? picture, TestContext? context) => Headless.Run(() =>
+    // settled as Pictures.Save settles it) and returns the frame, read through
+    // FramePixels, with each kind's slot in it.
+    private static (FramePixels Frame, List<(string Name, PixelRect Area)> Slots) Draw(ThemeCase themeCase, IReadOnlyList<RouteKind> kinds, string? picture, TestContext? context) => Headless.Run(() =>
     {
         themeCase.Apply(Application.Current!);
         var row = new StackPanel
@@ -138,25 +141,16 @@ public sealed class R3Tests
 
             FramePixels frame = FramePixels.Capture(window);
             int side = (int)Math.Round(RouteKinds.Slot * RouteKinds.Scale);
-            var swatches = new List<(string Name, Color[] Pixels)>();
+            var areas = new List<(string Name, PixelRect Area)>();
             foreach ((string name, Border slot) in slots)
             {
                 Point origin = slot.TranslatePoint(default, window) ?? throw new AssertFailedException($"The slot of {name} is not in the window.");
                 var area = new PixelRect((int)Math.Round(origin.X * RouteKinds.Scale), (int)Math.Round(origin.Y * RouteKinds.Scale), side, side);
                 Assert.IsTrue(frame.Contains(area), $"The slot of {name} lies outside the frame {frame.Width} x {frame.Height}.");
-                var pixels = new Color[side * side];
-                for (int y = 0; y < side; y++)
-                {
-                    for (int x = 0; x < side; x++)
-                    {
-                        pixels[(y * side) + x] = frame.At(area.X + x, area.Y + y);
-                    }
-                }
-
-                swatches.Add((name, pixels));
+                areas.Add((name, area));
             }
 
-            return swatches;
+            return (frame, areas);
         }
         finally
         {
