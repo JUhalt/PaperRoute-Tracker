@@ -5,68 +5,13 @@ using PaperRoute.Desktop.Tests.Legibility;
 
 namespace PaperRoute.Desktop.Tests.Styles;
 
-// The theme and legibility rules of d1 6.2 that need no window: T1, T2, T3,
-// and the port of UiTheme.Blend.
+// The theme rules of d1 6.2 that need no window: T3, the token file's
+// completeness, and the port of UiTheme.Blend. T1 and T2 grew into R1
+// (Legibility/R1Tests.cs, the harness design, part 2.4).
 [TestClass]
 public sealed partial class TokenTests
 {
     private static readonly string[] s_variants = ["Light", "Dark"];
-
-    private static readonly string[] s_stages =
-        ["Idea", "Draft", "Submitted", "UnderReview", "Revision", "Accepted", "InPress", "Published"];
-
-    private static readonly string[] s_tagPalettes =
-        ["Teal", "Blue", "Violet", "Rose", "Amber", "Green", "Slate", "Orange"];
-
-    // T1: every text and background pair the Board uses, in Light and Dark, at
-    // 4.5:1. The design asked only 3:1 for muted and disabled text (R8); today's
-    // suite holds every pair to 4.5:1, muted and disabled text included
-    // (WorkflowThemeKeyboardSmokeTests.DrawnPairs, its "off" buttons), and
-    // UiTheme.MutedText promises 4.5:1 on the board and card, so the trial does too.
-    [TestMethod]
-    public void T1_EveryTextPairTheBoardUsesHasItsContrast()
-    {
-        var failures = new List<string>();
-        int checkedPairs = 0;
-        foreach (string variant in s_variants)
-        {
-            IReadOnlyDictionary<string, Color> colors = TokenFile.Colors(variant);
-            foreach ((string where, string ink, string surface) in BoardPairs())
-            {
-                double ratio = Contrast.ContrastRatio(colors[ink], colors[surface]);
-                checkedPairs++;
-                if (ratio < Thresholds.Text)
-                {
-                    failures.Add($"{variant}: {where}: {ink} on {surface} is {ratio:F2}:1");
-                }
-            }
-        }
-
-        Assert.IsGreaterThan(40, checkedPairs, "Too few pairs were checked.");
-        Assert.IsEmpty(failures, "Pairs under 4.5:1:" + Environment.NewLine + string.Join(Environment.NewLine, failures));
-    }
-
-    // T2: the eight stage pills and the eight tag palettes, Light and Dark, at
-    // 4.5:1 (WorkTypeAndTagTests.EveryTagColorIsLegibleInBothThemes today).
-    [TestMethod]
-    public void T2_EveryStageAndTagPairIsLegibleInBothThemes()
-    {
-        var failures = new List<string>();
-        foreach (string variant in s_variants)
-        {
-            IReadOnlyDictionary<string, Color> colors = TokenFile.Colors(variant);
-            foreach (string pair in s_stages.Select(stage => "Stage" + stage).Concat(s_tagPalettes.Select(palette => "Tag" + palette)))
-            {
-                double ratio = Contrast.ContrastRatio(colors[pair + "ForegroundBrush"], colors[pair + "BackgroundBrush"]);
-                if (ratio < Thresholds.Text)
-                {
-                    failures.Add($"{variant}: {pair} is {ratio:F2}:1");
-                }
-            }
-        }
-
-        Assert.IsEmpty(failures, "Pairs under 4.5:1:" + Environment.NewLine + string.Join(Environment.NewLine, failures));
-    }
 
     // T3: a brush in ThemeDictionaries resolves only through DynamicResource;
     // StaticResource throws or keeps the first theme's colour (r2 4.1). No
@@ -140,7 +85,7 @@ public sealed partial class TokenTests
             "AccentMutedBackgroundBrush", "OnAccentTextBrush", "HoverBackgroundBrush", "WarningBrush", "WarningMutedBackgroundBrush",
             "DangerBrush", "DangerMutedBackgroundBrush",
         ];
-        IEnumerable<string> pairs = s_stages.Select(stage => "Stage" + stage).Concat(s_tagPalettes.Select(palette => "Tag" + palette))
+        IEnumerable<string> pairs = TokenPairs.Stages.Select(stage => "Stage" + stage).Concat(TokenPairs.TagPalettes.Select(palette => "Tag" + palette))
             .SelectMany(pair => new[] { pair + "BackgroundBrush", pair + "ForegroundBrush" });
 
         foreach (string variant in s_variants)
@@ -167,47 +112,147 @@ public sealed partial class TokenTests
         Assert.AreEqual(Color.FromRgb(14, 106, 99), ThemeTokens.Blend(Color.FromRgb(15, 118, 110), Colors.Black, 0.1F));
     }
 
-    // Where each pair is drawn: the ink and surface keys, from r1 5.1's "Board
-    // use" column and today's pair list (WorkflowThemeKeyboardSmokeTests.DrawnPairs).
-    private static IEnumerable<(string Where, string Ink, string Surface)> BoardPairs()
+    // Every value Tokens.axaml writes, pinned (the harness design, part 3.1,
+    // as WinForms pins UiTheme's colours in TokensBefore): the accepted Light
+    // and Dark colours and every theme-independent token. A token whose value
+    // changes, a new token, or a removed one fails here until this table
+    // changes in the same pull request, so review sees every token change; an
+    // unplanned one stops and asks the maintainer first. The check runs again
+    // on a copy of the file with one colour changed, and must name exactly it.
+    [TestMethod]
+    public void TokenValuesArePinned()
     {
-        string[] inks =
-        [
-            "PrimaryTextBrush", "SecondaryTextBrush", "MutedTextBrush", "AccentBrush", "AccentSecondaryBrush",
-            "WarningBrush", "DangerBrush",
-        ];
-        foreach (string surface in new[] { "BoardBackgroundBrush", "CardBackgroundBrush", "HeaderBackgroundBrush" })
+        List<string> problems = PinProblems(TokenFile.TokensPath);
+        Assert.IsEmpty(problems, "Token values differ from the pinned table:" + Environment.NewLine + string.Join(Environment.NewLine, problems));
+
+        string folder = Path.Combine(AssemblySetup.StorageRoot, "pins-teeth-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        string copy = Path.Combine(folder, "Tokens.axaml");
+        string real = File.ReadAllText(TokenFile.TokensPath);
+        const string good = "<SolidColorBrush x:Key=\"CardBorderBrush\" Color=\"#3D444F\" />";
+        Assert.AreEqual(2, real.Split(good).Length, "The real token file must hold Dark's CardBorderBrush, #3D444F, exactly once.");
+        File.WriteAllText(copy, real.Replace(good, "<SolidColorBrush x:Key=\"CardBorderBrush\" Color=\"#3D4450\" />", StringComparison.Ordinal));
+        Assert.AreEqual(
+            "Dark CardBorderBrush is #3D4450 in the file, pinned #3D444F.",
+            string.Join(Environment.NewLine, PinProblems(copy)),
+            "A copy with one Dark colour changed by one step.");
+    }
+
+    // The differences between a token file's values and the pinned tables.
+    private static List<string> PinProblems(string tokensPath)
+    {
+        var pinned = new Dictionary<(string Scope, string Key), string>();
+        foreach ((string key, string value) in s_pinnedIndependent)
         {
-            foreach (string ink in inks)
+            pinned.Add(("", key), value);
+        }
+
+        foreach ((string key, string light, string dark) in s_pinnedThemed)
+        {
+            pinned.Add(("Light", key), light);
+            pinned.Add(("Dark", key), dark);
+        }
+
+        var problems = new List<string>();
+        var seen = new HashSet<(string, string)>();
+        foreach ((string scope, string key, string value) in TokenFile.Values(tokensPath))
+        {
+            string name = scope.Length == 0 ? key : scope + " " + key;
+            seen.Add((scope, key));
+            if (!pinned.TryGetValue((scope, key), out string? expected))
             {
-                yield return ("text on a page, card or header", ink, surface);
+                problems.Add($"{name} is {value} in the file and not pinned.");
+            }
+            else if (!string.Equals(value, expected, StringComparison.Ordinal))
+            {
+                problems.Add($"{name} is {value} in the file, pinned {expected}.");
             }
         }
 
-        yield return ("a hovered secondary button", "PrimaryTextBrush", "HoverBackgroundBrush");
-        yield return ("a hovered quiet button (the card's ⋯)", "AccentBrush", "HoverBackgroundBrush");
-        yield return ("a hovered danger button", "DangerBrush", "HoverBackgroundBrush");
-        yield return ("a hovered neutral chip", "SecondaryTextBrush", "HoverBackgroundBrush");
-        yield return ("the example banner and the welcome's privacy note", "PrimaryTextBrush", "AccentMutedBackgroundBrush");
-        yield return ("an active chip", "AccentBrush", "AccentMutedBackgroundBrush");
-        yield return ("a pressed link on a tinted panel", "AccentSecondaryBrush", "AccentMutedBackgroundBrush");
-        yield return ("a warning chip", "WarningBrush", "WarningMutedBackgroundBrush");
-        yield return ("a danger chip", "DangerBrush", "DangerMutedBackgroundBrush");
-        yield return ("a warning chip, hovered", "WarningBrush", ThemeTokens.WarningChipHoverBrush);
-        yield return ("a danger chip, hovered", "DangerBrush", ThemeTokens.DangerChipHoverBrush);
-        yield return ("an active chip, hovered", "AccentBrush", ThemeTokens.AccentChipHoverBrush);
-        yield return ("a primary button", "OnAccentTextBrush", "AccentBrush");
-        yield return ("a primary button, hovered", "OnAccentTextBrush", ThemeTokens.AccentHoverBrush);
-        yield return ("a primary button, pressed", "OnAccentTextBrush", ThemeTokens.AccentPressedBrush);
-        yield return ("an off button (filled roles)", "MutedTextBrush", "BoardBackgroundBrush");
-        yield return ("an off quiet button on a card", "MutedTextBrush", "CardBackgroundBrush");
+        foreach ((string scope, string key) in pinned.Keys.Where(entry => !seen.Contains(entry)))
+        {
+            problems.Add($"{(scope.Length == 0 ? key : scope + " " + key)} is pinned but not in the file.");
+        }
+
+        return problems;
     }
 
-    // Every pair T1 and T2 judge, for R2 to map through the contrast roles
-    // (Legibility/R2Tests.cs).
-    internal static IEnumerable<(string Where, string Ink, string Surface)> AllPairs() =>
-        BoardPairs().Concat(s_stages.Select(stage => "Stage" + stage).Concat(s_tagPalettes.Select(palette => "Tag" + palette))
-            .Select(pair => (pair + " pill or tag", pair + "ForegroundBrush", pair + "BackgroundBrush")));
+    // The theme-independent tokens: key, value as written.
+    private static readonly (string Key, string Value)[] s_pinnedIndependent =
+    [
+        ("CardRadius", "10"),
+        ("ControlRadius", "8"),
+        ("FullRadius", "999"),
+        ("SpaceXs", "4"),
+        ("SpaceSm", "8"),
+        ("SpaceMd", "12"),
+        ("SpaceLg", "16"),
+        ("SpaceXl", "24"),
+        ("CardPadding", "14"),
+        ("BodyFontSize", "13"),
+        ("PageTitleFontSize", "21"),
+        ("CardTitleFontSize", "14"),
+        ("InsightFontSize", "12"),
+        ("MetaFontSize", "12"),
+        ("BadgeFontSize", "11"),
+        ("CaptionFontSize", "11"),
+        ("ControlContentThemeFontSize", "13"),
+    ];
+
+    // The themed tokens: key, Light value, Dark value, as written.
+    private static readonly (string Key, string Light, string Dark)[] s_pinnedThemed =
+    [
+        ("BoardBackgroundBrush", "#F4F7F8", "#181B20"),
+        ("HeaderBackgroundBrush", "#FFFFFF", "#1F2329"),
+        ("CardBackgroundBrush", "#FFFFFF", "#282C33"),
+        ("CardBorderBrush", "#DAE4E7", "#3D444F"),
+        ("SubtleBorderBrush", "#E7EEF0", "#323841"),
+        ("PrimaryTextBrush", "#000000", "#F0F0F0"),
+        ("SecondaryTextBrush", "#5B6977", "#ACB5C0"),
+        ("MutedTextBrush", "#64717D", "#8A95A1"),
+        ("AccentBrush", "#0F766E", "#2DD4BF"),
+        ("AccentSecondaryBrush", "#0E7490", "#22D3EE"),
+        ("AccentMutedBackgroundBrush", "#CCFBF1", "#144544"),
+        ("OnAccentTextBrush", "#FFFFFF", "#07201D"),
+        ("HoverBackgroundBrush", "#EBF4F5", "#323841"),
+        ("WarningBrush", "#B45309", "#FBBF24"),
+        ("WarningMutedBackgroundBrush", "#FEF3C7", "#5C3F15"),
+        ("DangerBrush", "#BE232D", "#F87C7C"),
+        ("DangerMutedBackgroundBrush", "#FEE2E2", "#5B2126"),
+        ("StageIdeaBackgroundBrush", "#EDE9FE", "#483678"),
+        ("StageIdeaForegroundBrush", "#5B21B6", "#DDD6FE"),
+        ("StageDraftBackgroundBrush", "#E5E7EB", "#41444B"),
+        ("StageDraftForegroundBrush", "#374151", "#E5E7EB"),
+        ("StageSubmittedBackgroundBrush", "#DBEAFE", "#1E406E"),
+        ("StageSubmittedForegroundBrush", "#1D4ED8", "#BFDBFE"),
+        ("StageUnderReviewBackgroundBrush", "#CCFBF1", "#115E59"),
+        ("StageUnderReviewForegroundBrush", "#0F766E", "#99F6E4"),
+        ("StageRevisionBackgroundBrush", "#FEF3C7", "#5C3F15"),
+        ("StageRevisionForegroundBrush", "#B45309", "#FDE68A"),
+        ("StageAcceptedBackgroundBrush", "#DCFCE7", "#1F4C2F"),
+        ("StageAcceptedForegroundBrush", "#15803D", "#BBF7D0"),
+        ("StageInPressBackgroundBrush", "#CFFAFE", "#134E4A"),
+        ("StageInPressForegroundBrush", "#0E7490", "#A5F3FC"),
+        ("StagePublishedBackgroundBrush", "#D1FAE5", "#114E3C"),
+        ("StagePublishedForegroundBrush", "#047857", "#A7F3D0"),
+        ("TagTealBackgroundBrush", "#CCFBF1", "#134E4A"),
+        ("TagTealForegroundBrush", "#115E59", "#99F6E4"),
+        ("TagBlueBackgroundBrush", "#DBEAFE", "#1E3A8A"),
+        ("TagBlueForegroundBrush", "#1E40AF", "#BFDBFE"),
+        ("TagVioletBackgroundBrush", "#EDE9FE", "#4C1D95"),
+        ("TagVioletForegroundBrush", "#5B21B6", "#DDD6FE"),
+        ("TagRoseBackgroundBrush", "#FFE4E6", "#881337"),
+        ("TagRoseForegroundBrush", "#9F1239", "#FECDD3"),
+        ("TagAmberBackgroundBrush", "#FEF3C7", "#78350F"),
+        ("TagAmberForegroundBrush", "#92400E", "#FDE68A"),
+        ("TagGreenBackgroundBrush", "#DCFCE7", "#14532D"),
+        ("TagGreenForegroundBrush", "#166534", "#BBF7D0"),
+        ("TagSlateBackgroundBrush", "#E2E8F0", "#334155"),
+        ("TagSlateForegroundBrush", "#334155", "#E2E8F0"),
+        ("TagOrangeBackgroundBrush", "#FFEDD5", "#7C2D12"),
+        ("TagOrangeForegroundBrush", "#9A3412", "#FED7AA"),
+        ("OutlineThickness", "0", "0"),
+    ];
 
     [GeneratedRegex(@"\{StaticResource\s+(?:ResourceKey=)?(?<key>[^\s,}]+)[^}]*\}")]
     private static partial Regex StaticResourcePattern();

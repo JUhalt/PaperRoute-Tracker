@@ -91,7 +91,7 @@ public sealed class R2Tests
     [TestMethod]
     public void R2_EveryPairIsADesignedPairUnderContrast()
     {
-        List<(string Where, string Ink, string Surface)> pairs = TokenTests.AllPairs().ToList();
+        List<(string Where, string Ink, string Surface)> pairs = TokenPairs.All.Select(pair => (pair.Where, pair.Ink, pair.Surface)).ToList();
         List<string> findings = Rules.R2DesignedPairFindings(pairs, Rules.R2Roles());
         TestContext.WriteLine($"{pairs.Count} pairs mapped through the roles.");
         Assert.IsGreaterThan(40, pairs.Count, "Too few pairs were mapped.");
@@ -104,7 +104,7 @@ public sealed class R2Tests
     [TestMethod]
     public void R2_EveryPairHasItsContrastInEveryWindowsContrastSet()
     {
-        List<(string Where, string Ink, string Surface)> pairs = TokenTests.AllPairs().ToList();
+        List<(string Where, string Ink, string Surface)> pairs = TokenPairs.All.Select(pair => (pair.Where, pair.Ink, pair.Surface)).ToList();
         var findings = new List<string>();
         IEnumerable<(string Name, SystemContrastColors Colors)> sets = ThemeCase.ContrastCases
             .Select(themeCase => (themeCase.Name, themeCase.Contrast!.Value))
@@ -189,7 +189,7 @@ public sealed class R2Tests
     [TestMethod]
     public void R2_FailsBadRoleTablesAndSets()
     {
-        List<(string Where, string Ink, string Surface)> pairs = TokenTests.AllPairs().ToList();
+        List<(string Where, string Ink, string Surface)> pairs = TokenPairs.All.Select(pair => (pair.Where, pair.Ink, pair.Surface)).ToList();
 
         // Check 2: the primary button's text, HighlightText, on WindowText.
         Dictionary<string, SystemColorRole> accentOnText = Rules.R2Roles().ToDictionary(StringComparer.Ordinal);

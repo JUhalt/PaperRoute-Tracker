@@ -85,7 +85,7 @@ public sealed class StyleFamilyTests
 
     // The app resolves every token of Tokens.axaml to the value the file
     // holds, in Light and in Dark, and the derived brushes ThemeTokens adds are
-    // there too: what T1 and T2 read is what a view gets.
+    // there too: what R1 (was T1 and T2) reads is what a view gets.
     [TestMethod]
     public void TheAppResolvesEveryTokenInBothThemes()
     {
