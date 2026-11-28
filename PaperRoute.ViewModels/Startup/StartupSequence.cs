@@ -24,7 +24,10 @@ public static class StartupSequence
     public const int NoHomeFolderExitCode = 1;
 
     // A second copy started by a person exits silently, as today
-    // (Program.vb:68-71), whether or not the first copy came forward.
+    // (Program.vb:69-72), whether or not the first copy came forward. Unlike
+    // today, which returns before its Try/Finally, it ends the session it
+    // began first, so a second copy started with --example leaves no
+    // example folder behind (start-up design 2.4, step 6).
     public const int SecondCopyExitCode = 0;
 
     // A second copy in a check mode: "another copy holds this library and

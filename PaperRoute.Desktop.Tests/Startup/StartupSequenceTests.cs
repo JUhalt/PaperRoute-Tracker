@@ -14,7 +14,10 @@ public sealed class StartupSequenceTests
     private static readonly string[] s_toTheHold =
         ["options", "platform", "session", "data-root", "error-reports", "single-instance"];
 
-    // "" is a plain start; the arguments are split on spaces.
+    // "" is a plain start; the arguments are split on spaces. Until W1a the
+    // two rows run the same steps: the sequence does not branch on the
+    // example, and the fake ignores the arguments. W1a's full list is where
+    // they differ (the example has no reminder and no update-check slot).
     [TestMethod]
     [DataRow("", DisplayName = "a plain start")]
     [DataRow("--example", DisplayName = "--example")]
@@ -46,6 +49,8 @@ public sealed class StartupSequenceTests
             ["options"]);
     }
 
+    // Run with --example, but it holds for every start until W1a: the order
+    // does not depend on the command line yet.
     [TestMethod]
     public void TheExampleStartsItsSessionBeforeAnyRoot()
     {

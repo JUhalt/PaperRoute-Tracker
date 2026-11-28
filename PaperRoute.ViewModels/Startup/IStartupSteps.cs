@@ -21,9 +21,11 @@ public interface IStartupSteps
     // before anything could read a key (Program.vb:44).
     void RegisterPlatform();
 
-    // 3 "session": starts the example's session or a check mode's, or nothing
-    // for the person's own library (Program.vb:49-50). Before any data root
-    // is found, so the session decides where every root lies.
+    // 3 "session": starts the example's session, a check mode's, or the
+    // session a plain start gets (Program.vb:49-50); which library a plain
+    // start opens is the start-up design's question 4, not this step's.
+    // Before any data root is found, so the session decides where every
+    // root lies.
     void BeginSession();
 
     // 4 "data-root": finds the data root, once. It throws when the system
