@@ -314,8 +314,11 @@ public sealed class NavigatorTests
     }
 
     // Not in the design's list (it is silent on races): while one leave
-    // guard is still answering, a second move of any kind is refused and
-    // changes nothing; the first then finishes as if alone.
+    // guard is still answering, a second move of any kind is refused at once
+    // and changes nothing; the first then finishes as if alone. Back and
+    // Forward both have an entry to take, so only the guard refuses them.
+    // The second moves are not awaited: without the guard each would wait on
+    // the held answer, and the test would hang instead of failing.
     [TestMethod]
     public async Task ASecondMoveWhileALeaveIsAskedIsRefused()
     {
@@ -323,30 +326,45 @@ public sealed class NavigatorTests
         Navigator navigator = pages.Navigator;
         await navigator.GoAsync(s_board);
         await navigator.GoAsync(s_library);
+        await navigator.GoAsync(s_journals);
+        await navigator.GoBackAsync();
+        HistoryIs(navigator.BackHistory, "Back has an entry to take.", s_board);
+        HistoryIs(navigator.ForwardHistory, "Forward has an entry to take.", s_journals);
         FakePage library = pages.Page(PageKey.Library);
+        int asked = library.LeaveQuestions;
+        int hidden = library.HiddenCount;
         var answer = new TaskCompletionSource<bool>();
         library.HeldAnswer = answer;
 
-        Task<bool> first = navigator.GoAsync(s_journals);
+        Task<bool> first = navigator.GoAsync(s_deadlines);
         Assert.IsFalse(first.IsCompleted, "The first move waits on the page's answer.");
 
-        Assert.IsFalse(await navigator.GoAsync(s_deadlines), "A second move is refused while the first is asked.");
-        Assert.IsFalse(await navigator.GoBackAsync(), "Back is refused while a move is asked.");
-        Assert.IsFalse(await navigator.GoForwardAsync(), "Forward is refused while a move is asked.");
-        Assert.AreEqual(1, library.LeaveQuestions, "The page is asked once, by the first move only.");
+        await RefusedAtOnce(navigator.GoAsync(s_settings), "A second move is refused while the first is asked.");
+        await RefusedAtOnce(navigator.GoBackAsync(), "Back is refused while a move is asked.");
+        await RefusedAtOnce(navigator.GoForwardAsync(), "Forward is refused while a move is asked.");
+        Assert.AreEqual(asked + 1, library.LeaveQuestions, "The page is asked once, by the first move only.");
         Assert.AreEqual(s_library, navigator.Current);
         HistoryIs(navigator.BackHistory, "Nothing moved yet.", s_board);
+        HistoryIs(navigator.ForwardHistory, "Nothing moved yet.", s_journals);
 
         answer.SetResult(true);
         Assert.IsTrue(await first);
 
-        Assert.AreEqual(s_journals, navigator.Current);
-        Assert.IsEmpty(pages.MadeFor(PageKey.Deadlines), "The refused move made no page.");
+        Assert.AreEqual(s_deadlines, navigator.Current);
+        Assert.IsEmpty(pages.MadeFor(PageKey.Settings), "The refused move made no page.");
         HistoryIs(navigator.BackHistory, "Only the first move is recorded.", s_library, s_board);
-        Assert.AreEqual(1, library.HiddenCount);
+        HistoryIs(navigator.ForwardHistory, "The first move, recorded, clears Forward.");
+        Assert.AreEqual(hidden + 1, library.HiddenCount, "The page left by the first move is hidden once.");
 
         library.HeldAnswer = null;
-        Assert.IsTrue(await navigator.GoAsync(s_deadlines), "Once the first move is done, the next goes.");
+        Assert.IsTrue(await navigator.GoAsync(s_settings), "Once the first move is done, the next goes.");
+    }
+
+    // A move refused by the guard against a second move ends at once.
+    private static async Task RefusedAtOnce(Task<bool> move, string message)
+    {
+        Assert.IsTrue(move.IsCompleted, message + " It waited instead of being refused at once.");
+        Assert.IsFalse(await move, message);
     }
 
     private static void HistoryIs(IReadOnlyList<PageRequest> history, string message, params PageRequest[] expected) =>
