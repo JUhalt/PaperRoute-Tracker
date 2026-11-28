@@ -571,3 +571,426 @@ jobs:
           path: TestResults/
           if-no-files-found: ignore
           retention-days: 14
+
+  # REPORT-ONLY until the maintainer has read its first runs: the Board trial
+  # and the core on macOS (build 24, #439). Nothing had been built or run on
+  # macOS before this job, so its first runs show what differs there.
+  #
+  # How it never fails a pull request: every step has continue-on-error: true,
+  # so a step that fails, or runs out of its own time limit (timeout-minutes),
+  # is marked in the summary file as "did not work" and the job still ends
+  # green. The steps' limits add up to less than the job's, so a hang is caught
+  # by a step's limit and the summary and the upload still run. Problems are
+  # written as warnings, never as errors. No other job needs this one, and it
+  # must not be made a required check, so a macOS failure can never block a
+  # merge. When the first runs have been read, the maintainer decides which
+  # steps start to judge, as the Linux trial job does now.
+  #
+  # Two machines, both standard GitHub-hosted runners, free for public
+  # repositories (docs.github.com, "GitHub-hosted runners", read 2026-11-27):
+  # macos-26 is Apple silicon (M1, osx-arm64) and macos-26-intel is Intel
+  # (osx-x64). Both run macOS 26, so a difference between them comes from the
+  # chip, not the system. GitHub said in 2025 that x86_64 runners end in
+  # August 2027 (actions/runner-images#13045); then the Intel row goes.
+  trial-macos:
+    name: Avalonia Board trial (macOS, ${{ matrix.machine }})
+    runs-on: ${{ matrix.runner }}
+    # More than the steps' limits added up (153 minutes), so that a step that
+    # runs out of time is recorded and the job goes on to its summary.
+    timeout-minutes: 165
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - machine: Apple silicon
+            runner: macos-26
+            rid: osx-arm64
+            slug: arm64
+          - machine: Intel
+            runner: macos-26-intel
+            rid: osx-x64
+            slug: x64
+    env:
+      # Avalonia.BuildServices reports build telemetry unless this is set.
+      AVALONIA_TELEMETRY_OPTOUT: "1"
+      MACHINE: ${{ matrix.machine }}
+      # Everything this job keeps; the upload carries this folder only.
+      OUT: ${{ github.workspace }}/TestResults/macos
+
+    steps:
+      - name: Check out repository
+        id: checkout
+        continue-on-error: true
+        timeout-minutes: 5
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up .NET 10
+        id: dotnet
+        continue-on-error: true
+        timeout-minutes: 10
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
+      - name: Restore dependencies
+        id: restore
+        continue-on-error: true
+        timeout-minutes: 10
+        run: dotnet restore PaperRoute.Desktop.slnx
+
+      - name: Build Release
+        id: build
+        if: steps.restore.outcome == 'success'
+        continue-on-error: true
+        timeout-minutes: 15
+        run: dotnet build PaperRoute.Desktop.slnx --configuration Release --no-restore
+
+      # The trial's solution does not hold the core's tests; this builds them
+      # and, through its reference, the core.
+      - name: Build the core tests
+        id: core_build
+        if: steps.dotnet.outcome == 'success'
+        continue-on-error: true
+        timeout-minutes: 10
+        run: dotnet build PaperRoute.Core.Tests/PaperRoute.Core.Tests.vbproj --configuration Release
+
+      # Counted, never judged here: passed, failed, skipped, and the names of
+      # the tests that do not pass, in the job summary and in core-tests.md.
+      # The step is marked "did not work" unless every test passes.
+      - name: Run core tests
+        id: core_tests
+        if: steps.core_build.outcome == 'success'
+        continue-on-error: true
+        timeout-minutes: 20
+        shell: pwsh
+        env:
+          TZ: Etc/UTC
+          LANG: en_US.UTF-8
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $results = Join-Path $env:OUT 'tests'
+          dotnet test PaperRoute.Core.Tests/PaperRoute.Core.Tests.vbproj --configuration Release --no-build --blame-hang-timeout 5m `
+              --logger 'trx;LogFileName=PaperRoute.Core.Tests.trx' --results-directory $results
+          $exitCode = $LASTEXITCODE
+          $path = Join-Path $results 'PaperRoute.Core.Tests.trx'
+          $counters = $null
+          if (Test-Path -LiteralPath $path) {
+              $trx = [xml]::new()
+              $trx.XmlResolver = $null
+              $trx.Load($path)
+              $counters = $trx.SelectSingleNode('//*[local-name()="ResultSummary"]/*[local-name()="Counters"]')
+          }
+          $lines = [System.Collections.Generic.List[string]]::new()
+          $total = if ($null -eq $counters) { 0 } else { [int] $counters.GetAttribute('total') }
+          $passed = 0
+          if ($total -lt 1) { $lines.Add("Core tests on macOS ($env:MACHINE): no results (dotnet test exit code $exitCode).") }
+          else {
+              $passed = [int] $counters.GetAttribute('passed')
+              $failed = [int] $counters.GetAttribute('failed')
+              $skipped = [int] $counters.GetAttribute('notExecuted')
+              $other = $total - $passed - $failed - $skipped
+              $line = "Core tests on macOS ($env:MACHINE): $passed passed, $failed failed, $skipped skipped"
+              if ($other -gt 0) { $line += ", $other neither (inconclusive, timed out or not run)" }
+              $lines.Add("$line, of $total (dotnet test exit code $exitCode).")
+              $names = @($trx.SelectNodes('//*[local-name()="UnitTestResult"][not(@outcome="Passed")]') |
+                  ForEach-Object { "$($_.GetAttribute('outcome')): $($_.GetAttribute('testName'))" } | Sort-Object)
+              if ($names.Count -gt 0) {
+                  $lines.Add('')
+                  $lines.Add("Not passing ($($names.Count)):")
+                  $lines.Add('')
+                  $names | ForEach-Object { $lines.Add("- ``$_``") }
+              }
+          }
+          New-Item -ItemType Directory -Force -Path $env:OUT | Out-Null
+          $lines | Set-Content -LiteralPath (Join-Path $env:OUT 'core-tests.md') -Encoding utf8
+          $lines | Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Encoding utf8
+          if ($total -lt 1 -or $passed -ne $total -or $exitCode -ne 0) {
+              "::warning title=Core on macOS ($env:MACHINE, report-only)::$($lines[0])"
+              exit 1
+          }
+          exit 0
+
+      # Headless tests (Avalonia.Headless with Skia), all but those marked
+      # Manual, counted as the core's are. The view tests' pictures go into
+      # the artifact.
+      - name: Run trial tests
+        id: trial_tests
+        if: steps.build.outcome == 'success'
+        continue-on-error: true
+        timeout-minutes: 20
+        shell: pwsh
+        env:
+          PAPERROUTE_TRIAL_PICTURES: ${{ github.workspace }}/TestResults/macos/pictures
+          TZ: Etc/UTC
+          LANG: en_US.UTF-8
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $results = Join-Path $env:OUT 'tests'
+          dotnet test PaperRoute.Desktop.Tests/PaperRoute.Desktop.Tests.csproj --configuration Release --no-build --blame-hang-timeout 5m `
+              --filter 'TestCategory!=Manual' `
+              --logger 'trx;LogFileName=PaperRoute.Desktop.Tests.trx' --results-directory $results
+          $exitCode = $LASTEXITCODE
+          $path = Join-Path $results 'PaperRoute.Desktop.Tests.trx'
+          $counters = $null
+          if (Test-Path -LiteralPath $path) {
+              $trx = [xml]::new()
+              $trx.XmlResolver = $null
+              $trx.Load($path)
+              $counters = $trx.SelectSingleNode('//*[local-name()="ResultSummary"]/*[local-name()="Counters"]')
+          }
+          $lines = [System.Collections.Generic.List[string]]::new()
+          $total = if ($null -eq $counters) { 0 } else { [int] $counters.GetAttribute('total') }
+          $passed = 0
+          if ($total -lt 1) { $lines.Add("Trial tests on macOS ($env:MACHINE): no results (dotnet test exit code $exitCode).") }
+          else {
+              $passed = [int] $counters.GetAttribute('passed')
+              $failed = [int] $counters.GetAttribute('failed')
+              $skipped = [int] $counters.GetAttribute('notExecuted')
+              $other = $total - $passed - $failed - $skipped
+              $line = "Trial tests on macOS ($env:MACHINE): $passed passed, $failed failed, $skipped skipped"
+              if ($other -gt 0) { $line += ", $other neither (inconclusive, timed out or not run)" }
+              $lines.Add("$line, of $total (dotnet test exit code $exitCode).")
+              $names = @($trx.SelectNodes('//*[local-name()="UnitTestResult"][not(@outcome="Passed")]') |
+                  ForEach-Object { "$($_.GetAttribute('outcome')): $($_.GetAttribute('testName'))" } | Sort-Object)
+              if ($names.Count -gt 0) {
+                  $lines.Add('')
+                  $lines.Add("Not passing ($($names.Count)):")
+                  $lines.Add('')
+                  $names | ForEach-Object { $lines.Add("- ``$_``") }
+              }
+          }
+          New-Item -ItemType Directory -Force -Path $env:OUT | Out-Null
+          $lines | Set-Content -LiteralPath (Join-Path $env:OUT 'trial-tests.md') -Encoding utf8
+          $lines | Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Encoding utf8
+          if ($total -lt 1 -or $passed -ne $total -or $exitCode -ne 0) {
+              "::warning title=Board trial on macOS ($env:MACHINE, report-only)::$($lines[0])"
+              exit 1
+          }
+          exit 0
+
+      - name: Publish the trial for this Mac
+        id: publish
+        if: steps.dotnet.outcome == 'success'
+        continue-on-error: true
+        timeout-minutes: 10
+        run: dotnet publish PaperRoute.Desktop/PaperRoute.Desktop.csproj --configuration Release --runtime ${{ matrix.rid }} --self-contained --output "$RUNNER_TEMP/board-trial"
+
+      # The project ships unsigned: it pays no Apple fee, so it has no
+      # Developer ID certificate. But macOS on Apple silicon runs only signed
+      # code, and an ad-hoc signature (codesign --sign -, no certificate)
+      # meets that rule. The .NET SDK already signs the program file ad hoc
+      # when it builds on a Mac. This step checks every Mach-O file of the
+      # published trial and, on Apple silicon only, signs ad hoc each one
+      # whose signature is not valid. Intel Macs run unsigned code, so there
+      # the files are only checked. The list is in codesign.txt. An ad-hoc
+      # signature does not satisfy Gatekeeper for a downloaded app; that
+      # needs a Developer ID and notarisation, which this job does not test.
+      - name: Sign the published trial ad hoc where macOS needs it
+        id: sign
+        if: steps.publish.outcome == 'success'
+        continue-on-error: true
+        timeout-minutes: 5
+        shell: pwsh
+        env:
+          SIGN: ${{ matrix.rid == 'osx-arm64' }}
+        run: |
+          $ErrorActionPreference = 'Continue'
+          New-Item -ItemType Directory -Force -Path $env:OUT | Out-Null
+          # Each file is known as Mach-O by its own first four bytes: thin
+          # (32-bit or 64-bit, either byte order) or universal. The `file` tool
+          # is not used: for a universal file it prints more than one line,
+          # so its lines cannot be paired with the files. Java class files
+          # also start with CAFEBABE; the published trial has none.
+          $machO = 'FEEDFACE', 'FEEDFACF', 'CEFAEDFE', 'CFFAEDFE', 'CAFEBABE', 'BEBAFECA', 'CAFEBABF', 'BFBAFECA'
+          function Get-Magic([string] $path) {
+              try {
+                  $stream = [IO.File]::OpenRead($path)
+                  try { $bytes = [byte[]]::new(4); $count = $stream.Read($bytes, 0, 4) } finally { $stream.Dispose() }
+                  return [BitConverter]::ToString($bytes, 0, $count) -replace '-'
+              }
+              catch { return '' }
+          }
+          $files = @(Get-ChildItem -LiteralPath (Join-Path $env:RUNNER_TEMP 'board-trial') -Recurse -File | ForEach-Object FullName)
+          $report = [System.Collections.Generic.List[string]]::new()
+          $counts = @{ valid = 0; signed = 0; unsigned = 0; failed = 0 }
+          foreach ($file in $files) {
+              if ((Get-Magic $file) -notin $machO) { continue }
+              $name = Split-Path -Leaf $file
+              & codesign --verify $file 2>$null
+              if ($LASTEXITCODE -eq 0) { $counts.valid++; $report.Add("valid: $name"); continue }
+              if ($env:SIGN -ne 'true') { $counts.unsigned++; $report.Add("no valid signature, left so (Intel runs it): $name"); continue }
+              $said = (& codesign --force --sign - $file 2>&1 | Out-String).Trim()
+              & codesign --verify $file 2>$null
+              if ($LASTEXITCODE -eq 0) { $counts.signed++; $report.Add("signed ad hoc here: $name") }
+              else { $counts.failed++; $report.Add("could not be signed: $name ($said)") }
+          }
+          $report | Set-Content -LiteralPath (Join-Path $env:OUT 'codesign.txt') -Encoding utf8
+          $line = "Signatures on macOS ($env:MACHINE): $($counts.valid) Mach-O files already valid, $($counts.signed) signed ad hoc here, $($counts.unsigned) left unsigned, $($counts.failed) could not be signed."
+          $line | Set-Content -LiteralPath (Join-Path $env:OUT 'codesign.md') -Encoding utf8
+          $line >> $env:GITHUB_STEP_SUMMARY
+          if ($counts.valid + $counts.signed + $counts.unsigned + $counts.failed -eq 0) {
+              '::warning title=Board trial on macOS (report-only)::No Mach-O file was found in the published trial.'
+              exit 1
+          }
+          if ($counts.failed -gt 0) { exit 1 }
+          exit 0
+
+      # The self-check waits 120 s, as in the Linux window job, well inside the
+      # step's limit, so a hang is stopped and written down here.
+      - name: Run the self-check
+        id: self_check
+        if: steps.publish.outcome == 'success'
+        continue-on-error: true
+        timeout-minutes: 4
+        shell: pwsh
+        env:
+          TZ: Etc/UTC
+          LANG: en_US.UTF-8
+        run: |
+          $ErrorActionPreference = 'Continue'
+          New-Item -ItemType Directory -Force -Path $env:OUT | Out-Null
+          $stdout = Join-Path $env:OUT 'self-check-stdout.txt'
+          $code = $null
+          try {
+              $trial = Start-Process -FilePath (Join-Path $env:RUNNER_TEMP 'board-trial/PaperRoute.Desktop') -ArgumentList '--self-check' -PassThru `
+                  -RedirectStandardOutput $stdout -RedirectStandardError (Join-Path $env:OUT 'self-check-stderr.txt')
+              if ($trial.WaitForExit(120000)) {
+                  $trial.WaitForExit()      # the last of its output reaches the files
+                  $code = $trial.ExitCode
+                  $result = "exit code $code"
+              }
+              else {
+                  try { $trial.Kill($true) } catch { }
+                  $result = 'no exit code: it did not end within 120 s and was stopped'
+              }
+          }
+          catch { $result = "it could not be started: $($_.Exception.Message)" }
+          $last = @(Get-Content -LiteralPath $stdout -ErrorAction SilentlyContinue | Where-Object { $_.Trim() } | Select-Object -Last 1)
+          $line = "Self-check on macOS ($env:MACHINE): $result. Its last line: $(if ($last.Count -gt 0) { $last[0] } else { 'none' })"
+          $line | Set-Content -LiteralPath (Join-Path $env:OUT 'self-check.md') -Encoding utf8
+          $line | Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Encoding utf8
+          if ($code -ne 0) { exit 1 }
+          exit 0
+
+      # The 500-manuscript TEST library, written by the manual test that
+      # exists for the real-window run, as in the Linux window job. It lands
+      # in TestResults/v11-trial, outside the uploaded folder. A filter that
+      # matches no test still ends with exit code 0, so the folder is looked
+      # for: a renamed test must not pass unseen.
+      - name: Write the 500 test library
+        id: library
+        if: steps.build.outcome == 'success'
+        continue-on-error: true
+        timeout-minutes: 10
+        shell: bash
+        env:
+          TZ: Etc/UTC
+          LANG: en_US.UTF-8
+        run: |
+          dotnet test PaperRoute.Desktop.Tests/PaperRoute.Desktop.Tests.csproj --configuration Release --no-build --filter "FullyQualifiedName~WriteLargeLibraryForMeasurement"
+          if [ ! -d TestResults/v11-trial/large-500/data ]; then
+            echo "::warning title=Board trial on macOS ($MACHINE, report-only)::The manual test wrote no library in TestResults/v11-trial/large-500. Was it renamed?"
+            exit 1
+          fi
+
+      # The example library in a real window on the runner's desktop: wait for
+      # the window, take a picture of the screen, close it by its close button.
+      - name: Show the trial's window
+        id: window
+        if: steps.publish.outcome == 'success'
+        continue-on-error: true
+        timeout-minutes: 5
+        shell: pwsh
+        env:
+          TZ: Etc/UTC
+          LANG: en_US.UTF-8
+        run: ./.github/scripts/Show-TrialWindowOnMac.ps1 -Part Window -Program "$env:RUNNER_TEMP/board-trial/PaperRoute.Desktop" -Out "$env:OUT"
+
+      # Before the platform check, as in the Linux window job: the launcher
+      # opens a browser, which could cover the timed window. No time is judged.
+      - name: Time the trial in its window
+        id: measure
+        if: steps.publish.outcome == 'success' && steps.library.outcome == 'success'
+        continue-on-error: true
+        timeout-minutes: 8
+        shell: pwsh
+        env:
+          TZ: Etc/UTC
+          LANG: en_US.UTF-8
+        run: ./.github/scripts/Show-TrialWindowOnMac.ps1 -Part Measure -Program "$env:RUNNER_TEMP/board-trial/PaperRoute.Desktop" -Out "$env:OUT" -Library "$env:GITHUB_WORKSPACE/TestResults/v11-trial/large-500"
+
+      - name: Run the platform check
+        id: platform
+        if: steps.publish.outcome == 'success'
+        continue-on-error: true
+        timeout-minutes: 8
+        shell: pwsh
+        env:
+          TZ: Etc/UTC
+          LANG: en_US.UTF-8
+        run: ./.github/scripts/Show-TrialWindowOnMac.ps1 -Part PlatformCheck -Program "$env:RUNNER_TEMP/board-trial/PaperRoute.Desktop" -Out "$env:OUT"
+
+      # summary.md: for each step above, whether it worked, then the test
+      # counts. The details are in the other files of the artifact.
+      - name: Write the summary file
+        if: always()
+        continue-on-error: true
+        timeout-minutes: 3
+        shell: pwsh
+        env:
+          RUNNER_LABEL: ${{ matrix.runner }}
+          RID: ${{ matrix.rid }}
+          STEP_OUTCOMES: |
+            Check out the repository|${{ steps.checkout.outcome }}
+            Set up .NET 10|${{ steps.dotnet.outcome }}
+            Restore the trial's solution|${{ steps.restore.outcome }}
+            Build the trial's solution (Release)|${{ steps.build.outcome }}
+            Build the core tests|${{ steps.core_build.outcome }}
+            Core tests (all must pass to count as worked)|${{ steps.core_tests.outcome }}
+            Trial tests (all must pass to count as worked)|${{ steps.trial_tests.outcome }}
+            Publish the trial, self-contained|${{ steps.publish.outcome }}
+            Check signatures, ad hoc where needed|${{ steps.sign.outcome }}
+            Self-check|${{ steps.self_check.outcome }}
+            Write the 500 test library|${{ steps.library.outcome }}
+            Example library in a real window|${{ steps.window.outcome }}
+            Timed run in the window (times not judged)|${{ steps.measure.outcome }}
+            Platform check|${{ steps.platform.outcome }}
+        run: |
+          $ErrorActionPreference = 'Continue'
+          New-Item -ItemType Directory -Force -Path $env:OUT | Out-Null
+          $words = @{ success = 'worked'; failure = 'did not work'; skipped = 'skipped: a step it needs did not work'; cancelled = 'cancelled' }
+          $lines = [System.Collections.Generic.List[string]]::new()
+          $lines.Add("## The Board trial on macOS: $env:MACHINE ($env:RUNNER_LABEL, $env:RID)")
+          $lines.Add('')
+          $lines.Add('Report-only: no step here fails the job or a pull request.')
+          $lines.Add('')
+          $lines.Add('| Step | Result |')
+          $lines.Add('|---|---|')
+          foreach ($row in @($env:STEP_OUTCOMES -split "`n" | Where-Object { $_.Trim() })) {
+              $name, $outcome = $row.Trim() -split '\|', 2
+              $result = if ($outcome -and $words.ContainsKey($outcome)) { $words[$outcome] } else { 'not reached' }
+              $lines.Add("| $name | $result |")
+          }
+          foreach ($file in 'core-tests.md', 'trial-tests.md', 'codesign.md', 'self-check.md') {
+              $path = Join-Path $env:OUT $file
+              if (Test-Path -LiteralPath $path) {
+                  $lines.Add('')
+                  Get-Content -LiteralPath $path | ForEach-Object { $lines.Add($_) }
+              }
+          }
+          $lines.Add('')
+          $lines.Add('Details: window.md, measure.md and platformcheck.md (facts), the pictures (*.png), measure-macos.json, platform-check-macos.json, codesign.txt, tests/ (results files) and pictures/ (the view tests).')
+          $lines | Set-Content -LiteralPath (Join-Path $env:OUT 'summary.md') -Encoding utf8
+          $lines | Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Encoding utf8
+          exit 0
+
+      - name: Upload the macOS results
+        if: always()
+        continue-on-error: true
+        timeout-minutes: 10
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: PaperRoute-trial-macos-${{ matrix.slug }}
+          path: TestResults/macos/
+          if-no-files-found: ignore
+          retention-days: 14
