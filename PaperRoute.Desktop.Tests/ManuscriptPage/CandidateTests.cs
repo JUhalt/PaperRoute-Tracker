@@ -368,7 +368,7 @@ public sealed class CandidateTests : Board.StorageCheckedTests
         foreach (HistoryEvent item in added)
         {
             Assert.AreEqual(clock.Local, item.EventDate, $"\"{item.Note}\" is not dated by the core's clock.");
-            Assert.AreEqual((DateTime?)FixedInstant.UtcDateTime, item.RecordedAtUtc,$"\"{item.Note}\" is not stamped by the core's clock.");
+            Assert.AreEqual((DateTime?)FixedInstant.UtcDateTime, item.RecordedAtUtc, $"\"{item.Note}\" is not stamped by the core's clock.");
         }
     }
 
@@ -475,24 +475,5 @@ public sealed class CandidateTests : Board.StorageCheckedTests
         original.TargetJournal = "J. Tests";
         original.TargetJournalId = TestsJournal;
         return Loaded(original);
-    }
-
-    // The core's clock fixed at one instant until disposed.
-    private sealed class FixedClock : TimeProvider, IDisposable
-    {
-        private readonly TimeProvider _before = PlatformServices.Clock;
-        private readonly DateTimeOffset _now;
-
-        public FixedClock(DateTimeOffset now)
-        {
-            _now = now;
-            PlatformServices.Clock = this;
-        }
-
-        public DateTime Local => _now.UtcDateTime.ToLocalTime();
-
-        public override DateTimeOffset GetUtcNow() => _now;
-
-        public void Dispose() => PlatformServices.Clock = _before;
     }
 }
