@@ -15,6 +15,22 @@ public sealed class DiskLibrarySession : ILibrarySession
     // example's seed (TrialStartup). Null when there is none, or once done.
     private Action? _prepare;
 
+    // One piece of library work at a time. _loading is true from the start of
+    // a load until it has published on the caller's context; _worker is the
+    // load's worker task, which WaitForWork waits on.
+    private readonly object _work = new();
+    private bool _loading;
+    private Task? _worker;
+
+    // The settings service whose Load gave Settings, kept so a save goes
+    // through it (shell design 2.5, critic M5): only that instance knows that
+    // settings.json could not be read and must be set aside. Null before a
+    // load, and after a load whose settings read failed.
+    private AppSettingsService? _settingsService;
+
+    // A settings save asked for while a load runs, written once when it ends.
+    private TaskCompletionSource<bool>? _heldSettingsSave;
+
     private IReadOnlyList<Manuscript> _manuscripts = [];
     private bool _disposed;
 
@@ -92,20 +108,129 @@ public sealed class DiskLibrarySession : ILibrarySession
 
     public event EventHandler? LibraryChanged;
 
-    public async Task LoadAsync(CancellationToken cancel)
+    public async Task<bool> LoadAsync(CancellationToken cancel)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
         // Off the interface thread (d1 3.4); the await comes back on the
         // caller's context, where the results are published.
-        LoadResult result = await Task.Run(() => Read(cancel), cancel);
+        Task<LoadResult> worker;
+        lock (_work)
+        {
+            if (_loading)
+            {
+                return false;
+            }
 
-        _manuscripts = result.Manuscripts;
-        AuthorLibrary = result.AuthorLibrary;
-        SearchIndex = new AuthorLibrarySearchIndex(result.AuthorLibrary);
-        Settings = result.Settings;
-        StartupNotice = result.Notice;
-        LibraryChanged?.Invoke(this, EventArgs.Empty);
+            _loading = true;
+            worker = Task.Run(() => Read(cancel), cancel);
+            _worker = worker;
+        }
+
+        try
+        {
+            LoadResult result = await worker;
+
+            _manuscripts = result.Manuscripts;
+            AuthorLibrary = result.AuthorLibrary;
+            SearchIndex = new AuthorLibrarySearchIndex(result.AuthorLibrary);
+            Settings = result.Settings;
+            _settingsService = result.SettingsService;
+            StartupNotice = result.Notice;
+            LibraryChanged?.Invoke(this, EventArgs.Empty);
+            return true;
+        }
+        finally
+        {
+            TaskCompletionSource<bool>? held;
+            lock (_work)
+            {
+                _loading = false;
+                held = _heldSettingsSave;
+                _heldSettingsSave = null;
+            }
+
+            // On the caller's context, as every settings save is. A fault
+            // WriteSettings does not catch goes to the held callers, so none
+            // waits forever and the load's own outcome is not hidden.
+            if (held is not null)
+            {
+                try
+                {
+                    held.SetResult(WriteSettings());
+                }
+                catch (Exception ex)
+                {
+                    held.SetException(ex);
+                }
+            }
+        }
+    }
+
+    public Task<bool> SaveSettingsAsync()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (Kind == LibraryKind.Snapshot)
+        {
+            // A snapshot writes nothing, its settings included.
+            return Task.FromResult(false);
+        }
+
+        lock (_work)
+        {
+            if (_loading)
+            {
+                _heldSettingsSave ??= new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                return _heldSettingsSave.Task;
+            }
+        }
+
+        return Task.FromResult(WriteSettings());
+    }
+
+    private bool WriteSettings()
+    {
+        AppSettingsService? service = _settingsService;
+        if (service is null || Kind == LibraryKind.Snapshot)
+        {
+            return false;
+        }
+
+        try
+        {
+            // One of lock 3's two allowed writes (d1 1.3; shell design 2.5):
+            // the settings, through the service that loaded them, into the
+            // settings folder this session was given, which FullPath admits
+            // only inside the temporary folder. Every library save stays
+            // banned (BannedSymbols.txt).
+#pragma warning disable RS0030
+            service.Save(Settings);
+#pragma warning restore RS0030
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    public bool WaitForWork()
+    {
+        Task? worker;
+        lock (_work)
+        {
+            worker = _worker;
+        }
+
+        if (worker is null || worker.IsCompleted)
+        {
+            return false;
+        }
+
+        // The wait handle, not Wait(): it neither runs the worker inline on
+        // this thread nor throws what the worker ended in.
+        ((IAsyncResult)worker).AsyncWaitHandle.WaitOne();
+        return true;
     }
 
     public void Dispose()
@@ -128,7 +253,7 @@ public sealed class DiskLibrarySession : ILibrarySession
             }
             catch (Exception ex) when (IsReadFailure(ex))
             {
-                return new LoadResult([], null, new AppSettings(), "The snapshot could not be taken: " + ex.Message);
+                return new LoadResult([], null, new AppSettings(), null, "The snapshot could not be taken: " + ex.Message);
             }
         }
         else
@@ -137,13 +262,17 @@ public sealed class DiskLibrarySession : ILibrarySession
         }
 
         AppSettings settings;
+        AppSettingsService? settingsService = new(_settingsDirectory);
         try
         {
-            settings = new AppSettingsService(_settingsDirectory).Load();
+            settings = settingsService.Load();
         }
         catch (Exception ex) when (IsReadFailure(ex))
         {
+            // Defaults in memory; with no service, nothing saves over the
+            // file that could not be read.
             settings = new AppSettings();
+            settingsService = null;
         }
 
         cancel.ThrowIfCancellationRequested();
@@ -167,7 +296,7 @@ public sealed class DiskLibrarySession : ILibrarySession
             notice = SkippedNotice(notice, skipped, manuscripts.Count);
         }
 
-        return new LoadResult(manuscripts, authors, settings, notice);
+        return new LoadResult(manuscripts, authors, settings, settingsService, notice);
     }
 
     // The status line of a snapshot that skipped files. Without the
@@ -263,5 +392,6 @@ public sealed class DiskLibrarySession : ILibrarySession
         IReadOnlyList<Manuscript> Manuscripts,
         AuthorLibraryData? AuthorLibrary,
         AppSettings Settings,
+        AppSettingsService? SettingsService,
         string Notice);
 }

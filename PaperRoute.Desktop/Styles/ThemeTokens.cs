@@ -19,7 +19,9 @@ namespace PaperRoute.Desktop.Styles;
 // Light and Dark each have their own dictionary, so the derived brushes follow a
 // theme change through DynamicResource without running again. The contrast
 // dictionaries made at run time (ContrastTheme, step 11) take the same derived
-// colours from DerivedColors.
+// colours from DerivedColors, except the primary button's pressed shade on a
+// dark contrast set, which ContrastTheme.Colors lightens instead (the harness
+// design's question 10).
 public static class ThemeTokens
 {
     public const string AccentHoverBrush = nameof(AccentHoverBrush);

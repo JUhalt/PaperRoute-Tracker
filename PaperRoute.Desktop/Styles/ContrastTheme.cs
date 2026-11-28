@@ -74,6 +74,14 @@ public static class ContrastTheme
             result[derived.Key] = derived.Value;
         }
 
+        // Except its pressed shade on a dark set, which lightens instead (the
+        // harness design's question 10): darkened, the selected text on it fell
+        // to 4.75:1 on hc1; lightened, it is 8.45:1. The hover keeps darkening.
+        if (colors.IsDark)
+        {
+            result[ThemeTokens.AccentPressedBrush] = ThemeTokens.Blend(colors.Highlight, Avalonia.Media.Colors.White, 0.2F);
+        }
+
         return result;
     }
 
@@ -174,6 +182,13 @@ public static class ContrastTheme
             ["SecondaryTextBrush"] = SystemColorRole.WindowText,
             ["WarningBrush"] = SystemColorRole.WindowText,
             ["DangerBrush"] = SystemColorRole.WindowText,
+
+            // The success and info tones (Appendix C.1): the ink the window text,
+            // its muted fill the window (:411-473).
+            ["SuccessBrush"] = SystemColorRole.WindowText,
+            ["SuccessMutedBackgroundBrush"] = SystemColorRole.Window,
+            ["InfoBrush"] = SystemColorRole.WindowText,
+            ["InfoMutedBackgroundBrush"] = SystemColorRole.Window,
 
             // Quiet text and dividers: the inactive text (:95-125).
             ["SubtleBorderBrush"] = SystemColorRole.GrayText,

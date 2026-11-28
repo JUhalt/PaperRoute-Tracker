@@ -6,8 +6,8 @@
   OutlineThickness is 0 in Light and Dark; under high contrast (step 11) the
   pill is outlined in its ink, as PillLabel.vb:31-46 does today.
 
-  Left out of C.4: success and info (no token in d1 5.1, nothing on the Board)
-  and the icon pill.
+  Left out of C.4 until S5b: success and info (their tokens exist; nothing on
+  the Board draws them yet) and the icon pill.
 -->
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
