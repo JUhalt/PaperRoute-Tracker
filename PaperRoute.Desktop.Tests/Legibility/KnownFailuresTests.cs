@@ -185,8 +185,10 @@ public sealed partial class KnownFailuresTests : StorageCheckedTests
         [
             Entry("R9\tTeeth/WindowEdge: Border#WindowEdge\thc1\t#1\tan edge in the window colour"),
             Entry("R9\tTeeth/NoFocusVisual: Button#NoFocusVisual, focus\thc1\t#1\ta control with no focus visual"),
+            Entry("R9\tTeeth/NoFocusVisual: TextBox#NoFocusFrame, focus\thc1\t#1\ta text box whose frame does not follow focus"),
             Entry("R9\tTeeth/WindowEdge: Border#WindowEdge\tfallback\t#1\tan edge in the window colour"),
             Entry("R9\tTeeth/NoFocusVisual: Button#NoFocusVisual, focus\tfallback\t#1\ta control with no focus visual"),
+            Entry("R9\tTeeth/NoFocusVisual: TextBox#NoFocusFrame, focus\tfallback\t#1\ta text box whose frame does not follow focus"),
         ];
         List<string> r9Problems = Problems(r9Current, r9Current.Length, r9Findings);
         Assert.IsEmpty(r9Problems, "R9 reports its entries on the teeth pages, in the first and the last theme case:" + Environment.NewLine + string.Join(Environment.NewLine, r9Problems));
@@ -194,12 +196,14 @@ public sealed partial class KnownFailuresTests : StorageCheckedTests
         [
             Entry("R9\tTeeth/WindowEdge: Border#Outlined\tfallback\t#1\tan edge too faint"),
             Entry("R9\tTeeth/NoFocusVisual: Button#Ringed, focus\tfallback\t#1\ta focus ring too faint"),
+            Entry("R9\tTeeth/NoFocusVisual: TextBox#Framed, focus\tfallback\t#1\ta focus frame too faint"),
         ];
         Assert.AreEqual(
             "Line 10: R9, Teeth/WindowEdge: Border#Outlined, fallback is stale: R9 no longer reports it." + Environment.NewLine +
-            "Line 10: R9, Teeth/NoFocusVisual: Button#Ringed, focus, fallback is stale: R9 no longer reports it.",
-            string.Join(Environment.NewLine, Problems(r9Stale, 2, r9Findings)),
-            "R9 entries for the outlined panel and the ringed button, which pass.");
+            "Line 10: R9, Teeth/NoFocusVisual: Button#Ringed, focus, fallback is stale: R9 no longer reports it." + Environment.NewLine +
+            "Line 10: R9, Teeth/NoFocusVisual: TextBox#Framed, focus, fallback is stale: R9 no longer reports it.",
+            string.Join(Environment.NewLine, Problems(r9Stale, r9Stale.Length, r9Findings)),
+            "R9 entries for the outlined panel, the ringed button and the framed text box, which pass.");
 
         KnownFailure noCheck = Entry("R6\tthe card\tDark\t#1\ta WinForms-only rule");
         Assert.AreEqual(

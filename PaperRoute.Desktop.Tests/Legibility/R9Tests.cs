@@ -150,8 +150,12 @@ public sealed class R9Tests : StorageCheckedTests
     }
 
     // The focus's teeth: in every R9 case, two buttons, one with its focus
-    // ring and one with no focus adorner. R9 must report that taking the
-    // focus changes none of the second's pixels, and nothing else.
+    // ring and one with no focus adorner, and two text boxes holding text,
+    // one whose frame turns to the accent and one whose frame stays as it
+    // is, so that only its caret and selection change. R9 must report that
+    // taking the focus changes none of the second button's pixels and none
+    // of the second text box's outside its text, and nothing else: the
+    // framed text box passes by its frame alone.
     [TestMethod]
     public void R9_FindsAControlWithNoFocusVisual()
     {
@@ -163,19 +167,27 @@ public sealed class R9Tests : StorageCheckedTests
                 TestContext.WriteLine(string.Join(" | ", FocusRow(change)));
             }
 
-            FocusChange ringed = read.Focus.Single(change => change.Control == "Button#Ringed");
-            Assert.IsNull(ringed.NotJudged, $"{themeCase}: the ringed button is judged.");
-            Assert.IsGreaterThan(0, ringed.Changed, $"{themeCase}: the ringed button's focus changes pixels.");
-            Assert.IsNull(read.Focus.Single(change => change.Control == "Button#NoFocusVisual").NotJudged, $"{themeCase}: the button with no focus visual is judged.");
+            foreach (string sound in new[] { "Button#Ringed", "TextBox#Framed" })
+            {
+                FocusChange shown = read.Focus.Single(change => change.Control == sound);
+                Assert.IsNull(shown.NotJudged, $"{themeCase}: {sound} is judged.");
+                Assert.IsGreaterThanOrEqualTo(Thresholds.Edge, shown.Strongest, $"{themeCase}: {sound}'s focus changes a pixel at 3:1 against the window colour.");
+            }
+
+            foreach (string faulty in new[] { "Button#NoFocusVisual", "TextBox#NoFocusFrame" })
+            {
+                Assert.IsNull(read.Focus.Single(change => change.Control == faulty).NotJudged, $"{themeCase}: {faulty} is judged.");
+            }
+
             IReadOnlyList<Finding> findings = Rules.R9Focus(read.Focus);
             foreach (Finding finding in findings)
             {
                 TestContext.WriteLine(finding.Line);
             }
 
-            Assert.HasCount(1, findings, $"{themeCase}: only the button with no focus visual:" + Environment.NewLine + string.Join(Environment.NewLine, findings));
-            Assert.AreEqual("Teeth/NoFocusVisual: Button#NoFocusVisual, focus", findings[0].Subject);
+            Assert.HasCount(2, findings, $"{themeCase}: only the button with no focus visual and the text box whose frame does not follow focus:" + Environment.NewLine + string.Join(Environment.NewLine, findings));
             Assert.AreEqual($"{themeCase}: Teeth/NoFocusVisual: Button#NoFocusVisual, focus changes no pixel", findings[0].Line);
+            Assert.AreEqual($"{themeCase}: Teeth/NoFocusVisual: TextBox#NoFocusFrame, focus changes no pixel", findings[1].Line);
         }
     }
 

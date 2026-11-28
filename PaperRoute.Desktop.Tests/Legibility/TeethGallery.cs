@@ -97,15 +97,33 @@ internal static class TeethGallery
         return page;
     });
 
-    // R9's bad input for focus: two buttons of the default role. The first
-    // shows its focus ring when it takes the keyboard focus; the second has
-    // no focus adorner, and nothing else in its look follows focus, so
-    // taking the focus changes none of its pixels.
-    public static SweepSubject NoFocusVisual { get; } = new("Teeth/NoFocusVisual", null, 400, 160, _ =>
+    // R9's bad inputs for focus: two buttons of the default role and two
+    // text boxes holding text. The first button shows its focus ring when it
+    // takes the keyboard focus; the second has no focus adorner, and nothing
+    // else in its look follows focus, so taking the focus changes none of its
+    // pixels. The first text box turns its frame to the accent; the second's
+    // frame part keeps its border, fill and width as local values, which no
+    // focus style outranks, so taking the focus changes only its caret and
+    // selection, which R9 leaves out (Sweep.TextAreas).
+    public static SweepSubject NoFocusVisual { get; } = new("Teeth/NoFocusVisual", null, 440, 200, _ =>
     {
-        var page = new StackPanel { Margin = new Thickness(20), Spacing = 16, Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Top };
-        page.Children.Add(new Button { Name = "Ringed", Content = "With a ring" });
-        page.Children.Add(new Button { Name = "NoFocusVisual", Content = "No focus visual", FocusAdorner = null });
+        var buttons = new StackPanel { Spacing = 16, Orientation = Orientation.Horizontal };
+        buttons.Children.Add(new Button { Name = "Ringed", Content = "With a ring" });
+        buttons.Children.Add(new Button { Name = "NoFocusVisual", Content = "No focus visual", FocusAdorner = null });
+        var boxes = new StackPanel { Spacing = 16, Orientation = Orientation.Horizontal };
+        boxes.Children.Add(new TextBox { Name = "Framed", Text = "A frame", Width = 160 });
+        var unframed = new TextBox { Name = "NoFocusFrame", Text = "No frame", Width = 160 };
+        unframed.TemplateApplied += (_, applied) =>
+        {
+            Border frame = applied.NameScope.Find<Border>("PART_BorderElement") ?? throw new InvalidOperationException("The text box's template has no PART_BorderElement.");
+            frame.Bind(Border.BorderBrushProperty, frame.GetResourceObservable("CardBorderBrush"));
+            frame.Bind(Border.BackgroundProperty, frame.GetResourceObservable("CardBackgroundBrush"));
+            frame.BorderThickness = new Thickness(1);
+        };
+        boxes.Children.Add(unframed);
+        var page = new StackPanel { Margin = new Thickness(20), Spacing = 16, VerticalAlignment = VerticalAlignment.Top };
+        page.Children.Add(buttons);
+        page.Children.Add(boxes);
         return page;
     });
 

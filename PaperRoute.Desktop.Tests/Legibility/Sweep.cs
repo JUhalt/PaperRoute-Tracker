@@ -281,7 +281,8 @@ internal static class Sweep
     // (focusable, a tab stop, visible and enabled), each given the keyboard
     // focus in turn from a window where nothing has it. For each, the pixels
     // of its bounds plus FocusReach that differ between the frame before and
-    // the frame after, and the strongest of them against the contrast set's
+    // the frame after, less its text areas (TextAreas: a text box's caret and
+    // selection), and the strongest of them against the contrast set's
     // window colour. A control is not judged, with the reason, when it is
     // not drawn in full, when it shows focus without having it (the gallery's
     // "focused" inputs, whose focus pseudo-classes are set by hand, so they
@@ -345,6 +346,7 @@ internal static class Sweep
             }
             else
             {
+                PixelRect[] textAreas = TextAreas(control, window);
                 int changed = 0;
                 double strongest = 0;
                 for (int y = area.Y; y < area.Bottom; y++)
@@ -352,7 +354,7 @@ internal static class Sweep
                     for (int x = area.X; x < area.Right; x++)
                     {
                         Color now = after.At(x, y);
-                        if (now != before.At(x, y))
+                        if (now != before.At(x, y) && !textAreas.Any(text => text.Contains(new PixelPoint(x, y))))
                         {
                             changed++;
                             strongest = Math.Max(strongest, Contrast.ContrastRatio(now, windowColour));
@@ -369,6 +371,16 @@ internal static class Sweep
 
         return changes;
     }
+
+    // Where a control draws a text box's caret and selection: the bounds of
+    // every text presenter in it. Taking the focus by Tab shows the caret, or
+    // selects all the text, both at full contrast, so a text box whose focus
+    // frame were gone would still change pixels there. R9 leaves these areas
+    // out, and judges a text box by its frame alone.
+    private static PixelRect[] TextAreas(Control control, Window window) =>
+        [.. new Visual[] { control }.Concat(control.GetVisualDescendants()).OfType<TextPresenter>()
+            .Where(presenter => presenter.IsEffectivelyVisible && presenter.Bounds.Width > 0 && presenter.Bounds.Height > 0)
+            .Select(presenter => Pixels(Bounds(presenter, window)))];
 
     // The background brush a control paints with, if it has one.
     private static IBrush? BackgroundOf(Control control) => control switch
