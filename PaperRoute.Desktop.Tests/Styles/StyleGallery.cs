@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Documents;
+using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Shapes;
 using Avalonia.Input;
@@ -20,11 +21,12 @@ namespace PaperRoute.Desktop.Tests.Styles;
 //
 // States a pointer would make (hovered, pressed) are set as pseudo-classes:
 // nothing moves the pointer in a headless window, so they stay, except that
-// a button sets its own :pressed again when its template is applied, so a
-// pressed specimen sets it after every layout pass (Pressed). Focus is real,
-// from the keyboard, and only one control can hold it: the button named
-// "Focused". The text box and drop-down shown "focused" carry the
-// pseudo-classes their focus styles select on.
+// a button sets :pressed from its IsPressed when its template is applied,
+// which clears it in a headless window, so a pressed specimen sets it again
+// after every layout pass (Pressed). Focus is real, from the keyboard, and
+// only one control can hold it: the button named "Focused". The text box and
+// drop-down shown "focused" carry the pseudo-classes their focus styles
+// select on.
 //
 // Every specimen has a name of its own, and so do the labels and captions
 // beside them, so the sweeps (Legibility/Sweep.cs) key each element by the
@@ -470,16 +472,31 @@ internal sealed class StyleGallery : UserControl
 
     // A pressed specimen: hovered and pressed. Avalonia's Button sets :pressed
     // from its IsPressed when its template is applied (Button.OnApplyTemplate
-    // at 12.1.6), and nothing presses it headless, so a :pressed set here
-    // alone is cleared at the first layout, once the window is shown, and the
-    // specimen drew as hovered (#463). So :pressed is set again after every
-    // layout pass, a template applied anew included: the specimen shows press
-    // in its pictures and in the sweeps
-    // (GalleryStateTests.EveryPressedSpecimenDrawsItsPressedBrush).
+    // at 12.1.6). IsPressed cannot be set from outside and nothing presses a
+    // button in a headless window, so a :pressed set here alone is cleared at
+    // the first layout, once the window is shown, and the specimen drew as
+    // hovered (#463). So :pressed is set again each time the template has been
+    // applied.
+    //
+    // The face's transitions are taken away first. A face that goes from
+    // hovered to pressed eases its background for 100 ms (Button.axaml), and
+    // that runs on the real clock in a headless window too: a picture or a
+    // sweep taken sooner reads a shade in between. Without the transition the
+    // face holds its pressed brush from the moment it is shown
+    // (GalleryStateTests.EveryPressedSpecimenDrawsItsPressedBrush and
+    // NoStateSpecimenIsStillEasingWhenItIsShown).
     private static Button Pressed(Button button)
     {
         With(button, ":pointerover", ":pressed");
-        button.LayoutUpdated += (_, _) => ((IPseudoClasses)button.Classes).Set(":pressed", true);
+        button.TemplateApplied += (_, e) =>
+        {
+            if (e.NameScope.Find<ContentPresenter>("PART_ContentPresenter") is { } face)
+            {
+                face.Transitions = null;
+            }
+
+            ((IPseudoClasses)button.Classes).Set(":pressed", true);
+        };
         return button;
     }
 }

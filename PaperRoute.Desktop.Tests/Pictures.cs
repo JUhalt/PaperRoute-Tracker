@@ -34,17 +34,22 @@ internal static class Pictures
             : Path.GetFullPath(named);
     }
 
-    // Lets transitions (100 ms hovers) finish, renders a frame, checks it is not
-    // blank and saves it as <name>.png, or only the region given (a close-up,
-    // in the window's pixels: headless draws at scale 1). Returns the file's
-    // full path.
+    // Runs the pending jobs, renders frames, checks the last one is not blank
+    // and saves it as <name>.png, or only the region given (a close-up, in the
+    // window's pixels: headless draws at scale 1). Returns the file's full
+    // path.
     public static string Save(Window window, string name, TestContext context, PixelRect? region = null)
     {
         ArgumentNullException.ThrowIfNull(window);
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
 
         Dispatcher.UIThread.RunJobs();
-        // Each tick moves the animation clock one frame; 30 frames outlast every transition the styles declare.
+        // The ticks draw frames. They do not finish a transition: the animation
+        // clock is the real one in a headless window too, and 30 ticks take a
+        // few milliseconds. So nothing in a picture may still be easing: a state
+        // set before the window is shown applies with no transition, and a
+        // specimen pressed afterwards has its transition taken away
+        // (StyleGallery.Pressed; GalleryStateTests reads every specimen at once).
         AvaloniaHeadlessPlatform.ForceRenderTimerTick(30);
         Dispatcher.UIThread.RunJobs();
 

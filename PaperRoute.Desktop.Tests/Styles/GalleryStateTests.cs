@@ -19,8 +19,11 @@ namespace PaperRoute.Desktop.Tests.Styles;
 // holds the very brush object of the token its style names for that state,
 // in all six theme cases. The gallery is shown as the sweeps show it
 // (Sweep.Subjects) and read at the moment its picture is taken (after
-// Pictures.Save's settling), so a state cleared after it was set, or a
-// transition not finished (which holds a brush of its own), fails here.
+// Pictures.Save's settling), so a state cleared after it was set fails here.
+// It is also read at once, before any frame is drawn: a specimen that is
+// still easing towards its state holds a brush of its own, and a transition
+// runs on the real clock in a headless window too, so read only after the
+// settling it would fail on a quick machine and pass on a busy one.
 //
 // Where a role's pressed brush is its hovered one (secondary, quiet, danger:
 // Button.axaml), only the pseudo-class tells press from hover; the
@@ -89,6 +92,15 @@ public sealed partial class GalleryStateTests
     [TestMethod]
     public void EveryHoveredFocusedAndOffSpecimenDrawsItsStatesBrush() => AssertStates(s_others);
 
+    // No specimen is on its way to its state when the gallery is shown: read
+    // at once, with no frame drawn and no time passed, each already holds its
+    // state's brush. The first fix of #463 pressed its specimens after the
+    // first layout and left the face's transition on, so the pressed brush
+    // eased in over 100 ms of real time: its pictures and its own guard were
+    // right on a busy PC and wrong on a quick one.
+    [TestMethod]
+    public void NoStateSpecimenIsStillEasingWhenItIsShown() => AssertStates([.. s_pressed, .. s_others], settle: false);
+
     // Every state specimen of the gallery (a control named for its state,
     // the column heads aside) is in one of the two lists, so a specimen added
     // later is checked too.
@@ -111,10 +123,16 @@ public sealed partial class GalleryStateTests
             }
         });
 
-        CollectionAssert.AreEquivalent(
-            s_pressed.Concat(s_others).Select(specimen => specimen.Name).ToList(),
-            named,
-            "The gallery's state specimens and the specimens these tests check differ.");
+        List<string> listed = s_pressed.Concat(s_others).Select(specimen => specimen.Name).ToList();
+        Assert.AreEqual(
+            "",
+            string.Join(", ", named.Except(listed).Order(StringComparer.Ordinal)),
+            "State specimens of the gallery that no row here checks.");
+        Assert.AreEqual(
+            "",
+            string.Join(", ", listed.Except(named).Order(StringComparer.Ordinal)),
+            "Rows here that name a specimen the gallery does not show.");
+        CollectionAssert.AreEquivalent(listed, named, "A state specimen is listed or shown twice.");
     }
 
     // The check's teeth, and the cause of #463 shown step by step: a primary
@@ -155,14 +173,50 @@ public sealed partial class GalleryStateTests
             "The check names the lost pseudo-class and the hovered brush:" + Environment.NewLine + string.Join(Environment.NewLine, faults));
     }
 
-    private void AssertStates(IReadOnlyList<StateSpecimen> specimens)
+    // The teeth of the read at once: a primary button pressed after it is
+    // shown, with its transition left on, as the first fix of #463 pressed
+    // its specimens. Its face holds the easing's own brush, still in the
+    // hovered colour, and the check names it.
+    [TestMethod]
+    public void TheStateCheckFailsAPressThatIsStillEasing()
+    {
+        List<string> faults = Headless.Run(() =>
+        {
+            ThemeCase.Light.Apply(Application.Current!);
+            var button = new Button { Name = "PrimaryPressed", Content = "+ Add Manuscript", Classes = { "primary" } };
+            var pseudo = (IPseudoClasses)button.Classes;
+            pseudo.Set(":pointerover", true);
+            var window = new Window { Width = 300, Height = 120, Content = button };
+            window.Show();
+            try
+            {
+                Dispatcher.UIThread.RunJobs();
+                pseudo.Set(":pressed", true);
+                return Faults(window, ThemeCase.Light.Name, s_pressed.Where(specimen => specimen.Name == "PrimaryPressed"));
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
+
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "Light: PrimaryPressed's PART_ContentPresenter holds a brush of no token (#FF0E6A63) in Background, not AccentPressedBrush (#FF0C5E58).",
+            },
+            faults,
+            "The check names the easing brush:" + Environment.NewLine + string.Join(Environment.NewLine, faults));
+    }
+
+    private void AssertStates(IReadOnlyList<StateSpecimen> specimens, bool settle = true)
     {
         var faults = new List<string>();
         foreach (ThemeCase themeCase in ThemeCase.All)
         {
             faults.AddRange(Headless.Run(() =>
             {
-                Window window = ShowGallery(themeCase);
+                Window window = ShowGallery(themeCase, settle);
                 try
                 {
                     return Faults(window, themeCase.Name, specimens);
@@ -175,13 +229,15 @@ public sealed partial class GalleryStateTests
         }
 
         Assert.IsEmpty(faults, "State specimens that do not show their state:" + Environment.NewLine + string.Join(Environment.NewLine, faults));
-        TestContext.WriteLine($"{specimens.Count} specimens show their states in {ThemeCase.All.Count} theme cases.");
+        TestContext.WriteLine($"{specimens.Count} specimens show their states in {ThemeCase.All.Count} theme cases{(settle ? "" : ", read at once")}.");
     }
 
     // Shows the gallery as the sweeps do (Sweep.Read), in the theme case, and
-    // lets it settle as Pictures.Save does before the picture is taken.
+    // lets it settle as Pictures.Save does before the picture is taken; or,
+    // with settle off, runs only the jobs that showing it left (the focus
+    // ring is made by one): no frame is drawn and no time is waited for.
     // Call inside Headless.Run.
-    private static Window ShowGallery(ThemeCase themeCase)
+    private static Window ShowGallery(ThemeCase themeCase, bool settle = true)
     {
         SweepSubject subject = Sweep.Subjects.Single(candidate => candidate.Name == "Styles/Gallery");
         themeCase.Apply(Application.Current!);
@@ -191,12 +247,21 @@ public sealed partial class GalleryStateTests
         window.Show();
         Dispatcher.UIThread.RunJobs();
         subject.Shown?.Invoke(view);
-        Settle(window);
+        if (settle)
+        {
+            Settle(window);
+        }
+        else
+        {
+            Dispatcher.UIThread.RunJobs();
+        }
+
         return window;
     }
 
-    // As Pictures.Save settles a window before its picture: jobs run,
-    // transitions finish, a frame is drawn.
+    // As Pictures.Save settles a window before its picture: jobs run and
+    // frames are drawn. The ticks do not finish a transition (it runs on the
+    // real clock), which is why the specimens are also read at once.
     private static void Settle(Window window)
     {
         Dispatcher.UIThread.RunJobs();
