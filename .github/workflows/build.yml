@@ -392,6 +392,16 @@ jobs:
               throw "Every test that reported a result passed ($total), but dotnet test ended with exit code $exitCode; a hang or crash ends the run early. See the run messages in this job's summary and the Sequence file in the artifact."
           }
 
+      # Report-only, until start-up G1's read is done: the end of Velopack's
+      # own log, which the tests' child processes write outside the results,
+      # printed here and copied into the artifact. It never fails the job.
+      - name: Show Velopack's log (report-only)
+        if: always()
+        continue-on-error: true
+        timeout-minutes: 2
+        shell: pwsh
+        run: ./.github/scripts/Show-VelopackLog.ps1 -Out "$env:GITHUB_WORKSPACE/TestResults/velopack"
+
       - name: Upload trial test results
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -598,7 +608,7 @@ jobs:
   trial-macos:
     name: Avalonia Board trial (macOS, ${{ matrix.machine }})
     runs-on: ${{ matrix.runner }}
-    # More than the steps' limits added up (153 minutes), so that a step that
+    # More than the steps' limits added up (155 minutes), so that a step that
     # runs out of time is recorded and the job goes on to its summary.
     timeout-minutes: 165
     strategy:
@@ -933,6 +943,16 @@ jobs:
           LANG: en_US.UTF-8
         run: ./.github/scripts/Show-TrialWindowOnMac.ps1 -Part PlatformCheck -Program "$env:RUNNER_TEMP/board-trial/PaperRoute.Desktop" -Out "$env:OUT"
 
+      # Until start-up G1's read is done: the end of Velopack's own log, which
+      # every start above writes outside the results, printed here and copied
+      # into the artifact.
+      - name: Show Velopack's log
+        if: always()
+        continue-on-error: true
+        timeout-minutes: 2
+        shell: pwsh
+        run: ./.github/scripts/Show-VelopackLog.ps1 -Out "$env:OUT/velopack"
+
       # summary.md: for each step above, whether it worked, then the test
       # counts. The details are in the other files of the artifact.
       - name: Write the summary file
@@ -982,7 +1002,7 @@ jobs:
               }
           }
           $lines.Add('')
-          $lines.Add('Details: window.md, measure.md and platformcheck.md (facts), the pictures (*.png), measure-macos.json, platform-check-macos.json, codesign.txt, tests/ (results files) and pictures/ (the view tests).')
+          $lines.Add('Details: window.md, measure.md and platformcheck.md (facts), the pictures (*.png), measure-macos.json, platform-check-macos.json, codesign.txt, tests/ (results files), pictures/ (the view tests) and velopack/ (Velopack''s own log).')
           $lines | Set-Content -LiteralPath (Join-Path $env:OUT 'summary.md') -Encoding utf8
           $lines | Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Encoding utf8
           exit 0

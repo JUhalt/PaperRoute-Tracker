@@ -33,6 +33,9 @@
     <None Update="CoreSurface\allowed-core-references.txt" CopyToOutputDirectory="PreserveNewest" />
     <!-- Every Friend core item the interface's compiled code references, with its declaration and fate (FriendUseTests). -->
     <None Update="CoreSurface\friend-uses.txt" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Every banned core member one file may call, with that file, and the banned list it is checked against (LiftedBanTests). -->
+    <None Update="CoreSurface\lifted-bans.txt" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\PaperRoute.ViewModels\BannedSymbols.txt" Link="CoreSurface\BannedSymbols.txt" CopyToOutputDirectory="PreserveNewest" />
     <!-- The accessibility trees and Tab orders the Board must keep (AccessibilityTreeTests). -->
     <None Update="Expected\*.txt" CopyToOutputDirectory="PreserveNewest" />
     <!-- The target catalog and the parity map as data (ParityMapTests); PaperRoute.Tests links parity-map.tsv for its key lock. -->
@@ -45,10 +48,14 @@
     <None Include="..\docs\USER_GUIDE.md" Link="Input\USER_GUIDE.md" CopyToOutputDirectory="PreserveNewest" />
     <!-- The app's .axaml files as text, for the token tests (R1, its completeness guard, T3) to read the values and uses themselves. Content, not None: Avalonia's build removes every None item named *.axaml. -->
     <Content Include="..\PaperRoute.Desktop\**\*.axaml" Exclude="..\PaperRoute.Desktop\bin\**;..\PaperRoute.Desktop\obj\**" LinkBase="Axaml" CopyToOutputDirectory="PreserveNewest" />
-    <!-- The app's .cs files as text, for the theme-owner scan (AppThemeTests: only AppTheme sets the theme variant or reads the system's contrast state). Content, so they are copied, not compiled. -->
+    <!-- The app's .cs files as text, for the theme-owner scan (AppThemeTests: only AppTheme sets the theme variant or reads the system's contrast state) and the lifted-ban scan (LiftedBanTests). Content, so they are copied, not compiled. -->
     <Content Include="..\PaperRoute.Desktop\**\*.cs" Exclude="..\PaperRoute.Desktop\bin\**;..\PaperRoute.Desktop\obj\**" LinkBase="Source" CopyToOutputDirectory="PreserveNewest" />
-    <!-- The view models' C# sources as text, for OnlyTheSessionDisablesTheSaveBan to find every #pragma that lifts the save ban (RS0030). Content, so nothing here is compiled. -->
+    <!-- The view models' C# sources as text, for OnlyTheSessionDisablesTheSaveBan and LiftedBanTests to find every #pragma that lifts the save ban (RS0030), and every other place that names it. Content, so nothing here is compiled. -->
     <Content Include="..\PaperRoute.ViewModels\**\*.cs" Exclude="..\PaperRoute.ViewModels\bin\**;..\PaperRoute.ViewModels\obj\**" LinkBase="ViewModelSources" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The build files that could turn RS0030 off for the two projects, as text, for LiftedBanTests: each project file, and every .editorconfig, .globalconfig and Directory.Build file in the projects or at the repository's root. Content, so nothing here is built. -->
+    <Content Include="..\PaperRoute.Desktop\PaperRoute.Desktop.csproj;..\PaperRoute.Desktop\**\*.editorconfig;..\PaperRoute.Desktop\**\*.globalconfig;..\PaperRoute.Desktop\Directory.Build.*" Exclude="..\PaperRoute.Desktop\bin\**;..\PaperRoute.Desktop\obj\**" LinkBase="BuildConfig\PaperRoute.Desktop" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\PaperRoute.ViewModels\PaperRoute.ViewModels.csproj;..\PaperRoute.ViewModels\**\*.editorconfig;..\PaperRoute.ViewModels\**\*.globalconfig;..\PaperRoute.ViewModels\Directory.Build.*" Exclude="..\PaperRoute.ViewModels\bin\**;..\PaperRoute.ViewModels\obj\**" LinkBase="BuildConfig\PaperRoute.ViewModels" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\*.editorconfig;..\*.globalconfig;..\Directory.Build.*" LinkBase="BuildConfig" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>
