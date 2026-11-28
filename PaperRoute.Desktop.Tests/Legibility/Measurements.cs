@@ -6,9 +6,11 @@ namespace PaperRoute.Desktop.Tests.Legibility;
 // the pictures (Pictures.Directory, so the CI trial job's artifact carries
 // it), so a reviewer reads numbers, not pictures (the harness design, part
 // 2.1). The first line names the columns; then one line per measurement,
-// its cells separated by tabs, numbers in the invariant culture. A run
-// writes its file anew, so a second run never adds to the first. The name is
-// in lower case for every rule and theme case (legibility-r1-light.txt,
+// its cells separated by tabs, numbers in the invariant culture, every line
+// ended by a line feed alone (not the system's own line end), so the files
+// two runners write can be compared byte for byte. A run writes its file
+// anew, so a second run never adds to the first. The name is in lower case
+// for every rule and theme case (legibility-r1-light.txt,
 // legibility-r2-hc1.txt), as the pictures beside it are named.
 // Limits of headless: HeadlessLimits.md
 internal static class Measurements
@@ -23,7 +25,7 @@ internal static class Measurements
         lines.AddRange(rows.Select(row => Line(row, columns.Count)));
         Directory.CreateDirectory(folder);
         string path = Path.Combine(folder, FileName(rule, themeCase));
-        File.WriteAllLines(path, lines);
+        File.WriteAllText(path, string.Join('\n', lines) + "\n");
         return path;
     }
 

@@ -6,9 +6,9 @@ namespace PaperRoute.Desktop.Tests.Legibility;
 
 // The pixel primitives of FramePixels, each on a bitmap made in code whose
 // right answer is known by construction (the harness design, part 5). No
-// window and no drawing: the rules built on them (P-R5, P-R7 today; the
-// sweeps later) then judge real frames with primitives shown to read
-// pixels right.
+// window and no drawing: the rules built on them (R5's and R7's sweeps,
+// R5_NoLightPatchesOnTheDarkBoard and P-R7) then judge real frames with
+// primitives shown to read pixels right.
 // Limits of headless: HeadlessLimits.md
 [TestClass]
 public sealed class PrimitiveTests

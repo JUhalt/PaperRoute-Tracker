@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using PaperRoute.Desktop.Styles;
+using PaperRoute.Desktop.Tests.Board;
 using PaperRoute.Desktop.Tests.Styles;
 
 namespace PaperRoute.Desktop.Tests.Legibility;
@@ -7,9 +8,11 @@ namespace PaperRoute.Desktop.Tests.Legibility;
 // The known-failures list stays current (the harness design, part 2.4): an
 // entry a rule no longer reports is stale, every entry carries its issue, and
 // the number of entries is written here too, so the list cannot grow unseen.
+// It opens the example library (through R5's sweep), so it checks, as every
+// test that opens a library does, that no default storage root answered.
 // Limits of headless: HeadlessLimits.md
 [TestClass]
-public sealed partial class KnownFailuresTests
+public sealed partial class KnownFailuresTests : StorageCheckedTests
 {
     // How many entries KnownFailures.tsv holds. Change it with the list.
     private const int ExpectedCount = 0;
@@ -18,14 +21,16 @@ public sealed partial class KnownFailuresTests
     // on its run tests' own inputs and gives everything it reports today,
     // listed failures included, and which entries that re-run can judge on
     // this system; an entry for another rule cannot be judged yet. Each
-    // rule's pull request adds its name. A rule is re-run here only when an
-    // entry names it (the teeth below re-run R1, R2 and R3 on every run, R2
-    // and R3 on spoiled inputs).
+    // rule's pull request adds its name. A re-run is given the test's
+    // context, which R5's sweep takes. A rule is re-run here only when an
+    // entry names it (the teeth below re-run R1, R2, R3 and R5 on every run,
+    // R2 and R3 on spoiled inputs).
     private static readonly Dictionary<string, RuleCheck> s_rulesWithACheck = new(StringComparer.Ordinal)
     {
-        ["R1"] = new(() => R1Tests.Variants.SelectMany(variant => Rules.R1(variant, TokenFile.Colors(variant), TokenPairs.All)).ToList(), _ => true),
-        ["R2"] = new(() => R2Tests.CurrentFindings(R2Tests.Inputs.Real), entry => R2Tests.Judges(R2Tests.RealThemeFolder, entry)),
-        ["R3"] = new(() => R3Tests.CurrentFindings(RouteKinds.All), _ => true),
+        ["R1"] = new(_ => R1Tests.Variants.SelectMany(variant => Rules.R1(variant, TokenFile.Colors(variant), TokenPairs.All)).ToList(), _ => true),
+        ["R2"] = new(_ => R2Tests.CurrentFindings(R2Tests.Inputs.Real), entry => R2Tests.Judges(R2Tests.RealThemeFolder, entry)),
+        ["R3"] = new(_ => R3Tests.CurrentFindings(RouteKinds.All), _ => true),
+        ["R5"] = new(R5Tests.CurrentFindings, _ => true),
     };
 
     public TestContext TestContext { get; set; } = null!;
@@ -36,7 +41,7 @@ public sealed partial class KnownFailuresTests
     public void KnownFailuresAreCurrent()
     {
         IReadOnlyList<KnownFailure> entries = KnownFailures.Load();
-        IReadOnlyList<Finding> findings = CurrentFindings(entries);
+        IReadOnlyList<Finding> findings = CurrentFindings(entries, TestContext);
         List<string> problems = Problems(entries, ExpectedCount, findings);
         foreach (KnownFailure entry in entries.Where(entry => s_rulesWithACheck.TryGetValue(entry.Rule, out RuleCheck? check) && !check.JudgedHere(entry)))
         {
@@ -64,7 +69,7 @@ public sealed partial class KnownFailuresTests
 
         Assert.AreEqual(
             "Line 10: R1, MutedTextBrush on CardBackgroundBrush, Light is stale: R1 no longer reports it.",
-            string.Join(Environment.NewLine, Problems([listed], 1, CurrentFindings([listed]))),
+            string.Join(Environment.NewLine, Problems([listed], 1, CurrentFindings([listed], TestContext))),
             "An entry the real token file no longer fails.");
 
         // R2 and R3 are judged the same way, each by re-running its checks on
@@ -136,10 +141,21 @@ public sealed partial class KnownFailuresTests
             string.Join(Environment.NewLine, Problems([r3Stale], 1, r3Findings)),
             "An R3 entry for the real current and accepted dots, which differ.");
 
-        KnownFailure noCheck = Entry("R5\tthe card\tDark\t#1\ta light patch");
+        // R5 is judged by re-running its sweep over the real surfaces (so this
+        // test opens the example library): an entry for a part the sweep does
+        // not report is stale. This shows that R5 has a check here and that
+        // its re-run runs; unlike R2 and R3 above, R5 has no spoiled input
+        // here yet that would show the re-run reporting an entry.
+        KnownFailure r5Stale = Entry("R5\tPage/Board: no such part\tDark\t#1\ta light part that is not there");
         Assert.AreEqual(
-            "Line 10: R5, the card, Dark names a rule with no check in this project yet.",
-            string.Join(Environment.NewLine, Problems([noCheck], 1, CurrentFindings([noCheck]))),
+            "Line 10: R5, Page/Board: no such part, Dark is stale: R5 no longer reports it.",
+            string.Join(Environment.NewLine, Problems([r5Stale], 1, CurrentFindings([r5Stale], TestContext))),
+            "An R5 entry for a part the sweep does not report.");
+
+        KnownFailure noCheck = Entry("R8\tthe card\tDark\t#1\ta faint disabled caption");
+        Assert.AreEqual(
+            "Line 10: R8, the card, Dark names a rule with no check in this project yet.",
+            string.Join(Environment.NewLine, Problems([noCheck], 1, CurrentFindings([noCheck], TestContext))),
             "An entry for a rule not built yet.");
 
         Assert.AreEqual(
@@ -186,16 +202,16 @@ public sealed partial class KnownFailuresTests
     }
 
     // What the rules the entries name report today, listed failures included:
-    // each such rule with a check, re-run once.
-    private static IReadOnlyList<Finding> CurrentFindings(IReadOnlyList<KnownFailure> entries) =>
+    // each such rule with a check, re-run once with the test's context.
+    private static IReadOnlyList<Finding> CurrentFindings(IReadOnlyList<KnownFailure> entries, TestContext context) =>
         entries.Select(entry => entry.Rule).Distinct(StringComparer.Ordinal)
             .Where(s_rulesWithACheck.ContainsKey)
-            .SelectMany(rule => s_rulesWithACheck[rule].Rerun())
+            .SelectMany(rule => s_rulesWithACheck[rule].Rerun(context))
             .ToList();
 
-    // One rule's check: what re-runs it, and which entries that re-run can
-    // judge on this system.
-    private sealed record RuleCheck(Func<IReadOnlyList<Finding>> Rerun, Func<KnownFailure, bool> JudgedHere);
+    // One rule's check: what re-runs it, given the test's context, and which
+    // entries that re-run can judge on this system.
+    private sealed record RuleCheck(Func<TestContext, IReadOnlyList<Finding>> Rerun, Func<KnownFailure, bool> JudgedHere);
 
     // One data line, read as the tenth line of a file with the real header.
     private static KnownFailure Entry(string line)
