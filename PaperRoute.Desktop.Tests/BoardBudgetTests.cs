@@ -656,6 +656,50 @@ public sealed class BoardBudgetTests : StorageCheckedTests
         }
     }
 
+    // The harm rows keep their worst case: on mid-step and key-step, when the
+    // last step, met inside the row, takes over the slow-step limit,
+    // preparation stops there; but that step ran inside the row, so the row
+    // is kept, the record says the stop came inside it, the run is not one
+    // the pairs script drops, and the first switch after idle is timed as on
+    // any run. The preparer's clock stands still until the steps before the
+    // last have run, then moves 130 ms at each reading, so only the last
+    // step reads as slow. The example library, whose Published shelf every
+    // step lays out.
+    [TestMethod]
+    [DataRow(IdleSides.MidStep, BoardMeasurement.FirstSwitchToPublishedAfterIdle)]
+    [DataRow(IdleSides.KeyStep, BoardMeasurement.SearchKeystrokeStepDue)]
+    public void ASlowStepMetInsideTheRowKeepsTheRow(string side, string metRow)
+    {
+        DateTime today = DateTime.Today;
+        using DiskLibrarySession session = Unloaded("example", today, root => LargeLibraryFixture.WriteExample(root));
+        (IReadOnlyList<MeasuredRow> rows, _, IReadOnlyList<IdlePreparationRecord> idle) =
+            Headless.Run(() => MeasureLibrary("example", session, requireChanges: false, side, SlowLastStep), s_runLimit);
+        BoardMeasurementReport report = Report(rows, today, "the computer's date", heldLibrary: string.Empty, idle: idle);
+        TestContext.WriteLine(report.ToTable());
+        Assert.IsEmpty(report.Failures(), "Nothing is held here.");
+
+        CheckIdleRows(rows, side);
+        CheckLastRows(rows);
+        IdlePreparationRecord record = idle.Single();
+        TestContext.WriteLine(BoardMeasurementReport.DescribeIdlePreparation(record));
+        Assert.AreEqual(IdleSides.StepsBeforeTheLast, record.StepsRun, $"{side}: the steps before the last ran and none stopped preparation.");
+        Assert.AreEqual(HiddenShelfPreparer.SlowSliceReason, record.SkippedReason, $"{side}: the last step stopped preparation as slow.");
+        Assert.IsTrue(record.StoppedInsideRow, $"{side}: the record says the stop came inside the row.");
+        Assert.AreEqual(1, record.StepsMet, $"{side}: the slow step ran inside the row.");
+        Assert.IsTrue(record.FirstSwitchTaken, $"{side}: the first switch after idle was timed.");
+        Assert.IsNotNull(record.ViewsMadeAtSwitch, $"{side}: the switch's card views are counted.");
+        Assert.Contains("the row kept", rows.Single(row => row.Id == metRow).Note, $"{side}: the met row's note says the stop came inside it.");
+    }
+
+    // The preparer's clock stands still for the steps before the last and
+    // moves 130 ms at each reading once they have run.
+    private static void SlowLastStep(BoardView view)
+    {
+        TimeSpan now = TimeSpan.Zero;
+        HiddenShelfPreparer preparer = view.Preparer;
+        preparer.Clock = () => now += preparer.StepsRun >= IdleSides.StepsBeforeTheLast ? TimeSpan.FromMilliseconds(130) : TimeSpan.Zero;
+    }
+
     // The preparer on the real clock with the slow-step limit raised, so a
     // busy PC cannot stop the idle timer: its idle rules read that clock.
     private static void NoSlowStop(BoardView view) => view.Preparer.SlowSliceLimit = TimeSpan.FromHours(1);

@@ -47,7 +47,9 @@ function Assert-That([bool] $condition, [string] $what) {
 # switch, when preparation stopped or noPrimary is set), and an
 # idlePreparation record as the measurement writes it for that side. Its
 # optional keys: JsonSide (the side the JSON names, when it is not Side),
-# NoRecord (no idlePreparation) and TodayRows (today's rows with the record).
+# NoRecord (no idlePreparation), TodayRows (today's rows with the record) and
+# InsideRow (preparation stopped by the step met inside the row a key or a
+# click meets: the rows are all written and the switch was timed).
 $idlePrimary = 'first-switch-published-after-idle'
 function New-RunJson($ui, $runUi, [double] $watchUi, [double] $riseUi, $conditions, [bool] $noPrimary = $false, $idle = $null, [string] $primaryRule = 'enforced') {
     $row = {
@@ -61,7 +63,7 @@ function New-RunJson($ui, $runUi, [double] $watchUi, [double] $riseUi, $conditio
     }
     $rows = [Collections.Generic.List[object]]::new()
     if ($null -ne $idle -and -not $idle.ContainsKey('TodayRows')) {
-        $stopped = $null -ne $idle.Skipped
+        $stopped = $null -ne $idle.Skipped -and -not $idle.ContainsKey('InsideRow')
         $prepare = if ($idle.Side -eq 'none') { 0.2 } else { 60 }
         $rows.Add((& $row 'example' $idlePrimary 100 'report-only' 999 900))
         $rows.Add((& $row '500' 'prepare-published-idle' 50 'report-only' $prepare $prepare))
@@ -100,7 +102,9 @@ function New-RunJson($ui, $runUi, [double] $watchUi, [double] $riseUi, $conditio
     # stopped preparation made 6 in 3 steps and its switch was not timed.
     if ($null -ne $idle -and -not $idle.ContainsKey('NoRecord')) {
         $side = if ($idle.ContainsKey('JsonSide')) { $idle.JsonSide } else { $idle.Side }
-        $record = if ($null -ne $idle.Skipped) {
+        $record = if ($idle.ContainsKey('InsideRow')) {
+            [ordered]@{ stepsRun = 4; viewsMade = 12; prepared = $false; skippedReason = $idle.Skipped; firstSwitchTaken = $true; viewsMadeAtSwitch = 0; stoppedInsideRow = $true }
+        } elseif ($null -ne $idle.Skipped) {
             [ordered]@{ stepsRun = 3; viewsMade = 6; prepared = $false; skippedReason = $idle.Skipped; firstSwitchTaken = $false; viewsMadeAtSwitch = $null }
         } elseif ($idle.Side -eq 'none') {
             [ordered]@{ stepsRun = 0; viewsMade = 0; prepared = $false; skippedReason = $null; firstSwitchTaken = $true; viewsMadeAtSwitch = 21 }
@@ -474,6 +478,17 @@ foreach ($id in 'refresh-published-after-search', 'refresh-published-after-clear
     Assert-That (@($r.Lines | Where-Object { $_ -like "  $id (idle preparation, before the switch): after higher in 10 of 10 pairs. Reported; it does not block." }).Count -eq 1) "$id is reported and does not block"
 }
 Assert-That (@($r.Lines | Where-Object { $_ -like 'Idle sides: before runs with --after-idle search-pending, after with --after-idle search-refreshed. Scenario: search.*' }).Count -eq 1) 'the summary names the sides and their scenario'
+
+# 29b. A sitting of none against mid-step: pair 2's after run stopped its
+# preparation with the slow step met inside the first switch's row, which
+# keeps that step and was timed: the run is kept, nothing is replaced, and
+# the summary lists it apart from the drops.
+$pairs = Set-IdleSides (New-Pairs 10 -higher 7) 'none' 'mid-step'
+$pairs[1]['AIdle'] = @{ Side = 'mid-step'; Skipped = 'slow slice'; InsideRow = $true }
+$r = Invoke-Check 'idle sides, a stop inside the met row' @(New-Sitting 'idle-stopped-inside' 10 $pairs 'none' 'mid-step')
+Assert-That ($r.Pairs -eq 10 -and $r.Replaced -eq 0) "10 pairs kept, none replaced (got $($r.Pairs), $($r.Replaced) replaced)"
+Assert-That (@($r.Lines | Where-Object { $_ -like '*dropped:*' }).Count -eq 0) 'no run is dropped for a stop inside the met row'
+Assert-That (@($r.Lines | Where-Object { $_ -like '  1 runs stopped their idle preparation with the slow step met inside the row a key or a click meets. They are kept*' }).Count -eq 1) 'the stop inside the met row is listed apart, kept'
 
 # 30. Run mode refuses two sides of different scenarios, which write
 # different rows, before it runs or checks anything else.

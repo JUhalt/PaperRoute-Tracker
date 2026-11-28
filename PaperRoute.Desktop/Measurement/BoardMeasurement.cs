@@ -628,7 +628,11 @@ public sealed class BoardMeasurement
     // SkippedReason: a slow step or an accessibility client), the switch is
     // not the one the row is about: it is made untimed, so every row after it
     // does the same work, and the record says why (idle-preparation design,
-    // section 8, row 1). The scenario's own rows are written either way.
+    // section 8, row 1). But a stop by the step met inside the row a key or
+    // a click meets (mid-step, key-step), which ran there and made its views:
+    // that row keeps its slow step, the switch is timed, and the record says
+    // the stop came inside the row (StoppedInsideRow), so the harm rows keep
+    // their worst cases. The scenario's own rows are written either way.
     // Nothing here throws on a stop; the checks throw only when preparation
     // did not do what it says. After the switch the scenario's change is
     // undone (the search cleared, the window restored, the scaling and the
@@ -731,6 +735,7 @@ public sealed class BoardMeasurement
         int? stepsMet = side == IdleSides.MidStep ? 0 : null;
         int? stepsMetViews = side == IdleSides.MidStep ? 0 : null;
         int? viewsMadeInRow = null;
+        bool stoppedInsideRow = false;
         int? refreshSteps = null;
         bool searchInEffect = false;
         ThemeVariant? themeBefore = window.RequestedThemeVariant;
@@ -757,7 +762,14 @@ public sealed class BoardMeasurement
                 stepsMet = met.Steps;
                 stepsMetViews = met.StepViews;
                 viewsMadeInRow = met.ViewsMade;
-                _rows[^1] = _rows[^1] with { Note = FormattableString.Invariant($"{BetweenSides}; {met.Steps} idle steps met inside the row ({StepKinds(preparer, met.First, met.Steps)}), {met.StepViews} card views made by them; {met.ViewsMade} card views made in the row") };
+
+                // A slow step met here stops preparation, but it ran inside
+                // this row: the row keeps it, and the switch after it is
+                // timed as on any run (its work is the same: no refresh is
+                // driven in this scenario).
+                stoppedInsideRow = skipped is null && met.Steps == 1 && preparer.SkippedReason is not null;
+                string stopNote = stoppedInsideRow ? FormattableString.Invariant($"; preparation stopped by it ({preparer.SkippedReason}), the row kept") : string.Empty;
+                _rows[^1] = _rows[^1] with { Note = FormattableString.Invariant($"{BetweenSides}; {met.Steps} idle steps met inside the row ({StepKinds(preparer, met.First, met.Steps)}), {met.StepViews} card views made by them; {met.ViewsMade} card views made in the row{stopNote}") };
                 NoteChanges(board);
                 _frame(window);
                 board.SearchText = string.Empty;
@@ -922,7 +934,9 @@ public sealed class BoardMeasurement
         Require(!prepared || cardsNow == 0 || viewsBefore > 0, $"The prepared Published shelf holds card views before its switch ({viewsBefore}).");
         int expectedCards = searchInEffect ? -1 : published;
 
-        bool taken = skipped is null;
+        // A stop by the step met inside the keystroke row (key-step) leaves
+        // the switch's work as on any run, so the switch is timed.
+        bool taken = skipped is null || stoppedInsideRow;
         int? madeAtSwitch = null;
         int framesBeforeSwitch = _framesDrawn - framesBefore;
         double? changeToSwitch = sinceChange?.Elapsed.TotalMilliseconds;
@@ -952,12 +966,18 @@ public sealed class BoardMeasurement
                 stepsMet = met.Steps;
                 stepsMetViews = met.StepViews;
                 viewsMadeInRow = met.ViewsMade;
+
+                // A slow step met here stops preparation, but it ran inside
+                // this row and made its views: the row keeps it.
+                stoppedInsideRow = skipped is null && met.Steps == 1 && preparer.SkippedReason is not null;
             }
 
-            if (preparer.SkippedReason is not null)
+            if (preparer.SkippedReason is not null && !stoppedInsideRow)
             {
-                // The step inside the row stopped preparation: the row is not
-                // the one it is about, as when preparation stops before it.
+                // Preparation stopped inside the row with no step run (the
+                // last step was predicted slow, so it did not run): no step
+                // was met, so the row is not the one it is about, as when
+                // preparation stops before it.
                 _rows.RemoveAt(_rows.Count - 1);
                 taken = false;
                 madeAtSwitch = null;
@@ -966,7 +986,8 @@ public sealed class BoardMeasurement
             }
             else
             {
-                string metNote = side == IdleSides.MidStep ? FormattableString.Invariant($"; {met.Steps} idle step run inside the row first ({StepKinds(preparer, met.First, met.Steps)}, {met.StepViews} card views), as the switch waited for it, {met.ViewsMade} card views made in the row in all") : string.Empty;
+                string stopNote = stoppedInsideRow && side == IdleSides.MidStep ? FormattableString.Invariant($"; preparation stopped by it ({preparer.SkippedReason}), the row kept") : string.Empty;
+                string metNote = side == IdleSides.MidStep ? FormattableString.Invariant($"; {met.Steps} idle step run inside the row first ({StepKinds(preparer, met.First, met.Steps)}, {met.StepViews} card views), as the switch waited for it, {met.ViewsMade} card views made in the row in all{stopNote}") : string.Empty;
                 string scenarioNote = scenario == IdleSides.SwitchScenario ? string.Empty : FormattableString.Invariant($", Published's rows {(rowsStale ? "stale" : "current")}");
                 _rows[^1] = _rows[^1] with
                 {
@@ -1013,6 +1034,7 @@ public sealed class BoardMeasurement
             StepsMet = stepsMet,
             StepsMetViews = stepsMetViews,
             ViewsMadeInRow = viewsMadeInRow,
+            StoppedInsideRow = stoppedInsideRow,
             RefreshSteps = refreshSteps,
             RowsStaleAtSwitch = rowsStale,
             ManagedBytesBefore = memoryBefore,

@@ -263,7 +263,10 @@ public static class IdleSides
 // counted inside that row's stopwatch (but on timer); ViewsMadeInRow, every
 // card view made inside the row a key or a click meets (mid-step and key), so
 // on mid-step ViewsMadeAtSwitch is the switch's own, the row's less the
-// step's; RefreshSteps, the idle refresh steps (search, timer, theme); RowsStaleAtSwitch,
+// step's; StoppedInsideRow, whether SkippedReason was set by the step met
+// inside that row, which ran there and made its views (mid-step, key-step):
+// the row and the first switch after idle are then kept and timed;
+// RefreshSteps, the idle refresh steps (search, timer, theme); RowsStaleAtSwitch,
 // whether Published's rows were stale as the switch began (the switch then
 // refills them); ManagedBytesBefore and ManagedBytesAfter, the managed heap
 // after a full collection before and after preparation (theme); StepFrameMs,
@@ -289,6 +292,8 @@ public sealed record IdlePreparationRecord(
     public int? StepsMetViews { get; init; }
 
     public int? ViewsMadeInRow { get; init; }
+
+    public bool StoppedInsideRow { get; init; }
 
     public int? RefreshSteps { get; init; }
 
@@ -641,6 +646,7 @@ public sealed class BoardMeasurementReport
             WriteNumberOrNull(json, "stepsMet", record.StepsMet, 0);
             WriteNumberOrNull(json, "stepsMetViews", record.StepsMetViews, 0);
             WriteNumberOrNull(json, "viewsMadeInRow", record.ViewsMadeInRow, 0);
+            json.WriteBoolean("stoppedInsideRow", record.StoppedInsideRow);
             WriteNumberOrNull(json, "refreshSteps", record.RefreshSteps, 0);
             json.WriteBoolean("rowsStaleAtSwitch", record.RowsStaleAtSwitch);
             WriteNumberOrNull(json, "managedBytesBefore", record.ManagedBytesBefore, 0);
@@ -738,7 +744,7 @@ public sealed class BoardMeasurementReport
             ? string.Create(CultureInfo.InvariantCulture, $"the first switch after idle made {idle.ViewsMadeAtSwitch} card views")
             : "the first switch after idle was made but not timed";
         string line = string.Create(CultureInfo.InvariantCulture,
-            $"Idle side {idle.Side} ({idle.Library}): {idle.StepsRun} preparation steps made {idle.ViewsMade} card views; Published {(idle.Prepared ? "prepared" : "not prepared")} at the switch; {(idle.SkippedReason is { } reason ? "preparation stopped: " + reason : "preparation not stopped")}; {switched}.");
+            $"Idle side {idle.Side} ({idle.Library}): {idle.StepsRun} preparation steps made {idle.ViewsMade} card views; Published {(idle.Prepared ? "prepared" : "not prepared")} at the switch; {(idle.SkippedReason is { } reason ? "preparation stopped: " + reason + (idle.StoppedInsideRow ? " by the step met inside the row a key or a click meets, which ran there and is kept" : string.Empty) : "preparation not stopped")}; {switched}.");
         var more = new List<string>();
         if (idle.StepsMet is { } met)
         {

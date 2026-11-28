@@ -248,7 +248,8 @@ function Get-RowIds($rows) {
 # What makes a run unusable, decided from facts that are not timings: not
 # run, timed out, no JSON, an error, no rows of the library held, a row with
 # no UI figure, an idle side other than its build's (or one where none was
-# given), its idle preparation stopped, a load that ended before the run, or
+# given), its idle preparation stopped (but by the step met inside the row a
+# key or a click meets, which is kept), a load that ended before the run, or
 # a disturbed PC. Null
 # when the run is usable. A disturbed of null (load unknown) counts as not
 # disturbed. Two depend on a timing: "outlasted its load" on how long the
@@ -290,8 +291,11 @@ function Get-DropReason($run, [string] $mode) {
     }
     # Its first switch after idle was made untimed. A slow step stops
     # preparation, so this drop, like the one below, depends on a timing.
+    # A stop by the step met inside the row a key or a click meets
+    # (stoppedInsideRow) is kept: that step ran inside the row, which holds
+    # it, and the first switch after idle was timed.
     $stopped = Get-Field $idle 'skippedReason'
-    if ($null -ne $stopped) { return "$StoppedReason ($stopped), so its first switch after idle was not timed" }
+    if ($null -ne $stopped -and (Get-Field $idle 'stoppedInsideRow') -ne $true) { return "$StoppedReason ($stopped), so its first switch after idle was not timed" }
     if ($run.LoadOutlasted) { return $OutlastedReason }
     if ((Get-Field (Get-Field $run.Json 'conditions') 'disturbed') -eq $true) { return 'disturbed' }
     return $null
@@ -488,6 +492,8 @@ function Get-Summary($sittings) {
         if ($outlasted) { $lines.Add("  $outlasted runs outlasted their load. This drop depends on how long a run took, which is a timing: slower runs are dropped more often.") }
         $stoppedRuns = @($sitting.Runs | Where-Object { $null -ne $_.Drop -and $_.Drop.StartsWith($StoppedReason) }).Count
         if ($stoppedRuns) { $lines.Add("  $stoppedRuns runs stopped their idle preparation, so their first switch after idle was not timed. A slow step stops it, and whether a step is slow is a timing: slower runs are dropped more often.") }
+        $insideRuns = @($sitting.Runs | Where-Object { $null -eq $_.Drop -and (Get-Field (Get-IdleRecord $_.Json) 'stoppedInsideRow') -eq $true }).Count
+        if ($insideRuns) { $lines.Add("  $insideRuns runs stopped their idle preparation with the slow step met inside the row a key or a click meets. They are kept: that row holds the slow step, and their first switch after idle was timed.") }
     }
     if ($counted.Count -gt 1) {
         $lines.Add("$($counted.Count) sittings are pooled. Each pooled look is another chance of a false pass: with sittings of 10 pairs about 2.7% at two, 6.1% at three and 7.4% at four; with sittings of 20 pairs 5.1% at two. Three sittings of 10 pairs, or two of 20, go past the 5% of one sitting.")
