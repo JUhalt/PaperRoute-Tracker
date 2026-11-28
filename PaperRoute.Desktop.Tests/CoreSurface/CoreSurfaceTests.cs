@@ -167,23 +167,26 @@ public sealed class CoreSurfaceTests
             "The scan found fewer pragmas than the two allowed writes have: the scan is broken.");
     }
 
-    private static bool LiftsTheSaveBan(string line)
+    private static bool LiftsTheSaveBan(string line) => IsSaveBanPragma(line, "disable");
+
+    // "#pragma warning <verb>" naming RS0030, or naming no code at all.
+    internal static bool IsSaveBanPragma(string line, string verb)
     {
         string text = line.Trim();
-        const string disable = "#pragma warning disable";
-        if (!text.StartsWith(disable, StringComparison.Ordinal))
+        string pragma = "#pragma warning " + verb;
+        if (!text.StartsWith(pragma, StringComparison.Ordinal))
         {
             return false;
         }
 
-        string codes = text[disable.Length..];
+        string codes = text[pragma.Length..];
         int comment = codes.IndexOf("//", StringComparison.Ordinal);
         codes = (comment < 0 ? codes : codes[..comment]).Trim();
         return codes.Length == 0 || codes.Split([',', ' '], StringSplitOptions.RemoveEmptyEntries).Contains("RS0030", StringComparer.Ordinal);
     }
 
     // The nearest line above that is not blank is a // comment.
-    private static bool HasReasonAbove(string[] lines, int index)
+    internal static bool HasReasonAbove(string[] lines, int index)
     {
         for (int i = index - 1; i >= 0; i--)
         {
