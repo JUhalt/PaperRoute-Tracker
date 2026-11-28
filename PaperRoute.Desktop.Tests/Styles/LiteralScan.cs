@@ -11,7 +11,8 @@ namespace PaperRoute.Desktop.Tests.Styles;
 //   - a #RRGGBB or #AARRGGBB colour, anywhere;
 //   - a FontFamily, FontSize or Duration given a value that is not a markup
 //     extension ({DynamicResource ...}, {TemplateBinding ...}), as an
-//     attribute or a style's Setter, or in code;
+//     attribute, a style's Setter, a property element or a Setter.Value, or
+//     in code;
 //   - a CornerRadius with a number other than 0 (0 is no rounding, not a size);
 //   - a numeric FontWeight (such as 700); named weights (Bold) are names already.
 // Paddings, margins, heights, line heights, border thicknesses and named font
@@ -65,8 +66,11 @@ internal static partial class LiteralScan
                         continue;
                     }
 
-                    int line = normal.AsSpan(0, match.Index).Count('\n');
-                    found.Add((match.Index, $"{path}:{line + 1}: {rule.What}: {lines[line].Trim()}"));
+                    // The line of the value itself, where a Setter spreads
+                    // over several lines.
+                    int at = value.Success ? value.Index : match.Index;
+                    int line = normal.AsSpan(0, at).Count('\n');
+                    found.Add((at, $"{path}:{line + 1}: {rule.What}: {lines[line].Trim()}"));
                 }
             }
 
@@ -85,12 +89,20 @@ internal static partial class LiteralScan
 
     private static bool IsNotAnExtension(string value) => !value.StartsWith('{');
 
-    // An attribute (FontSize="12", TextElement.FontSize="12") or a Setter
-    // (Property="FontSize" Value="12", in either order), its value captured.
+    // An attribute (FontSize="12", TextElement.FontSize="12"), a Setter
+    // (Property="FontSize" Value="12", in either order), a property element
+    // (<Border.CornerRadius>5</Border.CornerRadius>, or an element of the
+    // value's own type such as <CornerRadius>5</CornerRadius>), or a Setter
+    // whose <Setter.Value> holds the text, bare or in one element
+    // (<x:Double>12</x:Double>); its value captured. A value given as an
+    // element ({DynamicResource} written as <DynamicResource ... />) has no
+    // text, so it is not captured.
     private static Regex AxamlPattern(string property) => new(
         $@"(?<!\w){property}\s*=\s*""(?<value>[^""]*)""" +
         $@"|<Setter\s+Property=""(?:\w+\.)?{property}""\s+Value=""(?<value>[^""]*)""" +
-        $@"|<Setter\s+Value=""(?<value>[^""]*)""\s+Property=""(?:\w+\.)?{property}""",
+        $@"|<Setter\s+Value=""(?<value>[^""]*)""\s+Property=""(?:\w+\.)?{property}""" +
+        $@"|<Setter\s+Property=""(?:\w+\.)?{property}""\s*>\s*<Setter\.Value>\s*(?:<\w[^>]*(?<!/)>\s*)?(?<value>[^<\s][^<]*?)\s*</" +
+        $@"|<(?:\w+\.)?{property}(?:\s[^>]*)?(?<!/)>\s*(?<value>[^<\s][^<]*?)\s*</",
         RegexOptions.CultureInvariant);
 
     // Six or eight hex digits after a #, not part of a longer name
