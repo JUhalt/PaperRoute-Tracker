@@ -15,9 +15,10 @@ namespace PaperRoute.ViewModels.ManuscriptPage;
 // Discard, Working is a new object graph, so rows and editors hold ids, never
 // objects inside Working, and change it as Edit(w => ...find by id...).
 //
-// There is no save here: what Save writes (BuildCandidate) and what follows a
-// save that succeeded (AcceptSaved) come with build 9's W2, and no view model
-// calls a core save (lock 3).
+// There is no save here: BuildCandidate makes what Save writes, without
+// changing the working copy, and AcceptSaved starts again from what was
+// written once the store reports success. The write is the session's; no
+// view model calls a core save (lock 3).
 public sealed class WorkingCopy
 {
     private int _freezes;
@@ -65,7 +66,7 @@ public sealed class WorkingCopy
     // pickers.
     public AuthorLibraryData Library { get; private set; } = new();
 
-    // Changes at each load and each discard. Work started for an older token
+    // Changes at each load, discard and save. Work started for an older token
     // changes nothing (Edit(int, ...)), as today's RecordToken does.
     public int Token { get; private set; }
 
@@ -75,7 +76,7 @@ public sealed class WorkingCopy
     // A save is writing: every edit is refused until each Freeze is disposed.
     public bool IsFrozen => _freezes > 0;
 
-    // After every Edit, HoldStage, delta change, load and discard; boxes and
+    // After every Edit, HoldStage, delta change, load, discard and save; boxes and
     // rows reread the working copy then.
     public event EventHandler? Changed;
 
@@ -193,6 +194,84 @@ public sealed class WorkingCopy
     // EditManuscriptForm.Snapshot (:698-700): System.Text.Json with the
     // default options; there is no core member for it.
     public string Snapshot() => JsonSerializer.Serialize(Working);
+
+    // What Save writes (2.5), in today's order (EditManuscriptForm.vb:
+    // 4535-4687): a fresh clone of Working with Save's rules applied
+    // (ManuscriptRules), or why nothing is written. It never changes the
+    // working copy, the held stage or the delta, so a save that fails or is
+    // refused leaves every edit as it was, and a retry builds anew from the
+    // same state: it cannot add an event twice. Now is the core's clock
+    // (CoreClock.Now, D9), given by the caller.
+    public SaveAttempt BuildCandidate(DateTime now)
+    {
+        if (ManuscriptRules.IsTitleMissing(Working.Title))
+        {
+            return SaveAttempt.TitleRequired();
+        }
+
+        Manuscript candidate = ManuscriptCloneService.CloneManuscript(Working);
+        PaperStage oldStage = candidate.CurrentStage;
+        PaperStage newStage = HeldStage ?? oldStage;
+        if (newStage != oldStage && ManuscriptRules.StepNeededFor(candidate, newStage) is { } requirement)
+        {
+            return SaveAttempt.NeedsStep(requirement);
+        }
+
+        candidate.Location = ManuscriptRules.LocationFor(newStage, candidate.Location);
+
+        candidate.Title = (candidate.Title ?? string.Empty).Trim();
+        string journalText = (candidate.TargetJournal ?? string.Empty).Trim();
+        candidate.TargetJournalId = ManuscriptRules.TargetJournalIdFor(candidate.TargetJournalId, Stamps.TargetJournal, journalText, Library.Journals);
+        candidate.TargetJournal = journalText;
+
+        if (newStage != oldStage)
+        {
+            candidate.CurrentStage = newStage;
+            candidate.StageEnteredDate = now;
+            candidate.History.Add(ManuscriptRules.StageChanged(oldStage, newStage, now));
+        }
+
+        // By location, as today: Save may be pressed on any section. The
+        // saved record's reason, not the one loaded, so a recovered draft's
+        // reason gets its event (D16).
+        if (candidate.Location == ManuscriptLocation.FileDrawer &&
+            ManuscriptRules.FileDrawerReasonChanged(Original?.FileDrawerReason, candidate.FileDrawerReason, candidate.CurrentStage, now) is { } reasonChange)
+        {
+            candidate.FileDrawerReason = (candidate.FileDrawerReason ?? string.Empty).Trim();
+            candidate.History.Add(reasonChange);
+        }
+
+        // The clone leaves the matches empty, and the candidate, not the
+        // original, goes into the list written to disk: without them a page
+        // save would erase a publication check's matches on disk. The
+        // candidate gets its own list, holding the original's items.
+        candidate.PublicationMatches = [.. Original?.PublicationMatches ?? []];
+        return SaveAttempt.Ready(candidate);
+    }
+
+    // After the store reports that the candidate was written (2.2): the
+    // working copy starts again from the record as written, which the
+    // repository may have normalised in place. Working becomes a clone of
+    // it, the baseline, the stamps and the typed values are retaken from
+    // that clone, the held stage and the delta are cleared, a recovered
+    // draft is saved, and Token changes. No reconcile runs, as today's
+    // commit retakes the baseline straight after the copy
+    // (EditManuscriptForm.vb:4667-4670). Original is the session's to
+    // change (ManuscriptCommit), not this. It is called while the save's
+    // Freeze is still held, so it is not refused when frozen.
+    public void AcceptSaved(Manuscript written)
+    {
+        ArgumentNullException.ThrowIfNull(written);
+        Working = ManuscriptCloneService.CloneManuscript(written);
+        Baseline = Snapshot();
+        Stamps = HeldValues.Of(Working);
+        Loaded = TypedValues.Of(Working);
+        HeldStage = null;
+        Delta = new LibraryChanges();
+        IsRecovered = false;
+        Token++;
+        OnChanged();
+    }
 
     // Stops every edit until the result is disposed, for a save's write.
     public IDisposable Freeze()
