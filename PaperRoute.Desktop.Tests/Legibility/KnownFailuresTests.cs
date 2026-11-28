@@ -162,14 +162,18 @@ public sealed partial class KnownFailuresTests : StorageCheckedTests
         // surfaces, in all their theme cases. Here the re-runs are given the
         // teeth gallery's pages (R8_FindsAnOpacityDisabledLook's,
         // R9_FindsAnEdgeInTheWindowColour's and R9_FindsAControlWithNoFocusVisual's
-        // inputs), so each must report its entry in the theme case that ends
-        // its loop; an entry for the page's sound specimen is stale. A re-run
-        // that dropped a theme case, or R9's edges or focus, would leave its
-        // entry stale here.
+        // inputs), so each must report its entries in the theme cases that
+        // begin and end its loop; an entry for the page's sound specimen is
+        // stale. A re-run that dropped its first or last theme case, or R9's
+        // edges or focus, would leave an entry stale here.
         IReadOnlyList<Finding> r8Findings = R8Tests.CurrentFindings(TestContext, [TeethGallery.FadedOff]);
-        KnownFailure r8Current = Entry("R8\tTeeth/FadedOff: Button#Faded/AccessText \"Faded\"\thcwhite\t#1\ta disabled look made by opacity");
-        List<string> r8Problems = Problems([r8Current], 1, r8Findings);
-        Assert.IsEmpty(r8Problems, "R8 reports its entry on the faded button, in the last theme case:" + Environment.NewLine + string.Join(Environment.NewLine, r8Problems));
+        KnownFailure[] r8Current =
+        [
+            Entry("R8\tTeeth/FadedOff: Button#Faded/AccessText \"Faded\"\tLight\t#1\ta disabled look made by opacity"),
+            Entry("R8\tTeeth/FadedOff: Button#Faded/AccessText \"Faded\"\thcwhite\t#1\ta disabled look made by opacity"),
+        ];
+        List<string> r8Problems = Problems(r8Current, r8Current.Length, r8Findings);
+        Assert.IsEmpty(r8Problems, "R8 reports its entry on the faded button, in the first and the last theme case:" + Environment.NewLine + string.Join(Environment.NewLine, r8Problems));
         KnownFailure r8Stale = Entry("R8\tTeeth/FadedOff: Button#Off/AccessText \"Off\"\thcwhite\t#1\ta disabled caption too faint");
         Assert.AreEqual(
             "Line 10: R8, Teeth/FadedOff: Button#Off/AccessText \"Off\", hcwhite is stale: R8 no longer reports it.",
@@ -179,11 +183,13 @@ public sealed partial class KnownFailuresTests : StorageCheckedTests
         IReadOnlyList<Finding> r9Findings = R9Tests.CurrentFindings(TestContext, [TeethGallery.WindowEdge, TeethGallery.NoFocusVisual]);
         KnownFailure[] r9Current =
         [
+            Entry("R9\tTeeth/WindowEdge: Border#WindowEdge\thc1\t#1\tan edge in the window colour"),
+            Entry("R9\tTeeth/NoFocusVisual: Button#NoFocusVisual, focus\thc1\t#1\ta control with no focus visual"),
             Entry("R9\tTeeth/WindowEdge: Border#WindowEdge\tfallback\t#1\tan edge in the window colour"),
             Entry("R9\tTeeth/NoFocusVisual: Button#NoFocusVisual, focus\tfallback\t#1\ta control with no focus visual"),
         ];
         List<string> r9Problems = Problems(r9Current, r9Current.Length, r9Findings);
-        Assert.IsEmpty(r9Problems, "R9 reports its entries on the teeth pages, in the last theme case:" + Environment.NewLine + string.Join(Environment.NewLine, r9Problems));
+        Assert.IsEmpty(r9Problems, "R9 reports its entries on the teeth pages, in the first and the last theme case:" + Environment.NewLine + string.Join(Environment.NewLine, r9Problems));
         KnownFailure[] r9Stale =
         [
             Entry("R9\tTeeth/WindowEdge: Border#Outlined\tfallback\t#1\tan edge too faint"),
