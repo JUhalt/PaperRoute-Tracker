@@ -43,6 +43,8 @@
     <None Include="..\docs\USER_GUIDE.md" Link="Input\USER_GUIDE.md" CopyToOutputDirectory="PreserveNewest" />
     <!-- The app's .axaml files as text, for the token tests (R1, its completeness guard, T3) to read the values and uses themselves. Content, not None: Avalonia's build removes every None item named *.axaml. -->
     <Content Include="..\PaperRoute.Desktop\**\*.axaml" Exclude="..\PaperRoute.Desktop\bin\**;..\PaperRoute.Desktop\obj\**" LinkBase="Axaml" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The app's .cs files as text, for the theme-owner scan (AppThemeTests: only AppTheme sets the theme variant or reads the system's contrast state). Content, so they are copied, not compiled. -->
+    <Content Include="..\PaperRoute.Desktop\**\*.cs" Exclude="..\PaperRoute.Desktop\bin\**;..\PaperRoute.Desktop\obj\**" LinkBase="Source" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>
