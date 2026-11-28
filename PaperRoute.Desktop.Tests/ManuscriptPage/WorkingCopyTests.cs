@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using System.Reflection;
-using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using ManuscriptPipeline.Models;
@@ -611,21 +610,5 @@ public sealed partial class WorkingCopyTests : Board.StorageCheckedTests
         public Manuscript Working { get; } = new();
 
         public bool Unlisted { get; set; }
-    }
-
-    private sealed class LogCapture : TraceListener
-    {
-        private readonly StringBuilder _partial = new();
-
-        public List<string> Lines { get; } = [];
-
-        public override void Write(string? message) => _partial.Append(message);
-
-        public override void WriteLine(string? message)
-        {
-            _partial.Append(message);
-            Lines.Add(_partial.ToString());
-            _partial.Clear();
-        }
     }
 }
