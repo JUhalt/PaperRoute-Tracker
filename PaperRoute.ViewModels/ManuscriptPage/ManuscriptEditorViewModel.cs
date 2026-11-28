@@ -55,8 +55,8 @@ public sealed partial class ManuscriptEditorViewModel : ObservableObject
     // The record the page shows, editable or not.
     private Guid? _shownId;
 
-    // The working copy holds the shown record and it can be edited.
-    private bool _editable;
+    // IsLoaded's value.
+    private bool _isLoaded;
 
     // The author file as the last read or save left it on disk, without the
     // page's own records: what a discard keeps when it cannot read the file.
@@ -144,12 +144,19 @@ public sealed partial class ManuscriptEditorViewModel : ObservableObject
     // The tabs, in order. Only built sections are given (D13).
     public IReadOnlyList<IManuscriptSection> Sections { get; }
 
-    public bool IsLoaded => _editable;
+    // The working copy holds the shown record and it can be edited. False
+    // before the first Open and in the missing and error states; the view
+    // switches between the editor and those states on it.
+    public bool IsLoaded
+    {
+        get => _isLoaded;
+        private set => SetProperty(ref _isLoaded, value);
+    }
 
     // Something on the page is unsaved: the working copy, or text in a
     // section that is not in it yet (critique M4). Recomputed whenever it is
     // read, never taken from the bar.
-    public bool HasUnsavedWork => _editable && (Copy.HasUnsavedChanges() || Sections.Any(section => section.HasPendingInput()));
+    public bool HasUnsavedWork => IsLoaded &&(Copy.HasUnsavedChanges() || Sections.Any(section => section.HasPendingInput()));
 
     // Shows a record: a clone of the session's own, with a fresh read of the
     // author file. False, with the page's state saying why, when the record
@@ -189,8 +196,8 @@ public sealed partial class ManuscriptEditorViewModel : ObservableObject
         }
 
         _libraryOnDisk = JsonSerializer.Serialize(library);
-        Restart(() => Copy.Load(saved, library));
         LoadProblem = string.Empty;
+        Restart(() => Copy.Load(saved, library));
         return true;
     }
 
@@ -199,7 +206,7 @@ public sealed partial class ManuscriptEditorViewModel : ObservableObject
     public async Task<bool> SaveAsync()
     {
         // 1. No record loaded.
-        if (!_editable)
+        if (!IsLoaded)
         {
             return true;
         }
@@ -284,7 +291,7 @@ public sealed partial class ManuscriptEditorViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(CanSaveOrDiscard))]
     public void Discard()
     {
-        if (!_editable || IsSaving || _shownId is not Guid id)
+        if (!IsLoaded || IsSaving || _shownId is not Guid id)
         {
             return;
         }
@@ -411,7 +418,7 @@ public sealed partial class ManuscriptEditorViewModel : ObservableObject
             _starting = false;
         }
 
-        _editable = true;
+        IsLoaded = true;
         _lastSaveFailed = false;
         _stageMessageFor = null;
         StageMessage = string.Empty;
@@ -426,12 +433,14 @@ public sealed partial class ManuscriptEditorViewModel : ObservableObject
 
     private void ShowProblem(string problem)
     {
-        _editable = false;
         _lastSaveFailed = false;
         _stageMessageFor = null;
         StageMessage = string.Empty;
         Problems = [];
+
+        // The problem first, so a view that switches on IsLoaded finds it.
         LoadProblem = problem;
+        IsLoaded = false;
         Recompute();
     }
 
@@ -449,7 +458,7 @@ public sealed partial class ManuscriptEditorViewModel : ObservableObject
     private void Recompute()
     {
         bool unsaved = HasUnsavedWork;
-        ShowsSaveBar = _editable && (unsaved || _store.LastLibrarySaveFailed);
+        ShowsSaveBar = IsLoaded &&(unsaved || _store.LastLibrarySaveFailed);
         SaveBarHint = _savingShown ? SavingHint
             : _lastSaveFailed || (_store.LastLibrarySaveFailed && !unsaved) ? SaveFailedHint
             : EditedHint;

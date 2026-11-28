@@ -605,6 +605,38 @@ public sealed class EditorFrameTests : StorageCheckedTests
         Assert.AreEqual(0, store.Writes);
     }
 
+    // The view switches between the editor and the missing and error states
+    // on IsLoaded, so each change of it is announced, and only a change.
+    [TestMethod]
+    public void IsLoadedIsAnnouncedOnEveryChange()
+    {
+        Manuscript saved = Paper();
+        var store = new FakeManuscriptStore([saved], AuthorFile());
+        Page page = Page.Over(store, saved);
+        var announced = new List<(bool Loaded, string Problem)>();
+        page.Frame.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(ManuscriptEditorViewModel.IsLoaded))
+            {
+                announced.Add((page.Frame.IsLoaded, page.Frame.LoadProblem));
+            }
+        };
+
+        Assert.IsTrue(page.Frame.Open(saved.Id));
+        Assert.IsTrue(page.Frame.Open(saved.Id));
+        store.ReadFailure = new InvalidDataException(Damaged);
+        Assert.IsFalse(page.Frame.Open(saved.Id));
+        store.ReadFailure = null;
+        Assert.IsTrue(page.Frame.Open(saved.Id));
+        Assert.IsFalse(page.Frame.Open(Guid.Parse("4d1f4b0e-0000-4000-8000-0000000000ff")));
+
+        string unreadable = $"{ManuscriptEditorViewModel.UnreadableAuthorLibrary} {Damaged}";
+        CollectionAssert.AreEqual(
+            new[] { (true, string.Empty), (false, unreadable), (true, string.Empty), (false, ManuscriptEditorViewModel.MissingManuscript) },
+            announced,
+            "IsLoaded was not announced once for each change, or the state's problem was not set when it was.");
+    }
+
     [TestMethod]
     public void ADiscardThatCannotReadTheAuthorFileKeepsTheLibraryAndSaysSo()
     {
