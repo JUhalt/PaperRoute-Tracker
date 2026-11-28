@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Styling;
 
 namespace PaperRoute.Desktop.Tests.Legibility;
 
@@ -64,6 +65,64 @@ internal static class TeethGallery
         card.Bind(Border.BackgroundProperty, card.GetResourceObservable("CardBackgroundBrush"));
         return card;
     });
+
+    // R8's bad input: on the page's own background, two disabled buttons of
+    // the default role, which the off style draws in muted text on the board
+    // colour. The second also carries the class "faded", and a style on the
+    // page sets Opacity 0.3 on a disabled "faded" button, so its text and
+    // fill are drawn faint over the page: the opacity look of a disabled
+    // control, which leaves its tokens as they are.
+    public static SweepSubject FadedOff { get; } = new("Teeth/FadedOff", null, 400, 160, _ =>
+    {
+        var page = new StackPanel { Margin = new Thickness(20), Spacing = 12, Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Top };
+        page.Styles.Add(new Style(selector => selector.OfType<Button>().Class("faded").Class(":disabled"))
+        {
+            Setters = { new Setter(Visual.OpacityProperty, 0.3) },
+        });
+        page.Children.Add(new Button { Name = "Off", Content = "Off", IsEnabled = false });
+        page.Children.Add(new Button { Name = "Faded", Classes = { "faded" }, Content = "Faded", IsEnabled = false });
+        return page;
+    });
+
+    // R9's bad input for edges: on the page's own background, two empty
+    // panels with a 1 px border. The first's border is the card border
+    // (WindowText under a contrast set); the second's is the brush the
+    // window's background is drawn with, so its edge is in the window colour
+    // and cannot be seen.
+    public static SweepSubject WindowEdge { get; } = new("Teeth/WindowEdge", null, 400, 200, _ =>
+    {
+        var page = new StackPanel { Margin = new Thickness(20), Spacing = 12 };
+        page.Children.Add(Outline("Outlined", "CardBorderBrush"));
+        page.Children.Add(Outline("WindowEdge", "BoardBackgroundBrush"));
+        return page;
+    });
+
+    // R9's bad input for focus: two buttons of the default role. The first
+    // shows its focus ring when it takes the keyboard focus; the second has
+    // no focus adorner, and nothing else in its look follows focus, so
+    // taking the focus changes none of its pixels.
+    public static SweepSubject NoFocusVisual { get; } = new("Teeth/NoFocusVisual", null, 400, 160, _ =>
+    {
+        var page = new StackPanel { Margin = new Thickness(20), Spacing = 16, Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Top };
+        page.Children.Add(new Button { Name = "Ringed", Content = "With a ring" });
+        page.Children.Add(new Button { Name = "NoFocusVisual", Content = "No focus visual", FocusAdorner = null });
+        return page;
+    });
+
+    // An empty panel, 160 x 40, with a 1 px border in a token brush, as {DynamicResource}.
+    private static Border Outline(string name, string brush)
+    {
+        var border = new Border
+        {
+            Name = name,
+            Width = 160,
+            Height = 40,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            BorderThickness = new Thickness(1),
+        };
+        border.Bind(Border.BorderBrushProperty, border.GetResourceObservable(brush));
+        return border;
+    }
 
     // A 12 px Regular text in a token ink, as {DynamicResource}.
     private static TextBlock Text(string text, string ink, string? name = null)

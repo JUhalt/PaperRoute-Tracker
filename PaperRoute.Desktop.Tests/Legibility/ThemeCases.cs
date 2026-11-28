@@ -31,6 +31,11 @@ internal sealed record ThemeCase(string Name, ThemeVariant? Variant, SystemContr
     // The four Windows contrast sets.
     public static IReadOnlyList<ThemeCase> ContrastCases { get; } = [Hc1, Hc2, Hcblack, Hcwhite];
 
+    // The off-Windows fallback set (SystemContrastColors.Fallback), which R2
+    // judges by its colours and R9 by its pixels (part 2.4); not one of the
+    // six cases, as it is no Windows contrast theme.
+    public static ThemeCase Fallback { get; } = new("fallback", null, SystemContrastColors.Fallback);
+
     // A contrast case is entered from a Light or a Dark base (question 8: as
     // today's WinForms R2 runs, under SystemColorMode Classic and Dark).
     public static IReadOnlyList<ThemeVariant> ContrastBases { get; } = [ThemeVariant.Light, ThemeVariant.Dark];

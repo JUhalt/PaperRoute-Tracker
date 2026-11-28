@@ -22,15 +22,17 @@ public sealed partial class KnownFailuresTests : StorageCheckedTests
     // listed failures included, and which entries that re-run can judge on
     // this system; an entry for another rule cannot be judged yet. Each
     // rule's pull request adds its name. A re-run is given the test's
-    // context, which R5's sweep takes. A rule is re-run here only when an
-    // entry names it (the teeth below re-run R1, R2, R3 and R5 on every run,
-    // R2 and R3 on spoiled inputs).
+    // context, which the sweeps of R5, R8 and R9 take. A rule is re-run here
+    // only when an entry names it (the teeth below re-run R1, R2, R3, R5, R8
+    // and R9 on every run, R2, R3, R5, R8 and R9 on spoiled inputs too).
     private static readonly Dictionary<string, RuleCheck> s_rulesWithACheck = new(StringComparer.Ordinal)
     {
         ["R1"] = new(_ => R1Tests.Variants.SelectMany(variant => Rules.R1(variant, TokenFile.Colors(variant), TokenPairs.All)).ToList(), _ => true),
         ["R2"] = new(_ => R2Tests.CurrentFindings(R2Tests.Inputs.Real), entry => R2Tests.Judges(R2Tests.RealThemeFolder, entry)),
         ["R3"] = new(_ => R3Tests.CurrentFindings(RouteKinds.All), _ => true),
         ["R5"] = new(context => R5Tests.CurrentFindings(context), _ => true),
+        ["R8"] = new(context => R8Tests.CurrentFindings(context), _ => true),
+        ["R9"] = new(context => R9Tests.CurrentFindings(context), _ => true),
     };
 
     public TestContext TestContext { get; set; } = null!;
@@ -156,11 +158,48 @@ public sealed partial class KnownFailuresTests : StorageCheckedTests
         List<string> r5Problems = Problems([r5Current], 1, r5Findings);
         Assert.IsEmpty(r5Problems, "R5 reports its entry on the light panel:" + Environment.NewLine + string.Join(Environment.NewLine, r5Problems));
 
-        KnownFailure noCheck = Entry("R8\tthe card\tDark\t#1\ta faint disabled caption");
+        // R8 and R9 are judged by re-running their sweeps over the real
+        // surfaces, in all their theme cases. Here the re-runs are given the
+        // teeth gallery's pages (R8_FindsAnOpacityDisabledLook's,
+        // R9_FindsAnEdgeInTheWindowColour's and R9_FindsAControlWithNoFocusVisual's
+        // inputs), so each must report its entry in the theme case that ends
+        // its loop; an entry for the page's sound specimen is stale. A re-run
+        // that dropped a theme case, or R9's edges or focus, would leave its
+        // entry stale here.
+        IReadOnlyList<Finding> r8Findings = R8Tests.CurrentFindings(TestContext, [TeethGallery.FadedOff]);
+        KnownFailure r8Current = Entry("R8\tTeeth/FadedOff: Button#Faded/AccessText \"Faded\"\thcwhite\t#1\ta disabled look made by opacity");
+        List<string> r8Problems = Problems([r8Current], 1, r8Findings);
+        Assert.IsEmpty(r8Problems, "R8 reports its entry on the faded button, in the last theme case:" + Environment.NewLine + string.Join(Environment.NewLine, r8Problems));
+        KnownFailure r8Stale = Entry("R8\tTeeth/FadedOff: Button#Off/AccessText \"Off\"\thcwhite\t#1\ta disabled caption too faint");
         Assert.AreEqual(
-            "Line 10: R8, the card, Dark names a rule with no check in this project yet.",
+            "Line 10: R8, Teeth/FadedOff: Button#Off/AccessText \"Off\", hcwhite is stale: R8 no longer reports it.",
+            string.Join(Environment.NewLine, Problems([r8Stale], 1, r8Findings)),
+            "An R8 entry for the plain disabled button, which passes.");
+
+        IReadOnlyList<Finding> r9Findings = R9Tests.CurrentFindings(TestContext, [TeethGallery.WindowEdge, TeethGallery.NoFocusVisual]);
+        KnownFailure[] r9Current =
+        [
+            Entry("R9\tTeeth/WindowEdge: Border#WindowEdge\tfallback\t#1\tan edge in the window colour"),
+            Entry("R9\tTeeth/NoFocusVisual: Button#NoFocusVisual, focus\tfallback\t#1\ta control with no focus visual"),
+        ];
+        List<string> r9Problems = Problems(r9Current, r9Current.Length, r9Findings);
+        Assert.IsEmpty(r9Problems, "R9 reports its entries on the teeth pages, in the last theme case:" + Environment.NewLine + string.Join(Environment.NewLine, r9Problems));
+        KnownFailure[] r9Stale =
+        [
+            Entry("R9\tTeeth/WindowEdge: Border#Outlined\tfallback\t#1\tan edge too faint"),
+            Entry("R9\tTeeth/NoFocusVisual: Button#Ringed, focus\tfallback\t#1\ta focus ring too faint"),
+        ];
+        Assert.AreEqual(
+            "Line 10: R9, Teeth/WindowEdge: Border#Outlined, fallback is stale: R9 no longer reports it." + Environment.NewLine +
+            "Line 10: R9, Teeth/NoFocusVisual: Button#Ringed, focus, fallback is stale: R9 no longer reports it.",
+            string.Join(Environment.NewLine, Problems(r9Stale, 2, r9Findings)),
+            "R9 entries for the outlined panel and the ringed button, which pass.");
+
+        KnownFailure noCheck = Entry("R6\tthe card\tDark\t#1\ta WinForms-only rule");
+        Assert.AreEqual(
+            "Line 10: R6, the card, Dark names a rule with no check in this project yet.",
             string.Join(Environment.NewLine, Problems([noCheck], 1, CurrentFindings([noCheck], TestContext))),
-            "An entry for a rule not built yet.");
+            "An entry for a rule with no check here.");
 
         Assert.AreEqual(
             $"The list holds {entries.Count} entries; {nameof(KnownFailuresTests)}.{nameof(ExpectedCount)} says {ExpectedCount + 1}.",

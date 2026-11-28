@@ -310,11 +310,15 @@ internal sealed class StyleGallery : UserControl
 
     private static void AddTabs(StackPanel host)
     {
-        host.Children.Add(Caption("CaptionTabs", "TABS (PUBLISHED HOVERED)"));
+        host.Children.Add(Caption("CaptionTabs", "TABS (PUBLISHED HOVERED, THE LAST OFF)"));
         var strip = new TabStrip { Name = "Tabs" };
         strip.Items.Add(Tab("TabPipeline", "Pipeline", "3 of 167"));
         strip.Items.Add(With(Tab("TabPublishedHovered", "Published", "272"), ":pointerover"));
         strip.Items.Add(Tab("TabFileDrawer", "File Drawer", "61"));
+        // Off: the tab family's off look (Tabs.axaml), for R8's off column.
+        TabStripItem off = Tab("TabOff", "Off", "0");
+        off.IsEnabled = false;
+        strip.Items.Add(off);
         strip.SelectedIndex = 0;
         var bar = new Grid();
         bar.Children.Add(new Border { Name = "TabsHairline", Classes = { "hairline" } });
