@@ -25,11 +25,26 @@ public sealed partial class ProgramSourceTests
         string path = Path.Combine(AppContext.BaseDirectory, "Source", "Program.cs");
         Assert.IsTrue(File.Exists(path), $"{path} was not copied to the test output.");
 
-        string first = FirstStatementOfMain(File.ReadAllText(path));
+        string source = File.ReadAllText(path);
+        string first = FirstStatementOfMain(source);
         Assert.AreEqual(VelopackFirst, first,
             $"Main's first statement must be {VelopackFirst} Velopack may have to answer an install, update or uninstall hook, " +
             "or apply an update, and end the process before anything else runs (start-up design 2.4, step 0). " +
             $"The first statement is: {first}");
+
+        // Code that runs before Main's first statement: Program's static
+        // constructor, or a module initializer anywhere in the app.
+        Assert.IsFalse(StaticConstructor().IsMatch(source),
+            "Program.cs declares a static constructor, which runs before Velopack: move its work after VelopackApp.Build().Run().");
+        string[] initializers = [.. Directory.GetFiles(Path.Combine(AppContext.BaseDirectory, "Source"), "*.cs", SearchOption.AllDirectories)
+            .Where(file => File.ReadAllText(file).Contains("ModuleInitializer", StringComparison.Ordinal))
+            .Select(file => Path.GetFileName(file))];
+        Assert.IsEmpty(initializers,
+            $"A module initializer runs before Velopack: {string.Join(", ", initializers)}.");
+
+        // The design's second clause, that nothing stands between this call
+        // and "return StartupSequence.Run(...)", waits for I3, which brings
+        // that call; until then the trial's start-up follows it.
     }
 
     // Main's first statement, with its white space taken out, up to and
@@ -73,4 +88,7 @@ public sealed partial class ProgramSourceTests
 
     [GeneratedRegex(@"\bstatic\s+(?:int|void|async\s+Task(?:<int>)?)\s+Main\s*\(\s*string\s*\[\s*\]\s*\w+\s*\)")]
     private static partial Regex MainDeclaration();
+
+    [GeneratedRegex(@"\bstatic\s+Program\s*\(\s*\)")]
+    private static partial Regex StaticConstructor();
 }
