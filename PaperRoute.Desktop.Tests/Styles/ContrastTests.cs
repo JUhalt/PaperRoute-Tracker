@@ -90,9 +90,10 @@ public sealed class ContrastTests
         {
             var problems = new List<string>();
             Application app = Application.Current!;
-            app.RequestedThemeVariant = ThemeVariant.Light;
+            AppTheme theme = AppTheme.Of(app);
+            theme.Appearance = Appearance.Light;
             var preference = new ContrastPreference(false, SystemContrastColors.Fallback);
-            ContrastTheme.Follow(app, preference);
+            theme.Follow(preference);
 
             using BoardWindow board = BoardWindow.Show(session);
             CardView card = board.Cards("PipelineShelf")[0];
@@ -170,9 +171,10 @@ public sealed class ContrastTests
             {
                 string set = colors.IsDark ? "Night sky" : "Desert";
                 Application app = Application.Current!;
-                app.RequestedThemeVariant = ThemeVariant.Light;
+                AppTheme theme = AppTheme.Of(app);
+                theme.Appearance = Appearance.Light;
                 var preference = new ContrastPreference(false, SystemContrastColors.Fallback);
-                ContrastTheme.Follow(app, preference);
+                theme.Follow(preference);
                 (Window window, List<Border> pills, List<Border> tags, List<Button> chips) = ShowFamilies();
                 try
                 {
@@ -317,7 +319,7 @@ public sealed class ContrastTests
         List<string> failures = Headless.Run(() =>
         {
             var problems = new List<string>();
-            ContrastTheme.Follow(Application.Current!, new ContrastPreference(true, colors));
+            AppTheme.Of(Application.Current!).Follow(new ContrastPreference(true, colors));
             var combo = new ComboBox { Width = 200 };
             combo.Items.Add("All stages");
             combo.Items.Add("Draft");
@@ -393,7 +395,7 @@ public sealed class ContrastTests
     {
         string path = Headless.Run(() =>
         {
-            ContrastTheme.Follow(Application.Current!, new ContrastPreference(true, colors));
+            AppTheme.Of(Application.Current!).Follow(new ContrastPreference(true, colors));
             var gallery = new StyleGallery();
             var window = new Window { Width = 1280, Height = 900, Content = gallery };
             window.Bind(Window.BackgroundProperty, window.GetResourceObservable("BoardBackgroundBrush"));
@@ -426,7 +428,7 @@ public sealed class ContrastTests
 
         string path = Headless.Run(() =>
         {
-            ContrastTheme.Follow(Application.Current!, new ContrastPreference(true, colors));
+            AppTheme.Of(Application.Current!).Follow(new ContrastPreference(true, colors));
             using BoardWindow board = BoardWindow.Show(session);
             return Pictures.Save(board.Window, name, TestContext);
         });
@@ -440,7 +442,7 @@ public sealed class ContrastTests
         var session = new MemorySession(Showcase(), Papers.Today);
         string path = Headless.Run(() =>
         {
-            ContrastTheme.Follow(Application.Current!, new ContrastPreference(true, colors));
+            AppTheme.Of(Application.Current!).Follow(new ContrastPreference(true, colors));
             using BoardWindow board = BoardWindow.Show(session, height: 1000);
             Assert.IsTrue(board.Shelf("PipelineShelf").FocusFirstCard(), "The shelf shows a card.");
             Dispatcher.UIThread.RunJobs();
