@@ -321,7 +321,12 @@ public sealed class CandidateTests : Board.StorageCheckedTests
         Manuscript written = Ready(copy.BuildCandidate(SaveTime));
         written.ManuscriptUrl = "https://example.org/as-the-store-left-it";
         ManuscriptCommit.CopyInto(written, saved);
-        copy.AcceptSaved(written);
+        // The frame calls it inside the save's Freeze (2.5 step 9), so a
+        // frozen copy must not refuse it.
+        using (copy.Freeze())
+        {
+            copy.AcceptSaved(written);
+        }
 
         Assert.AreNotSame(written, copy.Working, "The working copy is the written record itself.");
         Assert.AreEqual(JsonSerializer.Serialize(written), copy.Snapshot(), "The working copy is not the record as written.");
