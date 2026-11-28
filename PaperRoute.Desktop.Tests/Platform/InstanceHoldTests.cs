@@ -69,13 +69,42 @@ public sealed class InstanceHoldTests
         }
     }
 
+    // The contract the start-up tests rely on from the fake as much as from
+    // the real forms: one hold per data root, a second Listen refused, and a
+    // release that may be called twice and frees the library.
+    [TestMethod]
+    [DataRow("this system's form")]
+    [DataRow("the fake")]
+    public void OneHoldPerLibraryReleasedOnceOrTwice(string which)
+    {
+        string root = NewRoot();
+        ISingleInstance form = FormFor(which);
+
+        IInstanceHold? hold = form.TryHold(root);
+        Assert.IsNotNull(hold, $"The library at a new data root could not be held ({which}).");
+        try
+        {
+            Assert.IsNull(form.TryHold(root), $"A second hold on a library already held was granted ({which}).");
+            hold.Listen(() => { });
+            Assert.ThrowsExactly<InvalidOperationException>(() => hold.Listen(() => { }), $"A second Listen on one hold was accepted ({which}).");
+        }
+        finally
+        {
+            hold.Dispose();
+        }
+
+        hold.Dispose();
+        using IInstanceHold? again = form.TryHold(root);
+        Assert.IsNotNull(again, $"After the hold was released twice, the library could not be held again ({which}).");
+    }
+
     [TestMethod]
     [DataRow("this system's form")]
     [DataRow("the fake")]
     public void AComeForwardBeforeListenIsDeliveredOnce(string which)
     {
         string root = NewRoot();
-        ISingleInstance form = which == "the fake" ? new FakeSingleInstance() : ChosenForm();
+        ISingleInstance form = FormFor(which);
         int delivered = 0;
         using var arrived = new SemaphoreSlim(0);
 
@@ -167,6 +196,9 @@ public sealed class InstanceHoldTests
 
     internal static string NewRoot() =>
         Path.Combine(AssemblySetup.StorageRoot, "hold-" + Guid.NewGuid().ToString("N")[..8], "PaperRoute");
+
+    private static ISingleInstance FormFor(string which) =>
+        which == "the fake" ? new FakeSingleInstance() : ChosenForm();
 
     // This system's form, checked to be the one the design gives it.
     internal static ISingleInstance ChosenForm()
