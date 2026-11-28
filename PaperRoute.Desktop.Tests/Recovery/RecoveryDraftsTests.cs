@@ -146,6 +146,81 @@ public sealed partial class RecoveryDraftsTests
         Assert.AreEqual("Old X", next.PendingDraftFor(s_x)?.Manuscript.Title, "Once the newer was opened, the older should be pending.");
     }
 
+    // Rule 2: a page's draft is never refused. When the main slot holds
+    // another manuscript's unanswered draft and the manuscript's waiting slot
+    // is taken too (by a draft whose Discard was undone, or by a file that
+    // cannot be read), the draft goes to the manuscript's next waiting slot,
+    // nothing is written over, and after a crash the newest is offered first.
+    [TestMethod]
+    [DataRow(false, DisplayName = "after a Discard is undone")]
+    [DataRow(true, DisplayName = "beside an unreadable waiting slot")]
+    public void ADraftMeetingTwoTakenSlotsGoesToTheNextWaitingSlot(bool unreadable)
+    {
+        Keep(_data, s_y, "Paper Y", s_first);
+        if (unreadable)
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(WaitingFile(s_x))!);
+            File.WriteAllText(WaitingFile(s_x), "{ not a draft");
+        }
+        else
+        {
+            Keep(WaitingFolder(s_x), s_x, "Old X", s_second);
+        }
+
+        byte[] mainBefore = File.ReadAllBytes(MainFile);
+        byte[] waitingBefore = File.ReadAllBytes(WaitingFile(s_x));
+        RecoveryDrafts drafts = Session(s_x, s_y);
+        if (!unreadable)
+        {
+            // The person discards X's offer, opens X (nothing is pending, so
+            // nothing is adopted), edits, and presses Undo on the notice.
+            Assert.IsTrue(drafts.Discard(s_x));
+            Assert.IsNull(drafts.PendingDraftFor(s_x), "A discarded draft is still pending.");
+            Assert.IsTrue(drafts.Undo(s_x), "Undo found no discarded draft.");
+        }
+
+        Assert.IsTrue(drafts.WriteFrom(new TestDraftPage(s_x, "Current X", s_third), RecoveryReasons.Shutdown),
+            "The page's draft of X was refused, so its unsaved work was lost.");
+
+        CollectionAssert.AreEqual(mainBefore, File.ReadAllBytes(MainFile), "Y's unanswered draft in the main slot was written over.");
+        CollectionAssert.AreEqual(waitingBefore, File.ReadAllBytes(WaitingFile(s_x)), "X's taken waiting slot was written over.");
+        Assert.AreEqual("Current X", new RecoveryDraftStore(WaitingFolder(s_x, 2)).Read()?.Manuscript.Title,
+            "The draft of X is not in X's next waiting slot, data\\recovery\\waiting-<id>-2\\recovery\\manuscript-page-draft.json.");
+        RecoveryDrafts next = Session(s_x, s_y);
+        Assert.AreEqual("Current X", next.PendingDraftFor(s_x)?.Manuscript.Title, "After a crash the newest draft of X is not the pending one.");
+        CollectionAssert.AreEqual(new[] { "Current X", "Paper Y" }, next.Offers.Select(offer => offer.Title).ToArray(),
+            "After a crash each manuscript's newest draft should be offered, the newest first.");
+        next.Adopt(s_x);
+        Assert.AreEqual(unreadable ? null : "Old X", next.PendingDraftFor(s_x)?.Manuscript.Title,
+            "Once the newest was opened, the older draft of X should be pending, and only a readable one.");
+    }
+
+    // Rules 2 and 8 (S14): with the newer draft of a manuscript opened and the
+    // older discarded, the page's next draft replaces the opened one, wherever
+    // the two are, and the discarded one keeps its file, so Undo still works.
+    [TestMethod]
+    [DataRow(true, DisplayName = "the opened one in the main slot")]
+    [DataRow(false, DisplayName = "the opened one in the waiting slot")]
+    public void AWriteReplacesTheOpenedDraftAndKeepsTheDiscardedOne(bool newerInMain)
+    {
+        Keep(_data, s_x, "Main copy", newerInMain ? s_second : s_first);
+        Keep(WaitingFolder(s_x), s_x, "Waiting copy", newerInMain ? s_first : s_second);
+        string older = newerInMain ? "Waiting copy" : "Main copy";
+        string olderFile = newerInMain ? WaitingFile(s_x) : MainFile;
+        string newerFolder = newerInMain ? _data : WaitingFolder(s_x);
+        byte[] olderBefore = File.ReadAllBytes(olderFile);
+        RecoveryDrafts drafts = Session(s_x);
+        drafts.Adopt(s_x);
+        Assert.IsTrue(drafts.Discard(s_x), "Discard found no older draft.");
+
+        Assert.IsTrue(drafts.WriteFrom(new TestDraftPage(s_x, "Current X", s_third), RecoveryReasons.Shutdown), "The draft of X was not written.");
+
+        CollectionAssert.AreEqual(olderBefore, File.ReadAllBytes(olderFile), "The page's draft was written over the discarded one.");
+        Assert.AreEqual("Current X", new RecoveryDraftStore(newerFolder).Read()?.Manuscript.Title, "The page's draft did not replace the opened one.");
+        Assert.IsTrue(drafts.Undo(s_x), "Undo no longer finds the discarded draft.");
+        Assert.AreEqual(older, drafts.PendingDraftFor(s_x)?.Manuscript.Title, "After Undo the older draft is not pending again.");
+    }
+
     // Rule 2: drafts left in waiting slots by two sessions that crashed are
     // offered with the main slot's, the newest first.
     [TestMethod]
@@ -535,9 +610,12 @@ public sealed partial class RecoveryDraftsTests
     private static void Keep(string folder, Guid id, string title, DateTime writtenAtUtc) =>
         new RecoveryDraftStore(folder).Write(TestDraftPage.Draft(id, title, writtenAtUtc));
 
-    private string WaitingFolder(Guid id) => Path.Combine(_data, "recovery", RecoveryDrafts.WaitingSlotPrefix + id.ToString("N"));
+    // A manuscript's n-th waiting slot: waiting-<id>, then waiting-<id>-2 and
+    // so on.
+    private string WaitingFolder(Guid id, int n = 1) =>
+        Path.Combine(_data, "recovery", RecoveryDrafts.WaitingSlotPrefix + id.ToString("N") + (n == 1 ? string.Empty : "-" + n.ToString(CultureInfo.InvariantCulture)));
 
-    private string WaitingFile(Guid id) => Path.Combine(WaitingFolder(id), "recovery", RecoveryDraftStore.FileName);
+    private string WaitingFile(Guid id, int n = 1) => Path.Combine(WaitingFolder(id, n), "recovery", RecoveryDraftStore.FileName);
 
     private string[] WaitingFolders()
     {

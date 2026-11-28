@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using ManuscriptPipeline.Services;
 
 namespace PaperRoute.ViewModels.Recovery;
@@ -11,18 +12,21 @@ namespace PaperRoute.ViewModels.Recovery;
 // The slots. The main slot is the core's own file,
 // data\recovery\manuscript-page-draft.json, the one file PaperRoute 1.0.x
 // reads and writes. A waiting slot is the same file under
-// data\recovery\waiting-<id>\, one per manuscript, used when the main slot
-// already holds a draft that is not this session's: so a new draft never
-// replaces one nobody has answered. At start every slot is read; 1.0.x sees
-// only the main slot.
+// data\recovery\waiting-<id>\ (then waiting-<id>-2\, waiting-<id>-3\ and so
+// on when that one is taken too), used when the main slot already holds a
+// draft that is not this session's: so a new draft never replaces one nobody
+// has answered, and a page's draft is never refused. At start every slot is
+// read; 1.0.x sees only the main slot.
 //
 // The rules (each tested by RecoveryDraftsTests):
 // 1. Nothing is offered until a page can open a draft (OpenWith), and
 //    nothing is deleted that this session does not own.
-// 2. A write goes to this session's own slot for that manuscript, else to the
-//    main slot when it is free or holds this session's own draft, else to the
-//    manuscript's waiting slot. A slot holding a draft nobody answered, or a
-//    file that cannot be read, is never written over.
+// 2. A write goes to this session's opened or written draft of that
+//    manuscript, else to the main slot when it is empty or holds this
+//    session's opened or written draft, else to the manuscript's first free
+//    waiting slot. A draft nobody answered (an earlier one of the same
+//    manuscript included), a discarded one (Undo keeps it until close) and a
+//    file that cannot be read are never written over.
 // 3. Adopting a draft (the page opened it) keeps its file until the page
 //    saves or discards.
 // 4. Only a draft this session wrote, adopted or discarded is deleted here.
@@ -38,7 +42,8 @@ namespace PaperRoute.ViewModels.Recovery;
 public sealed class RecoveryDrafts : IRecoveryDrafts
 {
     // A waiting slot's folder under data\recovery: this, then the
-    // manuscript's id as 32 hexadecimal digits.
+    // manuscript's id as 32 hexadecimal digits, then for the second and later
+    // slots of one manuscript a hyphen and the slot's number (2, 3 and so on).
     public const string WaitingSlotPrefix = "waiting-";
 
     private readonly string _dataFolder;
@@ -262,12 +267,7 @@ public sealed class RecoveryDrafts : IRecoveryDrafts
         {
             try
             {
-                if (SlotFor(draft.ManuscriptId) is not { } folder)
-                {
-                    Log("every slot this draft could take holds a draft nobody has answered; nothing was written over.");
-                    return false;
-                }
-
+                string folder = SlotFor(draft.ManuscriptId);
                 WriteSlot(folder, draft);
                 _kept.RemoveAll(kept => kept.IsIn(folder));
                 _kept.Add(new Kept(folder, draft, Holder.Written));
@@ -311,7 +311,7 @@ public sealed class RecoveryDrafts : IRecoveryDrafts
     // discards; a discarded one stays for Undo until close.
     private void DeleteLive(Guid manuscriptId)
     {
-        foreach (Kept kept in _kept.Where(kept => kept.Id == manuscriptId && kept.Holder is Holder.Written or Holder.Adopted).ToList())
+        foreach (Kept kept in _kept.Where(kept => kept.Id == manuscriptId && kept.IsLive).ToList())
         {
             if (TryDelete(kept))
             {
@@ -320,25 +320,63 @@ public sealed class RecoveryDrafts : IRecoveryDrafts
         }
     }
 
-    // Rule 2: the slot a new draft of this manuscript goes to, or null when
-    // each would write over a draft that is not this session's.
-    private string? SlotFor(Guid manuscriptId)
+    // Rule 2: the slot a new draft of this manuscript goes to. This session's
+    // opened or written draft of it is replaced (never a discarded one, even
+    // when it comes first, so Undo keeps its file); otherwise the first free
+    // slot of the main slot and the manuscript's waiting slots. There is
+    // always one, since a waiting slot with no file is free: a page's draft
+    // is never refused for want of a slot.
+    private string SlotFor(Guid manuscriptId)
     {
-        if (_kept.FirstOrDefault(kept => kept.Id == manuscriptId && kept.IsOwn) is { } own)
+        if (_kept.FirstOrDefault(kept => kept.Id == manuscriptId && kept.IsLive) is { } live)
         {
-            return own.Folder;
+            return live.Folder;
         }
 
-        string waiting = Path.Combine(_dataFolder, "recovery", WaitingSlotPrefix + manuscriptId.ToString("N"));
-        return IsFree(_dataFolder) ? _dataFolder : IsFree(waiting) ? waiting : null;
+        if (IsFree(_dataFolder))
+        {
+            return _dataFolder;
+        }
+
+        for (int n = 1; ; n++)
+        {
+            string waiting = Path.Combine(_dataFolder, "recovery", WaitingSlotName(manuscriptId, n));
+            if (IsFree(waiting))
+            {
+                return waiting;
+            }
+        }
     }
 
-    // No file, or this session's own draft that is still live (a discarded
-    // one is written over only by its own manuscript, above, so Undo keeps
-    // its file).
+    // No file, or this session's opened or written draft. A draft nobody
+    // answered, a discarded one and a file that cannot be read are not free.
     private bool IsFree(string folder) =>
         !File.Exists(SlotFile(folder)) ||
-        _kept.Any(kept => kept.IsIn(folder) && kept.Holder is Holder.Written or Holder.Adopted);
+        _kept.Any(kept => kept.IsIn(folder) && kept.IsLive);
+
+    // A manuscript's n-th waiting slot's folder name: waiting-<id> for the
+    // first, waiting-<id>-<n> after it.
+    private static string WaitingSlotName(Guid manuscriptId, int n) =>
+        WaitingSlotPrefix + manuscriptId.ToString("N") + (n == 1 ? string.Empty : "-" + n.ToString(CultureInfo.InvariantCulture));
+
+    // A folder name WaitingSlotName gives, written exactly as it writes it.
+    private static bool IsWaitingSlotName(string name)
+    {
+        string rest = name[WaitingSlotPrefix.Length..];
+        if (rest.Length < 32 || !Guid.TryParseExact(rest[..32], "N", out Guid id))
+        {
+            return false;
+        }
+
+        int n = 1;
+        if (rest.Length > 32 &&
+            (rest[32] != '-' || !int.TryParse(rest[33..], NumberStyles.None, CultureInfo.InvariantCulture, out n) || n < 2))
+        {
+            return false;
+        }
+
+        return name == WaitingSlotName(id, n);
+    }
 
     // The main slot, then every waiting slot, in ordinal order.
     private IEnumerable<string> SlotFolders()
@@ -350,8 +388,7 @@ public sealed class RecoveryDrafts : IRecoveryDrafts
             if (Directory.Exists(recovery))
             {
                 folders.AddRange(Directory.GetDirectories(recovery, WaitingSlotPrefix + "*")
-                    .Where(path => Guid.TryParseExact(Path.GetFileName(path)[WaitingSlotPrefix.Length..], "N", out Guid id) &&
-                        Path.GetFileName(path) == WaitingSlotPrefix + id.ToString("N"))
+                    .Where(path => IsWaitingSlotName(Path.GetFileName(path)))
                     .Order(StringComparer.Ordinal));
             }
         }
@@ -408,6 +445,9 @@ public sealed class RecoveryDrafts : IRecoveryDrafts
         public Guid Id => Draft.ManuscriptId;
 
         public bool IsOwn => Holder != Holder.Earlier;
+
+        // Opened or written in this session: what the page holds.
+        public bool IsLive => Holder is Holder.Written or Holder.Adopted;
 
         public bool IsIn(string slot) => string.Equals(Folder, slot, StringComparison.Ordinal);
     }
