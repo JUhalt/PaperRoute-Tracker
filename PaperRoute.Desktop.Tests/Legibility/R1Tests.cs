@@ -10,7 +10,7 @@ namespace PaperRoute.Desktop.Tests.Legibility;
 // here; R1_FailsADeliberatelyLowContrastToken (RuleTeethTests.cs) gives R1
 // its teeth through the same reader and the same rule. A failure listed in
 // KnownFailures.tsv does not fail these runs (KnownFailuresAreCurrent). Each
-// run writes every ratio R1 measures to legibility-R1-<case>.txt beside the
+// run writes every ratio R1 measures to legibility-r1-<case>.txt beside the
 // pictures, passing pairs included, so a reviewer reads the margins.
 // Limits of headless: HeadlessLimits.md
 [TestClass]
@@ -35,7 +35,7 @@ public sealed partial class R1Tests
         ["SubtleBorderBrush"] = "the 1 px line inside a card (Card.axaml, Border.divider)",
     };
 
-    // The columns of legibility-R1-<case>.txt.
+    // The columns of legibility-r1-<case>.txt.
     private static readonly string[] s_ratioColumns = ["theme case", "pair", "ratio", "where"];
 
     public TestContext TestContext { get; set; } = null!;
@@ -81,7 +81,7 @@ public sealed partial class R1Tests
         Assert.IsEmpty(findings, "Pairs under 4.5:1:" + Environment.NewLine + string.Join(Environment.NewLine, findings));
     }
 
-    // The numbers file (the harness design, part 2.1): legibility-R1-<case>.txt
+    // The numbers file (the harness design, part 2.1): legibility-r1-<case>.txt
     // holds every pair R1 judges in that case, one line each, with its ratio
     // in the invariant culture (here written under a culture with a decimal
     // comma), from the thinnest margin up; a second write replaces the first.
@@ -99,7 +99,7 @@ public sealed partial class R1Tests
             {
                 WriteRatios(folder, variant);
                 string path = WriteRatios(folder, variant);
-                Assert.AreEqual($"legibility-R1-{variant}.txt", Path.GetFileName(path));
+                Assert.AreEqual($"legibility-r1-{variant.ToLowerInvariant()}.txt", Path.GetFileName(path), "One lower-case name for every rule and theme case.");
                 lines[variant] = File.ReadAllLines(path);
             }
         }
@@ -107,6 +107,9 @@ public sealed partial class R1Tests
         {
             CultureInfo.CurrentCulture = before;
         }
+
+        Assert.AreEqual("legibility-r2-hcwhite.txt", Measurements.FileName("R2", "hcwhite"), "R2's files take the same form.");
+        Assert.AreEqual("legibility-r3-light.txt", Measurements.FileName("R3", "Light"), "R3's files take the same form.");
 
         foreach ((string variant, string[] file) in lines)
         {
@@ -124,7 +127,7 @@ public sealed partial class R1Tests
     }
 
     // Writes every ratio R1 measures in one theme case, over all its pairs and
-    // sorted from the thinnest margin up, to legibility-R1-<case>.txt in the
+    // sorted from the thinnest margin up, to legibility-r1-<case>.txt in the
     // folder, and returns the file's path. Both runs write the whole file, the
     // same each time, so either run alone leaves it complete.
     private static string WriteRatios(string folder, string variant) =>

@@ -7,11 +7,13 @@ namespace PaperRoute.Desktop.Tests.Legibility;
 // it), so a reviewer reads numbers, not pictures (the harness design, part
 // 2.1). The first line names the columns; then one line per measurement,
 // its cells separated by tabs, numbers in the invariant culture. A run
-// writes its file anew, so a second run never adds to the first.
+// writes its file anew, so a second run never adds to the first. The name is
+// in lower case for every rule and theme case (legibility-r1-light.txt,
+// legibility-r2-hc1.txt), as the pictures beside it are named.
 // Limits of headless: HeadlessLimits.md
 internal static class Measurements
 {
-    public static string FileName(string rule, string themeCase) => $"legibility-{rule}-{themeCase}.txt";
+    public static string FileName(string rule, string themeCase) => $"legibility-{rule}-{themeCase}.txt".ToLowerInvariant();
 
     // Writes the file into the folder (Pictures.Directory() for a rule's run)
     // and returns its full path.

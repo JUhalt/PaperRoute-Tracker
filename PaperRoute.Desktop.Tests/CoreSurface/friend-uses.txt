@@ -1,0 +1,29 @@
+# Every Friend item of PaperRoute.Core that the interface's compiled code (PaperRoute.ViewModels.dll, PaperRoute.Desktop.dll) references.
+# Checked by PaperRoute.Desktop.Tests\CoreSurface\FriendUseTests.cs, from the compiled references, not from names in the source:
+# a Friend reference not listed here fails, and so does a line nothing references.
+# Friend here means needing the core's friend grant (InternalsVisibleTo): a type that is not public, or a member of one, or a member
+# declared Friend, Protected Friend or Private Protected.
+#
+# One line per item, sorted (ordinal), "<documentation ID>;<declaration>;<fate> (#<issue>)":
+#   declaration   PaperRoute.Core/<path>.vb:<line>, the line that declares the item. For an item declared Friend, Protected Friend
+#                 or Private Protected, that line holds the word and the item's name (an accessor's may be its own Friend Get or
+#                 Friend Set line). For a member that is Friend only because its type is not public, it holds the member's name
+#                 (for a constructor the compiler adds, the line that declares its type).
+#   fate          make Public: the issue makes it Public in the core.
+#                 behind the session: the issue moves the call behind a Public member, and the item stays Friend.
+#                 trial-only: goes with --<mode>: the call belongs to a trial mode, and goes when the issue removes that mode.
+# Constants are not seen: the compiler copies a Const's value (an enum member's too) into the calling code, so a Friend Const the
+# interface uses leaves no reference here.
+# Nothing is made Public by this list. Each issue named changes its items; #436 (build 21, parity sign-off) empties the list before
+# v1.1 ships and adds the test NoFriendUseIsLeftForRelease, together with removing the core's InternalsVisibleTo grants to
+# PaperRoute.ViewModels and the app (or a source check for Friend Const names), so the compiler catches the constants.
+F:ManuscriptPipeline.Services.StorageEnvironment.DefaultRootUses;PaperRoute.Core/Services/StorageEnvironment.vb:25;trial-only: goes with --self-check (#421)
+M:ManuscriptPipeline.Services.AppSettingsService.#ctor(System.String);PaperRoute.Core/Services/AppSettingsService.vb:29;make Public (#421)
+M:ManuscriptPipeline.Services.AuthorLibraryRepository.#ctor(System.String,System.Func{System.String,System.IO.Stream});PaperRoute.Core/Services/AuthorLibraryRepository.vb:33;make Public (#421)
+M:ManuscriptPipeline.Services.ExampleLibraryService.EndSession;PaperRoute.Core/Services/ExampleLibraryService.vb:103;make Public (#421)
+M:ManuscriptPipeline.Services.ExampleLibraryService.Seed(System.DateTime,ManuscriptPipeline.Models.OnlineServicesSettings);PaperRoute.Core/Services/ExampleLibraryService.vb:89;make Public (#421)
+M:ManuscriptPipeline.Services.ExampleLibraryService.StartSession;PaperRoute.Core/Services/ExampleLibraryService.vb:80;make Public (#421)
+M:ManuscriptPipeline.Services.ManuscriptRepository.#ctor(System.String,System.String,ManuscriptPipeline.Services.ManagedLibraryService,System.Func{System.String,System.IO.Stream});PaperRoute.Core/Services/ManuscriptRepository.vb:52;make Public (#421)
+M:ManuscriptPipeline.Services.StorageEnvironment.ConfigureIsolatedSessionRoot(System.String);PaperRoute.Core/Services/StorageEnvironment.vb:77;trial-only: goes with --snapshot-from (#421)
+M:ManuscriptPipeline.Services.StorageEnvironment.get_IsIsolatedSession;PaperRoute.Core/Services/StorageEnvironment.vb:111;trial-only: goes with --self-check (#421)
+T:ManuscriptPipeline.Services.StorageFileInUseException;PaperRoute.Core/Services/StorageFile.vb:244;make Public (#421)

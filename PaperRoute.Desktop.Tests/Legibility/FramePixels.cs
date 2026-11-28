@@ -191,11 +191,12 @@ internal sealed class FramePixels
     // Two swatches share a pattern, whatever their colours, when nearly the
     // same positions are in each one's pattern (under 10 % differ), or nearly
     // the same positions are not (over 90 % differ).
-    public static bool SamePattern(FramePixels one, PixelRect oneArea, FramePixels other, PixelRect otherArea)
-    {
-        double differing = PatternDifference(one, oneArea, other, otherArea);
-        return differing < Thresholds.R3SamePatternUnder || differing > Thresholds.R3SamePatternOver;
-    }
+    public static bool SamePattern(FramePixels one, PixelRect oneArea, FramePixels other, PixelRect otherArea) =>
+        SharesPattern(PatternDifference(one, oneArea, other, otherArea));
+
+    // The same judgement from a share PatternDifference measured.
+    public static bool SharesPattern(double differing) =>
+        differing < Thresholds.R3SamePatternUnder || differing > Thresholds.R3SamePatternOver;
 
     // How far a drawn shape's edge stands out from the surface
     // (DeadlineListTests.vb EdgeContrast): at the middle of each side, the

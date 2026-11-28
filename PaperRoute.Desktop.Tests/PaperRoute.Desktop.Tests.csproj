@@ -31,6 +31,8 @@
     <None Include="..\PaperRoute.TestFixtures\SortOrders\board-sort-orders-500.json" Link="SortOrders\board-sort-orders-500.json" CopyToOutputDirectory="PreserveNewest" />
     <!-- Every core member the trial's compiled code may reference, each with its reason (lock 3 from the other side, CoreSurfaceTests). -->
     <None Update="CoreSurface\allowed-core-references.txt" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Every Friend core item the interface's compiled code references, with its declaration and fate (FriendUseTests). -->
+    <None Update="CoreSurface\friend-uses.txt" CopyToOutputDirectory="PreserveNewest" />
     <!-- The accessibility trees and Tab orders the Board must keep (AccessibilityTreeTests). -->
     <None Update="Expected\*.txt" CopyToOutputDirectory="PreserveNewest" />
     <!-- The target catalog and the parity map as data (ParityMapTests); PaperRoute.Tests links parity-map.tsv for its key lock. -->
@@ -43,6 +45,8 @@
     <None Include="..\docs\USER_GUIDE.md" Link="Input\USER_GUIDE.md" CopyToOutputDirectory="PreserveNewest" />
     <!-- The app's .axaml files as text, for the token tests (R1, its completeness guard, T3) to read the values and uses themselves. Content, not None: Avalonia's build removes every None item named *.axaml. -->
     <Content Include="..\PaperRoute.Desktop\**\*.axaml" Exclude="..\PaperRoute.Desktop\bin\**;..\PaperRoute.Desktop\obj\**" LinkBase="Axaml" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The app's .cs files as text, for the theme-owner scan (AppThemeTests: only AppTheme sets the theme variant or reads the system's contrast state). Content, so they are copied, not compiled. -->
+    <Content Include="..\PaperRoute.Desktop\**\*.cs" Exclude="..\PaperRoute.Desktop\bin\**;..\PaperRoute.Desktop\obj\**" LinkBase="Source" CopyToOutputDirectory="PreserveNewest" />
     <!-- The view models' C# sources as text, for OnlyTheSessionDisablesTheSaveBan to find every #pragma that lifts the save ban (RS0030). Content, so nothing here is compiled. -->
     <Content Include="..\PaperRoute.ViewModels\**\*.cs" Exclude="..\PaperRoute.ViewModels\bin\**;..\PaperRoute.ViewModels\obj\**" LinkBase="ViewModelSources" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
