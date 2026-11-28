@@ -4,6 +4,7 @@
 # number, when the number of entries differs from the constant in KnownFailuresTests.cs, so growth shows in that file's
 # source as well as here, or when an entry names a rule that has no check in this project yet. This is not R5's allow-list, which will hold looks that are accepted, not faults.
 #
-# One line per failure, five cells separated by tabs, none empty: rule (R1 today), subject (for R1 "<ink> on <surface>",
-# token keys), theme case (Light, Dark), issue ("#" and its number), and one line of why.
+# One line per failure, five cells separated by tabs, none empty: rule (R1 or R5 today), subject (for R1 "<ink> on <surface>",
+# token keys; for R5 "<surface>: <part>", as legibility-R5-Dark.txt names it), theme case (Light, Dark), issue ("#" and its
+# number), and one line of why.
 rule	subject	theme case	issue	why

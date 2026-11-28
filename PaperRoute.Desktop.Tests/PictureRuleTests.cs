@@ -66,8 +66,10 @@ public sealed class PictureRuleTests : StorageCheckedTests
         }
     }
 
+    // Was P_R5_NoLightPatchesOnTheDarkBoard (d1 6.2, the trial report's
+    // name); kept beside R5's sweep (Legibility/R5Tests.cs) as one subject.
     [TestMethod]
-    public void P_R5_NoLightPatchesOnTheDarkBoard()
+    public void R5_NoLightPatchesOnTheDarkBoard()
     {
         using DiskLibrarySession session = OpenExample();
         (string path, List<string> patches) = Headless.Run(() =>

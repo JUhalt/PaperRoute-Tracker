@@ -13,9 +13,11 @@ public sealed partial class KnownFailuresTests
     // How many entries KnownFailures.tsv holds. Change it with the list.
     private const int ExpectedCount = 0;
 
+    public TestContext TestContext { get; set; } = null!;
+
     // The rules that have a check in this project; an entry for another rule
     // cannot be judged yet. Each rule's pull request adds its name.
-    private static readonly string[] s_rulesWithACheck = ["R1"];
+    private static readonly string[] s_rulesWithACheck = ["R1", "R5"];
 
     // The list, read strictly; then the same check on lists spoiled one way
     // each, which must name exactly that fault.
@@ -23,7 +25,7 @@ public sealed partial class KnownFailuresTests
     public void KnownFailuresAreCurrent()
     {
         IReadOnlyList<KnownFailure> entries = KnownFailures.Load();
-        IReadOnlyList<Finding> findings = CurrentFindings();
+        IReadOnlyList<Finding> findings = CurrentFindings(TestContext);
         List<string> problems = Problems(entries, ExpectedCount, findings);
         Assert.IsEmpty(problems, "The known-failures list:" + Environment.NewLine + string.Join(Environment.NewLine, problems));
 
@@ -49,9 +51,9 @@ public sealed partial class KnownFailuresTests
             string.Join(Environment.NewLine, Problems([listed], 1, findings)),
             "An entry the real token file no longer fails.");
 
-        KnownFailure noCheck = Entry("R5\tthe card\tDark\t#1\ta light patch");
+        KnownFailure noCheck = Entry("R8\tthe card\tDark\t#1\ta faint disabled caption");
         Assert.AreEqual(
-            "Line 10: R5, the card, Dark names a rule with no check in this project yet.",
+            "Line 10: R8, the card, Dark names a rule with no check in this project yet.",
             string.Join(Environment.NewLine, Problems([noCheck], 1, findings)),
             "An entry for a rule not built yet.");
 
@@ -94,8 +96,8 @@ public sealed partial class KnownFailuresTests
     }
 
     // What the rules with a check report today, listed failures included.
-    private static IReadOnlyList<Finding> CurrentFindings() =>
-        R1Tests.Variants.SelectMany(variant => Rules.R1(variant, TokenFile.Colors(variant), TokenPairs.All)).ToList();
+    private static IReadOnlyList<Finding> CurrentFindings(TestContext context) =>
+        [.. R1Tests.Variants.SelectMany(variant => Rules.R1(variant, TokenFile.Colors(variant), TokenPairs.All)), .. R5Tests.CurrentFindings(context)];
 
     // One data line, read as the tenth line of a file with the real header.
     private static KnownFailure Entry(string line)
