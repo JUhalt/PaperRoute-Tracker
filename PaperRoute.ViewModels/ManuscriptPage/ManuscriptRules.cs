@@ -1,10 +1,12 @@
 namespace PaperRoute.ViewModels.ManuscriptPage;
 
 // Save's rules, ported from today's edit window (EditManuscriptForm's
-// CommitChanges, :4535-4687, and what it calls). Each is pure: it reads what
-// it is given and changes nothing, so WorkingCopy.BuildCandidate applies them
-// to a fresh clone and the working copy itself never changes (build 9's
-// design, 2.2 and 2.5).
+// CommitChanges, :4535-4687, and what it calls). Each changes nothing it is
+// given, so WorkingCopy.BuildCandidate applies them to a fresh clone and the
+// working copy itself never changes (build 9's design, 2.2 and 2.5). The two
+// event rules make a new event, dated by the now they are given and stamped
+// as created by the core's clock (RecordedAtUtc from CoreClock.UtcNow, through
+// ChronologyProvenanceService.StampCreated, as today).
 internal static class ManuscriptRules
 {
     // A blank title stops Save (EditManuscriptForm.vb:4537-4553). Today a
