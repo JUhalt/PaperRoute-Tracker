@@ -31,6 +31,8 @@
     <None Include="..\PaperRoute.TestFixtures\SortOrders\board-sort-orders-500.json" Link="SortOrders\board-sort-orders-500.json" CopyToOutputDirectory="PreserveNewest" />
     <!-- Every core member the trial's compiled code may reference, each with its reason (lock 3 from the other side, CoreSurfaceTests). -->
     <None Update="CoreSurface\allowed-core-references.txt" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Every Friend core item the interface's compiled code references, with its declaration and fate (FriendUseTests). -->
+    <None Update="CoreSurface\friend-uses.txt" CopyToOutputDirectory="PreserveNewest" />
     <!-- The accessibility trees and Tab orders the Board must keep (AccessibilityTreeTests). -->
     <None Update="Expected\*.txt" CopyToOutputDirectory="PreserveNewest" />
     <!-- The target catalog and the parity map as data (ParityMapTests); PaperRoute.Tests links parity-map.tsv for its key lock. -->
