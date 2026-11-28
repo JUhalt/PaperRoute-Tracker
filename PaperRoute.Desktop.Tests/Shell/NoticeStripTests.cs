@@ -38,9 +38,19 @@ public sealed class NoticeStripTests
     {
         var strip = new NoticeStripViewModel();
         StandingNotice reminder = Standing("startup-reminder", "PaperRoute does not start with Linux.", NoticeKind.Info);
+        strip.Notice("Loaded 7 manuscripts from local storage.");
+        var statusChanges = 0;
+        strip.PropertyChanged += (_, e) => statusChanges += e.PropertyName == nameof(NoticeStripViewModel.Status) ? 1 : 0;
 
         strip.Show(reminder);
-        strip.Notice("Loaded 7 manuscripts from local storage.");
+        strip.Withdraw("Startup-Reminder");
+
+        Assert.AreEqual("Loaded 7 manuscripts from local storage.", strip.Status,
+            "A standing notice never touches the status line: the last result stays.");
+        Assert.AreEqual(0, statusChanges, "Showing or withdrawing a standing notice does not re-announce the last result.");
+        CollectionAssert.AreEqual(new[] { reminder }, strip.StandingNotices.ToArray(),
+            "Keys are compared exactly: a key in other letter case withdraws nothing.");
+
         strip.Notice("Board sorted by title.");
         strip.Withdraw("update-available");
 
@@ -50,6 +60,8 @@ public sealed class NoticeStripTests
         strip.Withdraw("startup-reminder");
 
         Assert.IsEmpty(strip.StandingNotices, "A withdrawn notice is gone.");
+        Assert.AreEqual("Board sorted by title.", strip.Status, "Withdrawing a standing notice leaves the status line.");
+        Assert.AreEqual(1, statusChanges, "Only the result raised the status line's change; the withdrawal did not.");
         strip.Withdraw("startup-reminder");
         Assert.IsEmpty(strip.StandingNotices, "Withdrawing a key no longer shown changes nothing.");
     }
