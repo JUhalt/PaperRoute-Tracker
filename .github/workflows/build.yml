@@ -417,7 +417,7 @@ jobs:
   # Linux checklist). The platform check runs twice, as the display starts
   # and again after xrdb (x11-xserver-utils) sets Xft.dpi to 144, so the
   # summary shows whether that reaches the window's render scaling or the
-  # laid-out height of its text; both runs are recorded, neither judged.
+  # height of its text in pixels; both runs are recorded, neither judged.
   trial-linux-window:
     name: Avalonia Board trial (Linux window under Xvfb)
     runs-on: ubuntu-latest

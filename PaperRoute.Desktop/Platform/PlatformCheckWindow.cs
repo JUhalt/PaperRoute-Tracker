@@ -155,10 +155,11 @@ public sealed class PlatformCheckWindow
         return 1;
     }
 
-    // The size of the body line whose laid-out height the check records.
+    // The size of the body line whose height in pixels the check records.
     public const double BodyLineFontSize = 13;
 
-    // The height of the fixed box whose laid-out height the check records.
+    // The height, in layout units, of the fixed box whose height in pixels
+    // the check records.
     public const double BoxSize = 100;
 
     // The text of that body line.
@@ -167,21 +168,24 @@ public sealed class PlatformCheckWindow
     // The window's render scaling, what Avalonia reports of the system's
     // theme (PlatformSettings.GetColorValues), what the system says of its
     // text size (systemText; the real reader is SystemTextSettings.Read, and
-    // without one nothing is read), and the laid-out heights of one 13 px
-    // body line in the window's font and one fixed 100-pixel box.
+    // without one nothing is read), and the heights in the window's device
+    // pixels of one 13 px body line in the window's font and one fixed box
+    // 100 layout units high: each laid-out height times the render scaling,
+    // so the box grows when everything grows and stays when only text does.
     public static PlatformFacts FactsFor(Window window, Func<string, string?> environment, Func<SystemTextSetting>? systemText = null)
     {
         ArgumentNullException.ThrowIfNull(window);
         PlatformColorValues? colors = Application.Current?.PlatformSettings?.GetColorValues();
+        double scaling = window.RenderScaling;
         return Stamped(PlatformFacts.Read(
             environment,
-            window.RenderScaling,
+            scaling,
             colors?.ThemeVariant.ToString() ?? "unknown",
             colors?.ContrastPreference.ToString() ?? "unknown")) with
         {
             SystemText = SystemTextOf(systemText),
-            BodyLineHeight = LaidOutHeight(new TextBlock { Text = BodyLineText, FontSize = BodyLineFontSize, FontFamily = window.FontFamily }),
-            BoxHeight = LaidOutHeight(new Border { Width = BoxSize, Height = BoxSize }),
+            BodyLinePixels = scaling * LaidOutHeight(new TextBlock { Text = BodyLineText, FontSize = BodyLineFontSize, FontFamily = window.FontFamily }),
+            BoxPixels = scaling * LaidOutHeight(new Border { Width = BoxSize, Height = BoxSize }),
         };
     }
 

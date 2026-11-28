@@ -37,17 +37,18 @@ public sealed record PlatformFacts(
     public string? Build { get; init; }
 
     // Whether the system's text size reaches the window (the harness design,
-    // part 3.5): what the system says of its text size, and the laid-out
-    // heights, in layout units, of one 13 px body line and one fixed
-    // 100-pixel box in the window's font. With RenderScaling, a reader can
-    // tell which happened: text grows (the line grows, the box stays),
-    // everything grows (the render scaling grows), or nothing changes. Null
-    // when not known.
+    // part 3.5): what the system says of its text size, and the heights, in
+    // the window's device pixels (the laid-out height times RenderScaling),
+    // of one 13 px body line in the window's font and one fixed box 100
+    // layout units high. A reader can tell which happened: text grows (the
+    // line grows, the box stays), everything grows (both grow with the
+    // render scaling), or nothing changes. In layout units the box would
+    // always be 100, so pixels are what show it. Null when not known.
     public SystemTextSetting? SystemText { get; init; }
 
-    public double? BodyLineHeight { get; init; }
+    public double? BodyLinePixels { get; init; }
 
-    public double? BoxHeight { get; init; }
+    public double? BoxPixels { get; init; }
 
     // The facts for this process, with the environment read through
     // environment (tests give their own) and the window's figures given.
@@ -139,8 +140,8 @@ public sealed class PlatformCheckReport
             WriteNumberOrNull(json, "systemTextScale", Facts.SystemText?.Scale, 3);
             json.WriteString("systemTextScaleSource", Facts.SystemText?.Source);
             WriteNumberOrNull(json, "xftDpi", Facts.SystemText?.XftDpi, 2);
-            WriteNumberOrNull(json, "bodyLineHeight", Facts.BodyLineHeight, 2);
-            WriteNumberOrNull(json, "boxHeight", Facts.BoxHeight, 2);
+            WriteNumberOrNull(json, "bodyLinePixels", Facts.BodyLinePixels, 2);
+            WriteNumberOrNull(json, "boxPixels", Facts.BoxPixels, 2);
             if (Outcomes is not null)
             {
                 Write(json, "fileDialog", Outcomes.Dialog);

@@ -138,7 +138,7 @@ function Invoke-PlatformCheck([string] $label, [string] $tag, [string] $pictures
                 if ($null -ne $result) { Note "$label $step" "tried $($result.tried), ok $(if ($null -eq $result.ok) { 'null' } else { $result.ok }): $($result.detail)" }
             }
             foreach ($name in 'operatingSystem', 'runtimeIdentifier', 'xdgSessionType', 'displaySet', 'waylandDisplaySet', 'renderScaling', 'themeVariant',
-                'systemTextScale', 'systemTextScaleSource', 'xftDpi', 'bodyLineHeight', 'boxHeight') {
+                'systemTextScale', 'systemTextScaleSource', 'xftDpi', 'bodyLinePixels', 'boxPixels') {
                 Note "$label $name" $(if ($null -eq $platform.$name) { 'null' } else { $platform.$name })
             }
             if ($platform.error) { Note "$label error" "$($platform.error) (step running: $($platform.stepRunning))" }
