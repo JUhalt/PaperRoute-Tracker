@@ -99,6 +99,53 @@ function Stop-Hard($process) {
     if ($null -ne $process -and -not $process.HasExited) { try { $process.Kill($true) } catch { } }
 }
 
+# Runs the platform check once, answers its file dialog with Escape, and notes its
+# outcomes and facts under the given label. Recorded, never judged.
+function Invoke-PlatformCheck([string] $label, [string] $tag, [string] $pictures, [string] $fileName) {
+    $platformFile = Join-Path $Out $fileName
+    Remove-Item -LiteralPath $platformFile -ErrorAction SilentlyContinue
+    $trial = Start-Trial $tag @('--platform-check', $platformFile)
+    $watch = [Diagnostics.Stopwatch]::StartNew()
+    $answered = $false
+    while ($watch.Elapsed.TotalSeconds -lt 240 -and -not $trial.HasExited) {
+        if (-not $answered -and $watch.Elapsed.TotalSeconds -lt 90) {
+            $dialogs = @(Find-Windows $DialogTitle)
+            if ($dialogs.Count -gt 0) {
+                # The dialog waits for a person. Its picture is taken, then Escape answers it as "cancel".
+                Start-Sleep -Seconds 1
+                Note "picture of the file dialog ($label)" $(if (Save-Screen "$pictures-dialog.png") { "$pictures-dialog.png" } else { 'not taken' })
+                Invoke-Tool 'xdotool' @('windowactivate', '--sync', "$($dialogs[0])") | Out-Null
+                Invoke-Tool 'xdotool' @('key', 'Escape') | Out-Null
+                $answered = $true
+            }
+        }
+        Start-Sleep -Milliseconds 500
+    }
+    if (-not $trial.HasExited) {
+        Save-Screen "$pictures-stuck.png" | Out-Null
+        Close-MainWindow      # the trial then writes what it learnt so far
+        Wait-Exit $trial 40 | Out-Null
+    }
+    Note $label $(if ($trial.HasExited) { "ended after $([Math]::Round($watch.Elapsed.TotalSeconds, 1)) s with exit code $($trial.ExitCode)" } else { 'did not end, stopped' })
+    Stop-Hard $trial
+    # A browser the launcher may have started on a runner.
+    if ($env:GITHUB_ACTIONS) { foreach ($name in 'firefox', 'chrome', 'chromium') { Invoke-Tool 'pkill' @('-f', $name) | Out-Null } }
+    if (Test-Path -LiteralPath $platformFile) {
+        try {
+            $platform = Get-Content -LiteralPath $platformFile -Raw | ConvertFrom-Json
+            foreach ($step in 'fileDialog', 'launcher', 'restart') {
+                $result = $platform.$step
+                if ($null -ne $result) { Note "$label $step" "tried $($result.tried), ok $(if ($null -eq $result.ok) { 'null' } else { $result.ok }): $($result.detail)" }
+            }
+            foreach ($name in 'operatingSystem', 'runtimeIdentifier', 'xdgSessionType', 'displaySet', 'waylandDisplaySet', 'renderScaling', 'themeVariant',
+                'systemTextScale', 'systemTextScaleSource', 'xftDpi', 'bodyLineHeight', 'boxHeight') {
+                Note "$label $name" $(if ($null -eq $platform.$name) { 'null' } else { $platform.$name })
+            }
+            if ($platform.error) { Note "$label error" "$($platform.error) (step running: $($platform.stepRunning))" }
+        } catch { Note "$label file" 'written, but it could not be read as JSON' }
+    } else { Note "$label file" 'not written' }
+}
+
 $xvfb = $null
 $manager = $null
 try {
@@ -232,47 +279,22 @@ try {
     }
     elseif (-not $Library) { Note 'timed run' 'skipped: no test library was given' }
 
-    # --- the platform check: the file dialog, the launcher, a second copy.
-    # Recorded, never judged: a runner has no desktop to open a browser in.
-    $platformFile = Join-Path $Out 'platform-check-xvfb.json'
-    Remove-Item -LiteralPath $platformFile -ErrorAction SilentlyContinue
-    $trial = Start-Trial 'platform' @('--platform-check', $platformFile)
-    $watch.Restart()
-    $answered = $false
-    while ($watch.Elapsed.TotalSeconds -lt 240 -and -not $trial.HasExited) {
-        if (-not $answered -and $watch.Elapsed.TotalSeconds -lt 90) {
-            $dialogs = @(Find-Windows $DialogTitle)
-            if ($dialogs.Count -gt 0) {
-                # The dialog waits for a person. Its picture is taken, then Escape answers it as "cancel".
-                Start-Sleep -Seconds 1
-                Note 'picture of the file dialog' $(if (Save-Screen 'platform-check-dialog.png') { 'platform-check-dialog.png' } else { 'not taken' })
-                Invoke-Tool 'xdotool' @('windowactivate', '--sync', "$($dialogs[0])") | Out-Null
-                Invoke-Tool 'xdotool' @('key', 'Escape') | Out-Null
-                $answered = $true
-            }
-        }
-        Start-Sleep -Milliseconds 500
+    # --- the platform check: the file dialog, the launcher, a second copy, and
+    # what reaches the window of the system's text size. Recorded, never judged:
+    # a runner has no desktop to open a browser in. It runs twice: as the display
+    # starts, and again after xrdb sets the X resource Xft.dpi to 144 (150 %), to
+    # see whether that reaches the window's render scaling or its text (the
+    # harness design, part 3.5).
+    Invoke-PlatformCheck 'platform check' 'platform' 'platform-check' 'platform-check-xvfb.json'
+    $dpiFile = Join-Path $Out 'xft-dpi-144.txt'
+    Set-Content -LiteralPath $dpiFile -Value 'Xft.dpi: 144' -Encoding ascii
+    Invoke-Tool 'xrdb' @('-merge', $dpiFile) | Out-Null
+    $dpi = @(Invoke-Tool 'xrdb' @('-query') | Where-Object { $_ -like 'Xft.dpi:*' })
+    if ($dpi.Count -gt 0) {
+        Note 'Xft.dpi for the second platform check' ($dpi[0] -replace '^Xft\.dpi:\s*', '')
+        Invoke-PlatformCheck 'platform check at Xft.dpi 144' 'platform-dpi144' 'platform-check-dpi144' 'platform-check-xvfb-dpi144.json'
     }
-    if (-not $trial.HasExited) {
-        Save-Screen 'platform-check-stuck.png' | Out-Null
-        Close-MainWindow      # the trial then writes what it learnt so far
-        Wait-Exit $trial 40 | Out-Null
-    }
-    Note 'platform check' $(if ($trial.HasExited) { "ended after $([Math]::Round($watch.Elapsed.TotalSeconds, 1)) s with exit code $($trial.ExitCode)" } else { 'did not end, stopped' })
-    Stop-Hard $trial
-    if (Test-Path -LiteralPath $platformFile) {
-        try {
-            $platform = Get-Content -LiteralPath $platformFile -Raw | ConvertFrom-Json
-            foreach ($step in 'fileDialog', 'launcher', 'restart') {
-                $result = $platform.$step
-                if ($null -ne $result) { Note "platform check $step" "tried $($result.tried), ok $(if ($null -eq $result.ok) { 'null' } else { $result.ok }): $($result.detail)" }
-            }
-            foreach ($name in 'operatingSystem', 'runtimeIdentifier', 'xdgSessionType', 'displaySet', 'waylandDisplaySet', 'renderScaling', 'themeVariant') {
-                Note "platform check $name" $(if ($null -eq $platform.$name) { 'null' } else { $platform.$name })
-            }
-            if ($platform.error) { Note 'platform check error' "$($platform.error) (step running: $($platform.stepRunning))" }
-        } catch { Note 'platform check file' 'written, but it could not be read as JSON' }
-    } else { Note 'platform check file' 'not written' }
+    else { Note 'Xft.dpi for the second platform check' 'not set (xrdb did not answer), so the second run was skipped' }
 }
 catch {
     Note 'stopped early' $_.Exception.Message
