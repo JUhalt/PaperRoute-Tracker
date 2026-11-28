@@ -393,6 +393,43 @@ public sealed partial class StartupFailureModelTests
         Assert.AreEqual("The test's failure.", shown.Single().Cause.Message);
     }
 
+    // Start-up design 2.4 row 9: the storage step runs on a worker, awaited,
+    // so a long migration never holds the window's thread, and each failure
+    // is shown back on the window's thread, where the loop resumes.
+    [TestMethod]
+    public void TheStorageStepPreparesOffTheWindowThread()
+    {
+        var log = new CallLog();
+        int attempts = 0;
+        var step = new StorageStep(
+            () =>
+            {
+                attempts++;
+                log.Add("prepare " + attempts.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                if (attempts == 1)
+                {
+                    throw new InvalidDataException("The test's failure.");
+                }
+            },
+            () => s_schemaPath);
+        StorageReady? ready = null;
+
+        int window = WindowThread.Run(async () =>
+        {
+            ready = await step.RunAsync(failure =>
+            {
+                log.Add("show");
+                return Task.FromResult(true);
+            });
+        }, s_limit);
+
+        CollectionAssert.AreEqual(new[] { "prepare 1", "show", "prepare 2" }, log.Names);
+        Assert.IsNotNull(ready, "Start-up goes on with storage ready.");
+        Assert.AreNotEqual(window, log.ThreadOf("prepare 1"), "The storage step runs off the window's thread.");
+        Assert.AreNotEqual(window, log.ThreadOf("prepare 2"), "The storage step runs off the window's thread when it runs again.");
+        Assert.AreEqual(window, log.ThreadOf("show"), "The failure is shown on the window's thread.");
+    }
+
     private static void AssertNamesNoOne(string text, string user, string computer, string home, string what)
     {
         // The scrubber's own placeholders are taken out first: they hold words such as "user".
