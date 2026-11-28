@@ -132,9 +132,9 @@ public sealed class CoreSurfaceTests
     {
         string folder = Path.Combine(AppContext.BaseDirectory, "ViewModelSources");
         Assert.IsTrue(Directory.Exists(folder), $"{folder} was not copied to the test output.");
-        string[] allowed = ["TrialStartup.cs", "DiskLibrarySession.cs"];
+        string[] allowed = ["Session/TrialStartup.cs", "Session/DiskLibrarySession.cs"];
         string[] files = [.. Directory.GetFiles(folder, "*.cs", SearchOption.AllDirectories).Order(StringComparer.Ordinal)];
-        Assert.IsTrue(files.Any(file => Path.GetFileName(file) == "DiskLibrarySession.cs"),
+        Assert.IsTrue(files.Any(file => Path.GetRelativePath(folder, file).Replace('\\', '/') == "Session/DiskLibrarySession.cs"),
             "The view models' sources were not copied to the test output.");
 
         var problems = new List<string>();
@@ -151,7 +151,7 @@ public sealed class CoreSurfaceTests
                 }
 
                 found++;
-                if (!allowed.Contains(Path.GetFileName(file), StringComparer.Ordinal))
+                if (!allowed.Contains(name, StringComparer.Ordinal))
                 {
                     problems.Add($"{name}:{i + 1} lifts the save ban (RS0030) outside {string.Join(" and ", allowed)}.");
                 }
