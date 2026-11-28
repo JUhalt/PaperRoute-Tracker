@@ -10,14 +10,25 @@ namespace PaperRoute.Desktop.Tests.Styles;
 // names each literal by file and line:
 //   - a #RRGGBB or #AARRGGBB colour, anywhere;
 //   - a FontFamily, FontSize or Duration given a value that is not a markup
-//     extension ({DynamicResource ...}, {TemplateBinding ...}), as an
-//     attribute, a style's Setter, a property element or a Setter.Value, or
-//     in code;
+//     extension ({DynamicResource ...}, {TemplateBinding ...});
 //   - a CornerRadius with a number other than 0 (0 is no rounding, not a size);
 //   - a numeric FontWeight (such as 700); named weights (Bold) are names already.
-// Paddings, margins, heights, line heights, border thicknesses and named font
-// weights stay written in the styles, as Appendix C writes them (3.1), so the
-// scan does not look at them.
+// In .axaml it reads an attribute, a style's Setter, a property element and a
+// Setter.Value. In code it reads only these forms: a number right after the
+// property (FontSize = 12, CornerRadius = 4, FontWeight = 700 or
+// (FontWeight)700); for a family, a string or any new after FontFamily =,
+// new FontFamily(...) or FontFamily.Parse(...); new CornerRadius(...); and
+// TimeSpan.From..., TimeSpan.Parse or new TimeSpan after Duration. It does
+// not see a constant or field (FontSize = SomeConstant),
+// SetValue(TextBlock.FontSizeProperty, 12), a radius or duration given by a
+// target-typed new(...), a named colour (Colors.White) or Color.FromRgb, or
+// anything after a // inside a string on the same line ("avares://..."),
+// which the comment blanking takes for a comment. The design asks for
+// numeric and hex literals; these forms are where they are written today.
+// Other paddings, margins, heights, line heights, border thicknesses and
+// named font weights stay written in the styles (3.1). The scan does not
+// judge heights or line heights, so the few that are tokens (the control and
+// compact minimum heights, the card title's line and box) have no guard here.
 internal static partial class LiteralScan
 {
     // The files the scan does not judge, and why. Nothing else is exempt, and

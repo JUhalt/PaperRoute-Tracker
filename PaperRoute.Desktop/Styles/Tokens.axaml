@@ -18,9 +18,10 @@
   <CornerRadius x:Key="ControlRadius">8</CornerRadius>
   <CornerRadius x:Key="FullRadius">999</CornerRadius>
   <!--
-    A focus ring 2 px inside a button or rail item (Appendix C writes
-    ControlRadius for the button's; the trial's 6, kept until question 7 of the
-    harness design is answered); a link's focus frame; a rail item's corners
+    A focus ring inside a button (2 px in) or a rail item (1.5 px in);
+    Appendix C writes ControlRadius for the button's, and the trial's 6 is
+    kept until question 7 of the harness design is answered. A link's focus
+    frame. A rail item's corners
     (RailItems.vb, and Appendix C's icon pill).
   -->
   <CornerRadius x:Key="FocusRingRadius">6</CornerRadius>
@@ -38,7 +39,12 @@
   <Thickness x:Key="SpaceLgPad">16</Thickness>
   <!-- A card's inner padding (Form1.vb:3136). -->
   <Thickness x:Key="CardPadding">14</Thickness>
-  <!-- The least height of a button, text box or drop-down, and of a compact or icon button (inventory C.2). -->
+  <!--
+    The least height of a button, text box or drop-down, and of a compact
+    button (inventory C.2) or the trial's icon button (C.2 gives the icon no
+    MinHeight and Height 32; kept until question 7 of the harness design is
+    answered).
+  -->
   <x:Double x:Key="ControlMinHeight">32</x:Double>
   <x:Double x:Key="CompactMinHeight">26</x:Double>
 
