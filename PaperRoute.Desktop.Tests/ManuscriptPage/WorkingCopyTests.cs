@@ -266,6 +266,16 @@ public sealed partial class WorkingCopyTests : Board.StorageCheckedTests
                 Assert.IsFalse(copy.HoldStage(PaperStage.Submitted), "A stage choice while frozen was accepted.");
                 Assert.IsFalse(copy.EditLibrary(delta => delta.Authors.Add(new AuthorRecord { Id = Grace })), "A library change while frozen was accepted.");
                 Assert.IsFalse(copy.Discard(Paper(), Library()), "A discard while frozen was accepted.");
+
+                // Loading another record is the frame's call, never a
+                // section's, so it throws instead of refusing.
+                Manuscript original = copy.Original!;
+                Manuscript working = copy.Working;
+                int token = copy.Token;
+                Assert.ThrowsExactly<InvalidOperationException>(() => copy.Load(Paper("Another Paper"), Library()), "A load while frozen was accepted.");
+                Assert.AreSame(original, copy.Original, "A refused load changed the original.");
+                Assert.AreSame(working, copy.Working, "A refused load changed the working copy.");
+                Assert.AreEqual(token, copy.Token, "A refused load started a new token.");
             }
         }
         finally
@@ -513,6 +523,23 @@ public sealed partial class WorkingCopyTests : Board.StorageCheckedTests
         Assert.IsTrue(copy.Discard(Paper("Another Paper"), Library()));
         Assert.IsFalse(copy.Edit(second, working => working.Title = "Late again"), "Work started before a discard changed the record after it.");
         Assert.AreEqual("Another Paper", copy.Working.Title);
+    }
+
+    // W-15: a box shows the record as it is after a load or a discard, even
+    // where the text typed into it equals the record once trimmed.
+    [TestMethod]
+    public void AfterALoadOrADiscardTheBoxShowsTheRecordAsItIs()
+    {
+        WorkingCopy copy = Loaded(Paper());
+        var box = new TypedText(copy, TypedField.Title);
+
+        box.Text = "A Study of Tests  ";
+        copy.Load(Paper(), Library());
+        Assert.AreEqual("A Study of Tests", box.Text, "After a load the box kept the text typed for the record before.");
+
+        box.Text = "A Study of Tests  ";
+        Assert.IsTrue(copy.Discard(Paper(), Library()));
+        Assert.AreEqual("A Study of Tests", box.Text, "After a discard the box kept the text typed before it.");
     }
 
     private static Manuscript Paper(string title = "A Study of Tests") => new()
