@@ -808,8 +808,9 @@ public sealed class PlatformCheckTests : StorageCheckedTests
     // readers, in the trial's window and
     // in a window whose render scaling a test sets; then a reader that
     // fails or is missing, and the real reader's reading of what Windows'
-    // registry and Linux's tools give. Running the real reader is left to
-    // the Xvfb job and the guest runs.
+    // registry and Linux's tools give. The real reader runs in
+    // TheRealTextSizeReaderAnswersOnThisSystem, the Xvfb job and the guest
+    // runs.
     [TestMethod]
     public void ThePlatformCheckRecordsTextScaleScalingAndLineHeight()
     {
@@ -926,6 +927,25 @@ public sealed class PlatformCheckTests : StorageCheckedTests
         var line = new TextBlock { Text = PlatformCheckWindow.BodyLineText, FontSize = size, FontFamily = new Avalonia.Media.FontFamily("fonts:Inter#Inter") };
         line.Measure(Avalonia.Size.Infinity);
         return line.DesiredSize.Height;
+    }
+
+    // The real reader (SystemTextSettings.Read, what the app hands the
+    // check) on whichever system runs the tests: it answers without
+    // throwing, from where that system keeps the setting (Windows' registry;
+    // on Linux gsettings and xrdb, either of which may be missing or find no
+    // display on a runner), or says that nothing is read there.
+    [TestMethod]
+    public void TheRealTextSizeReaderAnswersOnThisSystem()
+    {
+        SystemTextSetting setting = SystemTextSettings.Read();
+        string described = $"scale {setting.Scale}, Xft.dpi {setting.XftDpi}, source \"{setting.Source}\"";
+        string expected = OperatingSystem.IsWindows() ? "Windows:" : OperatingSystem.IsLinux() ? "GNOME:" : SystemTextSettings.NotReadHere;
+        StringAssert.StartsWith(setting.Source, expected, described);
+        Assert.IsTrue(setting.Scale is null || setting.Scale > 0, described);
+        if (!OperatingSystem.IsLinux())
+        {
+            Assert.IsNull(setting.XftDpi, "Xft.dpi is read on Linux only: " + described);
+        }
     }
 
     // ---- The real start of a second program (it opens nothing) ----
