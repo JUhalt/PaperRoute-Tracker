@@ -221,8 +221,9 @@ public sealed class CandidateTests : Board.StorageCheckedTests
 
         Manuscript candidate = Ready(copy.BuildCandidate(SaveTime));
 
-        Assert.AreEqual("File Drawer reason updated. Reason: The second data set arrived", candidate.History[^1].Note,
+        Assert.HasCount(saved.History.Count + 1, candidate.History,
             "A recovered reason, compared with the draft instead of the saved record, got no event.");
+        Assert.AreEqual("File Drawer reason updated. Reason: The second data set arrived", candidate.History[^1].Note);
     }
 
     // C-8
