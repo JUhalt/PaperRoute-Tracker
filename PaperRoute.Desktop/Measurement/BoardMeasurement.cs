@@ -208,6 +208,12 @@ public sealed class BoardMeasurement
     public static readonly TimeSpan TimerLimit = TimeSpan.FromSeconds(30);
     public static readonly TimeSpan ResizeLimit = TimeSpan.FromSeconds(5);
 
+    // How far, in device-independent pixels per side, the shelf host's size
+    // after a restore may differ from its size before the maximise: a real
+    // window at a scaling other than 100% may come back a fraction of a pixel
+    // off, which is not a failed restore.
+    public const double RestoreTolerance = 0.5;
+
     // The scaling the scaling scenario changes to.
     public const double ChangedScaling = 1.25;
 
@@ -901,9 +907,9 @@ public sealed class BoardMeasurement
             {
                 Restore(window);
                 Settle(window);
-                PumpUntil(() => host.Bounds.Size == before, ResizeLimit);
+                PumpUntil(() => Restored(host.Bounds.Size, before), ResizeLimit);
                 Settle(window);
-                Require(host.Bounds.Size == before, $"The window was restored to its size before the maximise ({host.Bounds.Width:0} x {host.Bounds.Height:0}, not {before.Width:0} x {before.Height:0}).");
+                Require(Restored(host.Bounds.Size, before), $"The window was restored to its size before the maximise ({host.Bounds.Width:0} x {host.Bounds.Height:0}, not {before.Width:0} x {before.Height:0}).");
             };
         }
         else if (scenario == IdleSides.ScalingScenario)
@@ -1123,6 +1129,10 @@ public sealed class BoardMeasurement
             return done();
         }, limit);
     }
+
+    // Whether the shelf host's size is back to before, within RestoreTolerance.
+    public static bool Restored(Size now, Size before) =>
+        Math.Abs(now.Width - before.Width) <= RestoreTolerance && Math.Abs(now.Height - before.Height) <= RestoreTolerance;
 
     private static string Stopped(string? skipped) => skipped is null ? "not stopped" : "stopped: " + skipped;
 

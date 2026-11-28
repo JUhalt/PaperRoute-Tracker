@@ -414,6 +414,21 @@ public sealed class MeasureModeTests : StorageCheckedTests
         StringAssert.Contains(table, "Idle side maximise-prepared (500): 5 preparation steps made 21 card views; Published not prepared at the switch; preparation not stopped; the first switch after idle made 3 card views. 5 steps in the session; Published's rows stale at the switch; 41 ms from the change to the switch.");
     }
 
+    // The maximise scenario's restore takes the shelf host back to its size
+    // before the maximise within half a pixel per side, so a real window at
+    // a scaling other than 100% that comes back a fraction of a pixel off
+    // does not end the run in error; a larger difference still does.
+    [TestMethod]
+    public void ARestoreWithinHalfAPixelIsTheSizeBefore()
+    {
+        var before = new Avalonia.Size(1264, 737);
+        Assert.IsTrue(BoardMeasurement.Restored(before, before), "The same size is restored.");
+        Assert.IsTrue(BoardMeasurement.Restored(new Avalonia.Size(1264.4, 736.6), before), "A fraction of a pixel off on each side is restored.");
+        Assert.IsTrue(BoardMeasurement.Restored(new Avalonia.Size(1264 + BoardMeasurement.RestoreTolerance, 737), before), "Exactly the tolerance off is restored.");
+        Assert.IsFalse(BoardMeasurement.Restored(new Avalonia.Size(1265, 737), before), "A whole pixel wider is not restored.");
+        Assert.IsFalse(BoardMeasurement.Restored(new Avalonia.Size(1264, 736.4), before), "More than half a pixel shorter is not restored.");
+    }
+
     // ---- The UI probe ----
 
     // The probe ticks only where a key press could be served (Input priority,
