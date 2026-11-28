@@ -158,6 +158,31 @@ public sealed class NoticeStripTests
         Assert.AreEqual(string.Empty, strip.Status, "A null result empties the status line, as the trial's shell did.");
     }
 
+    // Not in the design's list of six: the records refuse what would leave a
+    // notice without a key to withdraw it by, a notice or button without a name
+    // for a screen reader, or a button that does nothing.
+    [TestMethod]
+    public void AStandingNoticeNeedsAKeyAndAText()
+    {
+        Assert.ThrowsExactly<ArgumentException>(() => new StandingNotice(" ", "Some text.", NoticeKind.Info, []),
+            "A blank key is refused.");
+        Assert.ThrowsExactly<ArgumentNullException>(() => new StandingNotice(null!, "Some text.", NoticeKind.Info, []),
+            "A missing key is refused.");
+        Assert.ThrowsExactly<ArgumentException>(() => new StandingNotice("key", " ", NoticeKind.Info, []),
+            "A blank text is refused: it would give the notice an empty accessible name.");
+        Assert.ThrowsExactly<ArgumentNullException>(() => new StandingNotice("key", null!, NoticeKind.Info, []),
+            "A missing text is refused.");
+        Assert.ThrowsExactly<ArgumentNullException>(() => new StandingNotice("key", "Some text.", NoticeKind.Info, null!),
+            "Missing actions are refused; a notice without buttons has an empty list.");
+        Assert.ThrowsExactly<ArgumentException>(() => new NoticeAction(" ", s_nothing),
+            "A blank button label is refused: it would give the button an empty accessible name.");
+        Assert.ThrowsExactly<ArgumentNullException>(() => new NoticeAction("Dismiss", null!),
+            "A button without a command is refused.");
+
+        StandingNotice plain = new("key", "Some text.", NoticeKind.Info, []);
+        Assert.IsEmpty(plain.Actions, "A notice without buttons is allowed.");
+    }
+
     private static StandingNotice Standing(string key, string text, NoticeKind kind) =>
         new(key, text, kind, [new NoticeAction("Dismiss", s_nothing)]);
 }
