@@ -85,7 +85,10 @@ public sealed class WorkingCopy
     // writes it (EditManuscriptForm.vb:2316-2319, 482-485). The library is the
     // author library just read from disk; a draft's own people and
     // affiliations join it only where the disk lacks their id, and its tag
-    // colours are set (EditManuscriptForm.vb:3030-3099).
+    // colours are set (EditManuscriptForm.vb:3030-3099). The library given
+    // becomes Library and the delta is added into it, so it must be a fresh
+    // read that nothing else holds (IManuscriptStore.ReadAuthorLibrary, F1a);
+    // Discard takes the same.
     public void Load(Manuscript original, AuthorLibraryData libraryOnDisk, RecoveryDraft? draft = null)
     {
         ArgumentNullException.ThrowIfNull(original);
@@ -160,7 +163,11 @@ public sealed class WorkingCopy
     }
 
     // The door for the page's own library records: the change is made to the
-    // delta, which then joins Library.
+    // delta, which then joins Library. Joining only adds, so the delta only
+    // grows until a save or a discard: a later step that would take a record
+    // out of it (undoing a new person, changing or clearing a held tag
+    // colour) must rebuild Library from a fresh read too, or Library would
+    // still show what Save no longer writes.
     public bool EditLibrary(Action<LibraryChanges> change)
     {
         ArgumentNullException.ThrowIfNull(change);
@@ -247,9 +254,11 @@ public sealed class WorkingCopy
         return delta;
     }
 
-    // A refusal while a save writes: a log line, never an exception. Under a
-    // debugger it also stops as an assertion does; without one it does not,
-    // because a failed assertion ends a process that has no debugger.
+    // A refusal while a save writes: a log line, never an exception. In a
+    // Debug build under a debugger it also stops as an assertion does (a
+    // Release build compiles Debug.Fail out); without a debugger it does not,
+    // because a failed assertion ends a process that has no debugger. Tests
+    // check the log line instead of an assertion (W-8).
     private static bool Refuse(string what)
     {
         string message = $"The manuscript page refused {what} to its working copy while a save was writing it.";
