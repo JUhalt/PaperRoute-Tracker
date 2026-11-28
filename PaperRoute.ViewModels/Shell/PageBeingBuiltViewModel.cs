@@ -1,7 +1,7 @@
 namespace PaperRoute.ViewModels.Shell;
 
 // A page being built (shell design 2.1): the plain page that stands for one a
-// later issue builds, with the page's title and that issue. It keeps nothing
+// later issue builds, with the page's title and that issue. It holds no state
 // and never refuses a leave.
 public sealed class PageBeingBuiltViewModel : IPage
 {

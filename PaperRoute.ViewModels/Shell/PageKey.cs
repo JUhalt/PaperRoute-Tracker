@@ -1,7 +1,7 @@
 namespace PaperRoute.ViewModels.Shell;
 
 // A page of the window (shell design 2.1): what a person reaches from the
-// rail, a link or history. Today's WorkspacePage (Form1.Shell.vb:12-18) with
+// rail, a link or history. Today's WorkspacePage (Form1.Shell.vb:21-30) with
 // Settings added, which becomes a page (3.1 row 13). The catalog
 // (PageCatalog) says everything else about each.
 public readonly record struct PageKey(string Name)

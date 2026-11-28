@@ -1,8 +1,8 @@
 namespace PaperRoute.ViewModels.Shell;
 
 // The page contract (shell design 2.3): what the navigator asks of a page.
-// Only the title is required; the rest have defaults, so a page that keeps
-// nothing and never refuses a leave writes none of them.
+// Only the title is required; the rest have defaults, so a page that holds
+// no state and never refuses a leave writes none of them.
 public interface IPage
 {
     // The page host's accessible name.

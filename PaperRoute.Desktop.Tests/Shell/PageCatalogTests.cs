@@ -79,17 +79,32 @@ public sealed class PageCatalogTests
             "A misspelt page is found.");
     }
 
+    // Each stand-in's issue is its page's "built by" in target-surfaces.tsv,
+    // written out here until B13's EveryPageBeingBuiltIsListedWithItsIssue
+    // reads it from there.
     [TestMethod]
     public void APageBeingBuiltNamesItsIssue()
     {
         ShellServices services = Services();
+        var issues = new Dictionary<PageKey, string>
+        {
+            [PageKey.Library] = "#430",
+            [PageKey.Journals] = "#431",
+            [PageKey.Deadlines] = "#432",
+            [PageKey.Insights] = "#433",
+            [PageKey.ImportExport] = "#434",
+            [PageKey.Manuscript] = "#424",
+            [PageKey.Settings] = "#435",
+        };
 
-        foreach (PageCatalogRow row in PageCatalog.Standard.Rows.Where(row => row.Key != PageKey.Board))
+        PageCatalogRow[] standIns = [.. PageCatalog.Standard.Rows.Where(row => row.Key != PageKey.Board)];
+        CollectionAssert.AreEquivalent(issues.Keys.ToArray(), standIns.Select(row => row.Key).ToArray(), "Every page but the Board is a page being built.");
+        foreach (PageCatalogRow row in standIns)
         {
             var standIn = row.Make(services) as PageBeingBuiltViewModel;
             Assert.IsNotNull(standIn, $"{row.Key} is a page being built in build 5.");
             Assert.AreEqual(row.Label, standIn.Title, $"{row.Key}'s stand-in shows the page's title.");
-            Assert.IsTrue(ParityMap.IsBuildIssue(standIn.Issue), $"{row.Key}'s stand-in names \"{standIn.Issue}\", not a build issue of the plan.");
+            Assert.AreEqual(issues[row.Key], standIn.Issue, $"{row.Key}'s stand-in names the issue that builds it.");
         }
     }
 
