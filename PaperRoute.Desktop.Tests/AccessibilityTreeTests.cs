@@ -3,10 +3,10 @@ using System.Text;
 using System.Text.RegularExpressions;
 using Avalonia.Automation.Peers;
 using Avalonia.Controls;
-using Avalonia.Input;
 using Avalonia.Styling;
 using ManuscriptPipeline.Models;
 using PaperRoute.Desktop.Tests.Board;
+using PaperRoute.Desktop.Tests.Input;
 using PaperRoute.TestFixtures;
 using PaperRoute.ViewModels.Board;
 using PaperRoute.ViewModels.Session;
@@ -29,6 +29,7 @@ namespace PaperRoute.Desktop.Tests;
 // (<name>.actual.txt) and names the first line that differs. A change that
 // means to alter the tree replaces the expected file with that text, and says
 // why in its commit.
+// Limits of headless: HeadlessLimits.md
 [TestClass]
 public sealed class AccessibilityTreeTests : StorageCheckedTests
 {
@@ -158,18 +159,11 @@ public sealed class AccessibilityTreeTests : StorageCheckedTests
             Walk(ControlAutomationPeer.CreatePeerForElement(board.Window), 0, nodes);
 
             // The Tab order.
-            var stops = new List<Control>();
+            IReadOnlyList<Control> stops = FocusWalk.Tab(board.Window, limit);
             var places = new Dictionary<Control, int>(ReferenceEqualityComparer.Instance);
-            for (int step = 0; step < limit; step++)
+            for (int index = 0; index < stops.Count; index++)
             {
-                board.Press(Key.Tab);
-                if (board.Focused() is not Control focused || places.ContainsKey(focused))
-                {
-                    break;
-                }
-
-                stops.Add(focused);
-                places[focused] = stops.Count;
+                places[stops[index]] = index + 1;
             }
 
             var text = new StringBuilder();

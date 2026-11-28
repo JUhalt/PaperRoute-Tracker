@@ -1,0 +1,98 @@
+# The parity map of v1.1: each of the 85 keys of today's WinForms view catalog (PaperRoute.Tests/ViewCatalog.vb: 63 dialogs,
+# 12 hosted views, 10 stages) and its destination in target-surfaces.tsv, or "removed" with the target map's reason
+# (harness design 2.3). Read by Parity/ParityMap.cs; checked by Parity/ParityMapTests.cs, and its key column by
+# PaperRoute.Tests/ParityMapKeyTests.vb, which links this file, against the catalog itself.
+#
+# Columns, separated by one tab:
+#   part         dialog, hosted or stage (the catalog's Dialogs, Hosted, Stages)
+#   key          as ViewCatalog.vb writes it: a dialog by its Form subclass's name, a hosted view or stage by its name
+#   destination  a key of target-surfaces.tsv, or removed
+#   map row      the inventory rows (the target map's section 3, 1 to 97) the view shows, separated by commas
+#   read from    where the row was read: the catalog line, then the map's inventory row and target-map table
+#   reason       may be left out; required for removed: the 5e row and its words
+part	key	destination	map row	read from	reason
+dialog	Form1	Page/Board	3	ViewCatalog.vb:54, the Board on a representative library ("The main window is its Board page"); 3.2 row 3; 5a Board (3)
+dialog	AboutForm	Page/Settings	34	ViewCatalog.vb:55; 3.4 row 34; 5c About PaperRoute (34), Settings page, About section
+dialog	AddCorrespondenceForm	Page/Manuscript/Submissions/CorrespondenceEditor	88	ViewCatalog.vb:56; 3.4 row 88; 5b Add / Edit Correspondence (88)
+dialog	AddDecisionForm	Page/Manuscript/Submissions/DecisionEditor	86	ViewCatalog.vb:57; 3.4 row 86; 5b Add / Edit Decision (86)
+dialog	AddManuscriptForm	Page/Manuscript/New	35	ViewCatalog.vb:58; 3.4 row 35; 5c Add Manuscript (35)
+dialog	AddSubmissionForm	Page/Manuscript/Submissions/SubmissionEditor	85	ViewCatalog.vb:59; 3.4 row 85; 5b Record / Edit Submission (85)
+dialog	AffiliationEditForm	Page/Library/AuthorsAffiliations/Detail	67	ViewCatalog.vb:60; 3.4 row 67; 5b Add / Edit Affiliation (67)
+dialog	ApiKeyForm	Page/Settings/KeyEntry	53	ViewCatalog.vb:61; 3.4 row 53; 5b Add Claude / Server Key (53)
+dialog	OpenAlexKeyForm	Page/Settings/KeyEntry	52	ViewCatalog.vb:62; 3.4 row 52; 5b Add OpenAlex Key (52)
+dialog	AssistantConsentForm	Stage/BeforeSending	95	ViewCatalog.vb:63; 3.4 row 95; 5c Before Sending (95)
+dialog	AssistantDraftForm	Stage/SuggestStartingPoint	94	ViewCatalog.vb:64; 3.4 row 94; 5c Suggest a Starting Point (94)
+dialog	AuthorEditForm	Page/Library/AuthorsAffiliations/Detail	66	ViewCatalog.vb:65; 3.4 row 66; 5b Add / Edit Author, reusable (66)
+dialog	AuthorInstructionsForm	Stage/AuthorInstructions	78	ViewCatalog.vb:66; 3.4 row 78; 5c Read Author Instructions (78)
+dialog	AuthorLibraryForm	removed	65	ViewCatalog.vb:67; 3.4 row 65; 5e Manage Library (65)	5e: Manage Library, the same class and code as the Authors & Affiliations page; its route goes to "Go to Authors & Affiliations" and the inline author picker's create steps
+dialog	BibliographyExportSelectionForm	Page/ImportExport/Export	41	ViewCatalog.vb:68; 3.4 row 41; 5c Choose manuscripts to export (41)
+dialog	BibliographyImportForm	Stage/ImportReview	40	ViewCatalog.vb:69; 3.4 row 40; 5c Import BibTeX / RIS (40)
+dialog	CitationsUpdateForm	Stage/UpdateFromOpenAlex	48	ViewCatalog.vb:70; 3.4 row 48; 5c Update from OpenAlex (48)
+dialog	CoverLetterForm	Stage/CoverLetter	89	ViewCatalog.vb:71; 3.4 row 89; 5c Draft Cover Letter (89)
+dialog	CrossrefLookupForm	Stage/CrossrefMetadata	69	ViewCatalog.vb:72; 3.4 row 69; 5c DOI & Crossref Metadata (69)
+dialog	DeadlineDateForm	Page/Deadlines/Postpone	49	ViewCatalog.vb:73; 3.4 row 49; 5b Postpone / Set Deadline (49)
+dialog	DecisionLetterForm	Stage/DecisionLetter	87	ViewCatalog.vb:74; 3.4 row 87; 5c Read Decision Letter (87)
+dialog	DeleteManuscriptForm	Modal/DeleteManuscript	38	ViewCatalog.vb:75; 3.4 row 38; 5d Delete Manuscript (38)
+dialog	DiagnosticsForm	Page/Settings	54	ViewCatalog.vb:76; 3.4 row 54; 5c Diagnostics (54), Settings page, Diagnostics section
+dialog	EditManuscriptForm	Page/Manuscript	10	ViewCatalog.vb:77; 3.2 row 10 (only ever a page, note 3); 5a Manuscript page (10)
+dialog	ExcelMappingForm	Stage/ImportReview	42	ViewCatalog.vb:78; 3.4 row 42; 5c Map Spreadsheet Columns (42)
+dialog	ExternalLinkEditForm	Page/Manuscript/Overview/Links	63	ViewCatalog.vb:79; 3.4 row 63; 5b Add / Edit Link (63)
+dialog	FillBlanksForm	Stage/FillBlanks	45	ViewCatalog.vb:80; 3.4 row 45; 5c Fill Blanks from Crossref (45)
+dialog	HelpForm	Window/Main/HelpPanel	55	ViewCatalog.vb:81; 3.4 row 55; 5b User Guide (55)
+dialog	JournalCandidateForm	Page/Manuscript/Overview/ShortlistEditor	70	ViewCatalog.vb:82; 3.4 row 70; 5b Shortlist journal (70)
+dialog	JournalChecklistItemEditForm	Page/Journals/Detail/ListRows	75	ViewCatalog.vb:83; 3.4 row 75; 5b Add / Edit Requirement (75)
+dialog	JournalEditForm	Page/Journals/Detail	74	ViewCatalog.vb:84; 3.4 row 74; 5b Edit journal (74)
+dialog	JournalFactsForm	Stage/LookUpFacts	77	ViewCatalog.vb:85; 3.4 row 77; 5c Look Up Facts (77)
+dialog	JournalLibraryForm	removed	73	ViewCatalog.vb:86; 3.4 row 73; 5e Manage Journals (73)	5e: Manage Journals, the same class and code as the Journals page; its route goes to the inline journal chooser's "Add a journal" form and "Go to Journals"
+dialog	JournalMetricForm	Page/Journals/Detail/ListRows	76	ViewCatalog.vb:87; 3.4 row 76; 5b Add / Edit Metric (76)
+dialog	JournalPickerForm	Part/JournalChooser	72	ViewCatalog.vb:88; 3.4 row 72; 5b Choose from Library (72)
+dialog	JournalSuggestionsForm	Stage/FindJournals	71	ViewCatalog.vb:89; 3.4 row 71; 5c Find Journals (71)
+dialog	ManuscriptAuthorForm	Page/Manuscript/Authors/AuthorRow	64	ViewCatalog.vb:90; 3.4 row 64; 5b Add / Edit Author, manuscript (64)
+dialog	ManuscriptLinksForm	Page/Manuscript/Overview	62	ViewCatalog.vb:91; 3.4 row 62; 5c Journal, Preprint & Links (62), merged into the Overview
+dialog	ManuscriptReadinessForm	Page/Manuscript/ReadinessPackets	79	ViewCatalog.vb:92; 3.4 row 79; 5c Submission Readiness (79), the Readiness part
+dialog	ManuscriptRouteViewForm	Page/Manuscript/Route	37	ViewCatalog.vb:93; 3.4 row 37; 5c The Route (37), the manuscript page's Route section
+dialog	ManuscriptVersionEditForm	Page/Manuscript/Versions/VersionEditor	61	ViewCatalog.vb:94; 3.4 row 61; 5b Add / Edit Version (61)
+dialog	MarkPublishedForm	Part/MarkPublished	46	ViewCatalog.vb:95; 3.4 row 46; 5b Mark Published (46)
+dialog	MoveToFileDrawerForm	Page/Board/MoveToFileDrawer	39	ViewCatalog.vb:96; 3.4 row 39; 5b Move to File Drawer (39)
+dialog	OrcidLookupForm	Stage/OrcidImport	68	ViewCatalog.vb:97; 3.4 row 68; 5c ORCID Public-Profile Import (68)
+dialog	PacketExportForm	Page/Manuscript/ReadinessPackets/PacketExport	84	ViewCatalog.vb:98; 3.4 row 84; 5b Export Submission Packet (84)
+dialog	PublicationCheckForm	Stage/CheckForPublications	44	ViewCatalog.vb:99; 3.4 row 44; 5c Check for Publications (44)
+dialog	PublicationExportForm	Page/ImportExport/Export	43	ViewCatalog.vb:100; 3.4 row 43; 5b Publication & CV Export (43)
+dialog	ReadinessItemNotesForm	Page/Manuscript/ReadinessPackets/Notes	80	ViewCatalog.vb:101; 3.4 row 80; 5b Readiness Notes (80)
+dialog	ReminderEditForm	Page/Deadlines/Reminder	50	ViewCatalog.vb:102; 3.4 row 50; 5b Add / Edit Reminder (50)
+dialog	ReportForm	Part/Report	47	ViewCatalog.vb:103; 3.4 row 47; 5b Pipeline Report / Route Report (47)
+dialog	ReviewerResponseExportForm	Page/Manuscript/Submissions/ResponseExport	93	ViewCatalog.vb:104; 3.4 row 93; 5b Export Markdown (93)
+dialog	ReviewerResponseItemForm	Page/Manuscript/Submissions/ReviewerCommentEditor	92	ViewCatalog.vb:105; 3.4 row 92; 5b Reviewer comment (92)
+dialog	ReviewerResponseMatrixForm	removed	91	ViewCatalog.vb:106; 3.4 row 91; 5e Reviewer Response Matrix as a window (91)	5e: Reviewer Response Matrix as a window, reachable only from row 90; the inline tab has every action, and the manuscript's Save replaces its Save & Close
+dialog	SettingsForm	Page/Settings	51	ViewCatalog.vb:107; 3.4 row 51; 5a and 5c Preferences (51), the Settings page
+dialog	StartupFailureForm	Modal/StartupFailure	57	ViewCatalog.vb:108; 3.4 row 57; 5d PaperRoute could not start (57)
+dialog	SubmissionDetailsForm	removed	90	ViewCatalog.vb:109; 3.4 row 90; 5e Submission Details as a window (90)	5e: Submission Details as a window; the inline detail pane has every field and action, and Save with a stage that needs a decision opens the latest submission's Editorial History instead
+dialog	SubmissionPacketEditForm	Page/Manuscript/ReadinessPackets/PacketDetail	82	ViewCatalog.vb:110; 3.4 row 82; 5b New / Edit Packet (82)
+dialog	SubmissionPacketFileEditForm	Page/Manuscript/ReadinessPackets/PacketDetail	83	ViewCatalog.vb:111; 3.4 row 83; 5b Add / Edit Packet File (83)
+dialog	SubmissionPacketVaultForm	Page/Manuscript/ReadinessPackets	81	ViewCatalog.vb:112; 3.4 row 81; 5c Submission Packet Vault (81), the Packets part
+dialog	TitlePageImportForm	Page/Manuscript/New/TitlePage	36	ViewCatalog.vb:113; 3.4 row 36; 5b Paste a Title Page (36)
+dialog	UnexpectedErrorForm	Modal/UnexpectedError	56	ViewCatalog.vb:114; 3.4 row 56; 5d PaperRoute ran into a problem (56)
+dialog	UpdateProgressForm	Window/Main/UpdateNotice	59	ViewCatalog.vb:115; 3.4 row 59; 5c Installing update (59), merged into the update notice
+dialog	UpdatePromptForm	Window/Main/UpdateNotice	58	ViewCatalog.vb:116; 3.4 row 58; 5b Update available (58)
+hosted	The welcome, on an empty library	Page/Board	3,12	ViewCatalog.vb:124; 3.3 row 12; 5a Board (3), welcome (12), the Board's empty state
+hosted	Board after startup (filled in slices)	Page/Board	3	ViewCatalog.vb:125; 3.2 row 3; 5a Board (3)
+hosted	Library page	Page/Library/Manuscripts	4	ViewCatalog.vb:126; 3.2 row 4; 5a Library: Manuscripts (4)
+hosted	AuthorLibraryForm as the Library page	Page/Library/AuthorsAffiliations	5	ViewCatalog.vb:127; 3.2 row 5; 5a Library: Authors & Affiliations (5)
+hosted	Journals page, JournalLibraryForm hosted	Page/Journals	6	ViewCatalog.vb:128; 3.2 row 6; 5a Journals (6)
+hosted	Deadlines page	Page/Deadlines	7	ViewCatalog.vb:129; 3.2 row 7; 5a Deadlines (7)
+hosted	Insights page	Page/Insights	8	ViewCatalog.vb:130; 3.2 row 8; 5a Insights (8)
+hosted	Import & Export page	Page/ImportExport	9	ViewCatalog.vb:131; 3.2 row 9; 5a Import & Export (9)
+hosted	EditManuscriptForm as the manuscript page	Page/Manuscript	10	ViewCatalog.vb:132; 3.2 row 10; 5a Manuscript page (10)
+hosted	The manuscript page opened a second time	Page/Manuscript/Submissions	19	ViewCatalog.vb:133, SubmissionDetailsForm hosted in a manuscript page opened again; 3.3 row 19; 5a the submission detail pane (19)
+hosted	SubmissionDetailsForm inside the manuscript page	Page/Manuscript/Submissions	19	ViewCatalog.vb:134; 3.3 row 19; 5a the submission detail pane (19)
+hosted	ReviewerResponseMatrixForm inside the submission's details	Page/Manuscript/Submissions	21	ViewCatalog.vb:135; 3.3 row 21; 5a the submission detail pane's tabs (20-22)
+stage	CitationsUpdateForm, confirming the works it found	Stage/UpdateFromOpenAlex	48	ViewCatalog.vb:145; 3.4 row 48; 5c Update from OpenAlex (48)
+stage	JournalFactsForm, with the changes it found	Stage/LookUpFacts	77	ViewCatalog.vb:146; 3.4 row 77; 5c Look Up Facts (77)
+stage	JournalSuggestionsForm, with the journals it found	Stage/FindJournals	71	ViewCatalog.vb:147; 3.4 row 71; 5c Find Journals (71)
+stage	FillBlanksForm, with the blanks it can fill	Stage/FillBlanks	45	ViewCatalog.vb:148; 3.4 row 45; 5c Fill Blanks from Crossref (45)
+stage	DecisionLetterForm, reviewing the comments it read	Stage/DecisionLetter	87	ViewCatalog.vb:149; 3.4 row 87; 5c Read Decision Letter (87)
+stage	AuthorInstructionsForm, reviewing the requirements it read	Stage/AuthorInstructions	78	ViewCatalog.vb:150; 3.4 row 78; 5c Read Author Instructions (78)
+stage	TitlePageImportForm, with the authors it read	Page/Manuscript/New/TitlePage	36	ViewCatalog.vb:151; 3.4 row 36; 5b Paste a Title Page (36)
+stage	Insights page, Your Citations before an update	Page/Insights	14	ViewCatalog.vb:152; 3.3 row 14; 5a Insights (8), Your Citations (14)
+stage	Insights page, Your Citations from a saved update	Page/Insights	14	ViewCatalog.vb:153; 3.3 row 14; 5a Insights (8), Your Citations (14)
+stage	EditManuscriptForm as the manuscript page, after its shortlist is rebuilt	Page/Manuscript/Overview	15	ViewCatalog.vb:154 (ShortlistStage, :160); 3.3 row 15; 5a the manuscript page's Overview (15), where the shortlist is

@@ -15,9 +15,10 @@ using PaperRoute.ViewModels.Session;
 namespace PaperRoute.Desktop.Tests.Styles;
 
 // High contrast and the change of theme without a restart (d1 5.2, step 11):
-// T4, T5, the contrast token map, and the pictures under two stand-in contrast
-// sets (SystemContrastColors.NightSky, dark, and Desert, light) for the
-// maintainer to judge the outlines and the system colours by.
+// T4, T5, the contrast token map, and the pictures under two of Windows'
+// contrast sets (SystemContrastColors.NightSky, hc2, dark, and Desert,
+// hcwhite, light) for the maintainer to judge the outlines and the system
+// colours by.
 //
 // Every test drives a ContrastPreference of its own: no test reads the
 // contrast setting of this PC.

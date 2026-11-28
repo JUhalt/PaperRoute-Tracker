@@ -2,11 +2,11 @@ using System.Diagnostics;
 using System.Reflection;
 using System.Text.Json;
 using Avalonia.Controls;
-using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Threading;
 using ManuscriptPipeline.Models;
 using ManuscriptPipeline.Services;
+using PaperRoute.Desktop.Tests.Input;
 using PaperRoute.TestFixtures;
 using PaperRoute.ViewModels.Spikes;
 
@@ -67,7 +67,7 @@ public sealed class WorkingCopySpikeTests : Board.StorageCheckedTests
             Record("shown");
             window.Type("X");
             Record("typed X");
-            window.Press(Key.Back, PhysicalKey.Backspace);
+            window.Press(Key.Back);
             Record("Backspace");
             window.Box.SelectAll();
             window.Type("Another title");
@@ -197,21 +197,9 @@ public sealed class WorkingCopySpikeTests : Board.StorageCheckedTests
         public TextBlock UnsavedLine { get; }
 
         // One text-input event per character, as a keyboard sends them.
-        public void Type(string text)
-        {
-            foreach (char character in text)
-            {
-                _window.KeyTextInput(character.ToString());
-                Dispatcher.UIThread.RunJobs();
-            }
-        }
+        public void Type(string text) => Keyboard.Type(_window, text);
 
-        public void Press(Key key, PhysicalKey physical, RawInputModifiers modifiers = RawInputModifiers.None)
-        {
-            _window.KeyPress(key, modifiers, physical, null);
-            _window.KeyRelease(key, modifiers, physical, null);
-            Dispatcher.UIThread.RunJobs();
-        }
+        public void Press(Key key) => Keyboard.Press(_window, key);
 
         public void Dispose() => _window.Close();
     }

@@ -9,10 +9,12 @@ namespace PaperRoute.Desktop.Styles;
 //
 // Read() asks Windows (user32!GetSysColor) on Windows, and off Windows gives a
 // fixed black-on-white set until the Linux theme question is looked at (d1
-// 5.2). NightSky and Desert are fixed stand-ins for tests and pictures,
-// modelled on Windows 11's own "Night sky" and "Desert" contrast themes; their
-// values were written from memory of those themes, not read from a Windows
-// install, so they show how the mapping behaves, not what Windows draws.
+// 5.2). Hc1, NightSky, Hcblack and Desert are Windows' four contrast themes,
+// fixed for tests and pictures: their values were read from the theme files
+// (hc1.theme, hc2.theme, hcblack.theme and hcwhite.theme in Windows'
+// "Ease of Access Themes" folder, section [Control Panel\Colors], on
+// 2026-11-27), and R2_TheContrastSetsAreWindowsOwn compares them with those
+// files on every Windows run.
 public readonly record struct SystemContrastColors(
     Color Window,
     Color WindowText,
@@ -38,7 +40,17 @@ public readonly record struct SystemContrastColors(
         HighlightText: Color.FromRgb(0xFF, 0xFF, 0xFF),
         HotTrack: Color.FromRgb(0x1A, 0x0D, 0xAB));
 
-    // A dark stand-in, modelled on Windows 11's "Night sky".
+    // hc1.theme, a dark set.
+    public static SystemContrastColors Hc1 { get; } = new(
+        Window: Color.FromRgb(0x2D, 0x32, 0x36),
+        WindowText: Color.FromRgb(0xFF, 0xFF, 0xFF),
+        GrayText: Color.FromRgb(0xA6, 0xA6, 0xA6),
+        Highlight: Color.FromRgb(0xA1, 0xBF, 0xDE),
+        HighlightText: Color.FromRgb(0x21, 0x2D, 0x3B),
+        HotTrack: Color.FromRgb(0x70, 0xEB, 0xDE));
+
+    // hc2.theme, a dark set. The trial's stand-in for "Night sky", written
+    // from memory, already held these values.
     public static SystemContrastColors NightSky { get; } = new(
         Window: Color.FromRgb(0x00, 0x00, 0x00),
         WindowText: Color.FromRgb(0xFF, 0xFF, 0xFF),
@@ -47,7 +59,17 @@ public readonly record struct SystemContrastColors(
         HighlightText: Color.FromRgb(0x2B, 0x2B, 0x2B),
         HotTrack: Color.FromRgb(0x80, 0x80, 0xFF));
 
-    // A light stand-in, modelled on Windows 11's "Desert".
+    // hcblack.theme, a dark set.
+    public static SystemContrastColors Hcblack { get; } = new(
+        Window: Color.FromRgb(0x20, 0x20, 0x20),
+        WindowText: Color.FromRgb(0xFF, 0xFF, 0xFF),
+        GrayText: Color.FromRgb(0xA6, 0xA6, 0xA6),
+        Highlight: Color.FromRgb(0x8E, 0xE3, 0xF0),
+        HighlightText: Color.FromRgb(0x26, 0x3B, 0x50),
+        HotTrack: Color.FromRgb(0x75, 0xE9, 0xFC));
+
+    // hcwhite.theme, a light set. The trial's stand-in for "Desert", written
+    // from memory, already held these values.
     public static SystemContrastColors Desert { get; } = new(
         Window: Color.FromRgb(0xFF, 0xFA, 0xEF),
         WindowText: Color.FromRgb(0x3D, 0x3D, 0x3D),

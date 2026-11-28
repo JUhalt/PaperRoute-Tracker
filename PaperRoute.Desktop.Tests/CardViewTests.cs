@@ -127,11 +127,7 @@ public sealed class CardViewTests : StorageCheckedTests
             using BoardWindow board = BoardWindow.Show(session);
             List<string> expected = board.Board.Shelves[0].Cards.Select(card => card.AutomationKey + ".Title").ToList();
             var results = new List<(string, List<string>, List<string>, string)>();
-            foreach ((string name, Key key, RawInputModifiers held, PhysicalKey physical) in new[]
-            {
-                ("Ctrl", Key.LeftCtrl, RawInputModifiers.Control, PhysicalKey.ControlLeft),
-                ("Alt", Key.LeftAlt, RawInputModifiers.Alt, PhysicalKey.AltLeft),
-            })
+            foreach ((string name, Key key) in new[] { ("Ctrl", Key.LeftCtrl), ("Alt", Key.LeftAlt) })
             {
                 board.Find<TextBox>("SearchBox").Focus(NavigationMethod.Tab);
                 Dispatcher.UIThread.RunJobs();
@@ -139,8 +135,7 @@ public sealed class CardViewTests : StorageCheckedTests
                 var stops = new List<string>();
                 for (int count = 0; count < 80; count++)
                 {
-                    board.Window.KeyPress(key, held, physical, null);
-                    board.Window.KeyRelease(key, RawInputModifiers.None, physical, null);
+                    board.Press(key);
                     board.Press(Key.Tab);
                     string id = CardParts.Id(board.Focused() as Control);
                     stops.Add(id);
@@ -839,7 +834,7 @@ public sealed class CardViewTests : StorageCheckedTests
     {
         Assert.IsTrue(TargetSurfaceCatalog.Surfaces.Count > 0, "The catalog lists at least one surface.");
         CollectionAssert.AllItemsAreUnique(TargetSurfaceCatalog.Surfaces.Select(surface => surface.Key).ToList());
-        CollectionAssert.Contains(TargetSurfaceCatalog.Surfaces.Select(surface => surface.Key).ToList(), "Board");
+        CollectionAssert.Contains(TargetSurfaceCatalog.Surfaces.Select(surface => surface.Key).ToList(), "Page/Board");
 
         foreach (TargetSurface surface in TargetSurfaceCatalog.Surfaces)
         {
@@ -861,7 +856,7 @@ public sealed class CardViewTests : StorageCheckedTests
             Assert.AreEqual(surface.ViewType.FullName, type, $"{surface.Key}: the factory built the view it names.");
             Assert.IsGreaterThan(1, colours, $"{surface.Key}: the view renders.");
             TestContext.WriteLine($"{surface.Key}: {type}, {cards} card views");
-            if (surface.Key == "Board")
+            if (surface.Key == "Page/Board")
             {
                 Assert.AreEqual(5, cards, "The Board shows the example's five Pipeline cards.");
             }

@@ -1,16 +1,13 @@
 using System.Globalization;
-using System.Runtime.InteropServices;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Media;
-using Avalonia.Media.Imaging;
-using Avalonia.Platform;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using PaperRoute.Desktop.Tests.Board;
-using PaperRoute.Desktop.Tests.Styles;
+using PaperRoute.Desktop.Tests.Legibility;
 using PaperRoute.TestFixtures;
 using PaperRoute.ViewModels.Board;
 using PaperRoute.ViewModels.Session;
@@ -33,14 +30,12 @@ namespace PaperRoute.Desktop.Tests;
 // bounds, the strongest pixel against the card's background (read from the
 // card's own patch) has a contrast of 4.5:1 or more, the strongest-pixel rule
 // (plan :164).
+//
+// Both read the frame through Legibility/FramePixels.cs, whose primitives
+// PrimitiveTests checks on bitmaps made in code.
 [TestClass]
 public sealed class PictureRuleTests : StorageCheckedTests
 {
-    // DarkThemeLegibilityTests.vb IsLight: lighter than any surface the Dark tokens fill.
-    public const double LightLine = 0.6;
-
-    public const double TitleContrast = 4.5;
-
     private const int PatchSize = 4;
 
     private string _root = string.Empty;
@@ -164,9 +159,9 @@ public sealed class PictureRuleTests : StorageCheckedTests
         }
 
         Assert.AreEqual(7, titles.Count, "Every card of the example's three shelves was checked.");
-        List<string> faint = titles.Where(item => item.Ratio < TitleContrast)
+        List<string> faint = titles.Where(item => item.Ratio < Thresholds.Text)
             .Select(item => $"{item.Title}: {item.Ratio.ToString("0.00", CultureInfo.InvariantCulture)}:1").ToList();
-        Assert.IsEmpty(faint, $"Titles under {TitleContrast}:1 against their card:" + Environment.NewLine + string.Join(Environment.NewLine, faint));
+        Assert.IsEmpty(faint, $"Titles under {Thresholds.Text}:1 against their card:" + Environment.NewLine + string.Join(Environment.NewLine, faint));
         Assert.IsTrue(File.Exists(path), $"No picture at {path}.");
     }
 
@@ -210,91 +205,5 @@ public sealed class PictureRuleTests : StorageCheckedTests
         session.LoadAsync(CancellationToken.None).GetAwaiter().GetResult();
         Assert.HasCount(7, session.Manuscripts);
         return session;
-    }
-
-    // The pixels of one rendered frame, read as colours.
-    private sealed class FramePixels
-    {
-        private readonly byte[] _bytes;
-        private readonly int _stride;
-        private readonly bool _bgra;
-
-        private FramePixels(byte[] bytes, int stride, int width, int height, bool bgra)
-        {
-            _bytes = bytes;
-            _stride = stride;
-            Width = width;
-            Height = height;
-            _bgra = bgra;
-        }
-
-        public int Width { get; }
-
-        public int Height { get; }
-
-        public static FramePixels Capture(Window window)
-        {
-            Dispatcher.UIThread.RunJobs();
-            using WriteableBitmap? frame = window.CaptureRenderedFrame();
-            Assert.IsNotNull(frame, "The headless platform captured no frame.");
-            using ILockedFramebuffer buffer = frame.Lock();
-            bool bgra = buffer.Format == PixelFormat.Bgra8888;
-            Assert.IsTrue(bgra || buffer.Format == PixelFormat.Rgba8888, $"A frame in {buffer.Format}, which the test does not read.");
-            var bytes = new byte[buffer.RowBytes * buffer.Size.Height];
-            Marshal.Copy(buffer.Address, bytes, 0, bytes.Length);
-            return new FramePixels(bytes, buffer.RowBytes, buffer.Size.Width, buffer.Size.Height, bgra);
-        }
-
-        public bool Contains(PixelRect rect) =>
-            rect.X >= 0 && rect.Y >= 0 && rect.Right <= Width && rect.Bottom <= Height && rect.Width > 0 && rect.Height > 0;
-
-        // The frame is opaque, so premultiplied colour is the colour.
-        public Color At(int x, int y)
-        {
-            int offset = (y * _stride) + (x * 4);
-            return _bgra
-                ? Color.FromRgb(_bytes[offset + 2], _bytes[offset + 1], _bytes[offset])
-                : Color.FromRgb(_bytes[offset], _bytes[offset + 1], _bytes[offset + 2]);
-        }
-
-        // "<name>: luminance <max> at (x, y), colour #rrggbb", and " LIGHT"
-        // when a pixel of the patch is above the light line.
-        public string Describe(string name, PixelRect patch)
-        {
-            Assert.IsTrue(Contains(patch), $"The patch {patch} of {name} lies outside the frame.");
-            double brightest = -1;
-            Color colour = default;
-            for (int y = patch.Y; y < patch.Bottom; y++)
-            {
-                for (int x = patch.X; x < patch.Right; x++)
-                {
-                    Color pixel = At(x, y);
-                    double luminance = TokenFile.RelativeLuminance(pixel);
-                    if (luminance > brightest)
-                    {
-                        brightest = luminance;
-                        colour = pixel;
-                    }
-                }
-            }
-
-            return string.Create(CultureInfo.InvariantCulture,
-                $"{name}: luminance {brightest:0.000} (#{colour.R:X2}{colour.G:X2}{colour.B:X2}) in {patch}{(brightest > LightLine ? " LIGHT" : string.Empty)}");
-        }
-
-        // The highest contrast any pixel of the rectangle has against background.
-        public double StrongestContrast(PixelRect rect, Color background)
-        {
-            double strongest = 1;
-            for (int y = rect.Y; y < rect.Bottom; y++)
-            {
-                for (int x = rect.X; x < rect.Right; x++)
-                {
-                    strongest = Math.Max(strongest, TokenFile.ContrastRatio(At(x, y), background));
-                }
-            }
-
-            return strongest;
-        }
     }
 }
