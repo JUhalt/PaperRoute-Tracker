@@ -5,9 +5,100 @@
   "Manuscript": {
     "Id": "8a3e5d21-6c4b-4f70-a2d9-1e5b7c3f9d02",
     "Title": "Edited under v1.0.1",
-    "CurrentStage": "Idea",
+    "CoAuthors": "",
+    "Authors": [
+      {
+        "AuthorId": "c5d7e9f1-2a4b-4c6d-8e0f-1a3b5c7d9e03",
+        "AffiliationIds": [],
+        "IsCorrespondingAuthor": true
+      }
+    ],
+    "TargetJournal": "Annals of Placeholder Studies",
+    "TargetJournalId": null,
+    "ManuscriptUrl": "",
+    "Metadata": {
+      "AbstractText": "",
+      "Keywords": [],
+      "Doi": "",
+      "PublicationJournal": "",
+      "PublishedDate": null,
+      "Volume": "",
+      "Issue": "",
+      "Pages": "",
+      "Publisher": "",
+      "PublicationUrl": "",
+      "PreprintDoi": "",
+      "PreprintUrl": "",
+      "ExternalIdentifiers": {}
+    },
+    "RelatedLinks": [],
+    "Reminders": [],
+    "Versions": [
+      {
+        "Id": "1b3d5f7a-9c0e-4a2b-8d4f-6a8c0e2b4d21",
+        "RecordedAtUtc": "2026-09-28T19:21:45.7730016Z",
+        "LastModifiedAtUtc": "2026-09-28T19:21:45.7730016Z",
+        "CreatedDate": "2026-09-28T12:21:45.7730016",
+        "Label": "Submitted version",
+        "Notes": "",
+        "LocalFilePath": "",
+        "IsManagedCopy": false,
+        "SubmissionId": "2c4e6a8b-0d1f-4b3c-9e5a-7b9d1f3c5e22",
+        "DecisionId": null,
+        "RevisionRoundNumber": null
+      }
+    ],
+    "CurrentVersionId": "1b3d5f7a-9c0e-4a2b-8d4f-6a8c0e2b4d21",
+    "ReadinessProfiles": [],
+    "SubmissionPackets": [],
+    "CurrentStage": "Revision",
     "Location": "Pipeline",
-    "Tags": []
+    "StageEnteredDate": "2026-11-03T09:05:51.2264408",
+    "RevisionDeadline": "2027-01-15T00:00:00",
+    "FileDrawerDate": null,
+    "FileDrawerReason": "",
+    "History": [
+      {
+        "Id": "3d5f7b9c-1e2a-4c4d-8f6b-8c0e2a4d6f23",
+        "RecordedAtUtc": "2026-11-03T17:05:51.2264408Z",
+        "LastModifiedAtUtc": "2026-11-03T17:05:51.2264408Z",
+        "EventDate": "2026-11-03T00:00:00",
+        "Stage": "Revision",
+        "Note": ""
+      }
+    ],
+    "Submissions": [
+      {
+        "Id": "2c4e6a8b-0d1f-4b3c-9e5a-7b9d1f3c5e22",
+        "RecordedAtUtc": "2026-09-28T19:21:45.7730016Z",
+        "LastModifiedAtUtc": "2026-11-03T17:05:51.2264408Z",
+        "JournalName": "Annals of Placeholder Studies",
+        "JournalId": null,
+        "ManuscriptNumber": "APS-26-1187",
+        "SubmittedDate": "2026-09-28T00:00:00",
+        "FollowUpDate": "2026-10-26T00:00:00",
+        "Notes": "",
+        "PortalUrl": "",
+        "Decisions": [
+          {
+            "Id": "4e6a8c0d-2f3b-4d5e-9a7c-9d1f3b5e7a24",
+            "RecordedAtUtc": "2026-11-03T17:05:51.2264408Z",
+            "LastModifiedAtUtc": "2026-11-03T17:05:51.2264408Z",
+            "DecisionDate": "2026-11-03T00:00:00",
+            "Decision": "MinorRevision",
+            "RevisionDeadline": "2027-01-15T00:00:00",
+            "Notes": "",
+            "Suggestion": null
+          }
+        ],
+        "Correspondence": [],
+        "ReviewerResponses": []
+      }
+    ],
+    "WorkType": "JournalArticle",
+    "Tags": [],
+    "JournalShortlist": [],
+    "PublicationMatches": []
   },
   "UnsavedLibrary": {
     "Authors": [

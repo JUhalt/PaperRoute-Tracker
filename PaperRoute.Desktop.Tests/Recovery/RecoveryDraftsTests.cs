@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -141,19 +142,31 @@ public sealed partial class RecoveryDraftsTests
 
     // The main slot is 1.0.x's file: 1.0.0's and 1.0.1's drafts read and are
     // offered unchanged, and a draft written into an empty main slot lands at
-    // 1.0.x's path in the shape 1.0.0 wrote.
+    // 1.0.x's path in the shape 1.0.0 wrote. Each fixture is a whole
+    // manuscript as 1.0.x wrote it, calendar dates without an offset (#118),
+    // and every one of its dates reads as the same day on every runner; so
+    // does each date given the offset System.Text.Json writes for a local
+    // time (+14:00 here), which the core's store takes off on the way in.
     [TestMethod]
     [DataRow(V100Fixture, "4f1c2b7a-3d5e-4a61-9b8c-0d2e7f6a1b01", "Edited under v1.0.0", false, DisplayName = "1.0.0's draft")]
     [DataRow(V101Fixture, "8a3e5d21-6c4b-4f70-a2d9-1e5b7c3f9d02", "Edited under v1.0.1", true, DisplayName = "1.0.1's draft")]
     public void TheMainSlotKeepsTheOneZeroBytes(string fixture, string manuscript, string title, bool withLibrary)
     {
         Guid id = Guid.Parse(manuscript);
-        CollectionAssert.AreEqual(withLibrary ? s_keysOf101 : s_keysOf100, KeysOf(File.ReadAllText(FixturePath(fixture))),
+        string written = File.ReadAllText(FixturePath(fixture));
+        CollectionAssert.AreEqual(withLibrary ? s_keysOf101 : s_keysOf100, KeysOf(written),
             $"{fixture} does not have the keys its version writes.");
         byte[] before = PlaceFixture(fixture, _data);
         RecoveryDraft? read = new RecoveryDraftStore(_data).Read();
         Assert.AreEqual(id, read?.ManuscriptId, $"The core's store did not read {fixture}.");
         Assert.AreEqual(withLibrary, read?.UnsavedLibrary is not null, $"{fixture} read with the wrong library records.");
+        AssertTheCalendarDays(written, read, fixture);
+
+        Assert.HasCount(8, CalendarDate().Matches(written), $"{fixture} should hold eight calendar dates.");
+        string offsetFolder = Path.Combine(_root, "offset");
+        Directory.CreateDirectory(Path.Combine(offsetFolder, "recovery"));
+        File.WriteAllText(Path.Combine(offsetFolder, "recovery", RecoveryDraftStore.FileName), CalendarDate().Replace(written, "${value}+14:00\""));
+        AssertTheCalendarDays(written, new RecoveryDraftStore(offsetFolder).Read(), fixture + " with +14:00 on its calendar dates");
 
         RecoveryDrafts drafts = Session(id);
         Assert.AreEqual(title, drafts.Offers.SingleOrDefault()?.Title, $"{fixture} in the main slot was not offered.");
@@ -522,6 +535,36 @@ public sealed partial class RecoveryDraftsTests
         return [.. document.RootElement.EnumerateObject().Select(property => property.Name)];
     }
 
+    // Each calendar date of a fixture's manuscript reads as the day the
+    // fixture's text names (#118).
+    private static void AssertTheCalendarDays(string fixtureJson, RecoveryDraft? draft, string what)
+    {
+        Assert.IsNotNull(draft, $"The core's store did not read {what}.");
+        using JsonDocument document = JsonDocument.Parse(fixtureJson);
+        JsonElement manuscript = document.RootElement.GetProperty("Manuscript");
+        JsonElement submission = manuscript.GetProperty("Submissions")[0];
+        JsonElement decision = submission.GetProperty("Decisions")[0];
+        var read = draft.Manuscript;
+        var readSubmission = read.Submissions.SingleOrDefault();
+        var readDecision = readSubmission?.Decisions.SingleOrDefault();
+        (string Name, JsonElement Written, DateTime? Read)[] dates =
+        [
+            ("StageEnteredDate", manuscript.GetProperty("StageEnteredDate"), read.StageEnteredDate),
+            ("RevisionDeadline", manuscript.GetProperty("RevisionDeadline"), read.RevisionDeadline),
+            ("a version's CreatedDate", manuscript.GetProperty("Versions")[0].GetProperty("CreatedDate"), read.Versions.SingleOrDefault()?.CreatedDate),
+            ("a history event's EventDate", manuscript.GetProperty("History")[0].GetProperty("EventDate"), read.History.SingleOrDefault()?.EventDate),
+            ("a submission's SubmittedDate", submission.GetProperty("SubmittedDate"), readSubmission?.SubmittedDate),
+            ("a submission's FollowUpDate", submission.GetProperty("FollowUpDate"), readSubmission?.FollowUpDate),
+            ("a decision's DecisionDate", decision.GetProperty("DecisionDate"), readDecision?.DecisionDate),
+            ("a decision's RevisionDeadline", decision.GetProperty("RevisionDeadline"), readDecision?.RevisionDeadline),
+        ];
+        foreach ((string name, JsonElement writtenDate, DateTime? readDate) in dates)
+        {
+            Assert.AreEqual(writtenDate.GetString()![..10], readDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                $"{what}: {name} read as another day.");
+        }
+    }
+
     // Both projects' sources as the test output holds them, by repository path.
     private static IEnumerable<(string File, string[] Lines)> Sources()
     {
@@ -541,6 +584,11 @@ public sealed partial class RecoveryDraftsTests
 
     [GeneratedRegex(@"\bRecoveryDraftStore\b", RegexOptions.CultureInvariant)]
     private static partial Regex StoreName();
+
+    // A calendar date in a draft's text: a date and time with no offset and
+    // no Z, under any name but a ...Utc stamp.
+    [GeneratedRegex(@"(?<value>""[A-Za-z]+(?<!Utc)""\s*:\s*""\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?)""", RegexOptions.CultureInvariant)]
+    private static partial Regex CalendarDate();
 
     private sealed class LogCapture : TraceListener
     {
