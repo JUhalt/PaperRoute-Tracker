@@ -11,9 +11,10 @@ namespace PaperRoute.ViewModels.ManuscriptPage;
 //
 // One working copy serves a page host and is loaded record after record, as
 // today's kept editor is (LoadRecord). Edit is the one way to change the
-// record it holds, and it refuses while a save writes (Freeze). After Load or
-// Discard, Working is a new object graph, so rows and editors hold ids, never
-// objects inside Working, and change it as Edit(w => ...find by id...).
+// record it holds, and it refuses while a save writes (Freeze). After Load,
+// Discard or AcceptSaved, Working is a new object graph, so rows and editors
+// hold ids, never objects inside Working, and change it as
+// Edit(w => ...find by id...).
 //
 // There is no save here: BuildCandidate makes what Save writes, without
 // changing the working copy, and AcceptSaved starts again from what was
@@ -41,21 +42,26 @@ public sealed class WorkingCopy
     // through Edit.
     public Manuscript Working { get; private set; }
 
-    // Working as JSON when it was loaded; empty for a recovered draft, which
-    // is unsaved on purpose (EditManuscriptForm.vb:482-485).
+    // Working as JSON when it was loaded or last saved; empty for a recovered
+    // draft not saved yet, which is unsaved on purpose
+    // (EditManuscriptForm.vb:482-485).
     public string Baseline { get; private set; }
 
-    // A stage chosen and not yet applied. Save completes it through the
-    // stage rules (W2); a step that changes the stage clears it (2.4).
+    // A stage chosen and not yet applied. BuildCandidate completes it
+    // through the stage rules and AcceptSaved clears it; a step that changes
+    // the stage clears it too (2.4).
     public PaperStage? HeldStage { get; private set; }
 
-    // Target journal text, stage and File Drawer reason as the load left
-    // them, and the stage as the last step that changed it left it.
+    // Target journal text, stage and File Drawer reason as the last load,
+    // discard or save left them, and the stage as the last step that changed
+    // it left it.
     public HeldValues Stamps { get; private set; }
 
-    // Title, target journal and File Drawer reason as the load left Working,
-    // not trimmed: what text typed back to them writes (TypedText). Taken
-    // with the baseline, after the reconciliation.
+    // Title, target journal and File Drawer reason as the last load, discard
+    // or save left Working, not trimmed: what text typed back to them writes
+    // (TypedText). Taken with the baseline: after the reconciliation at a
+    // load or a discard, and from the record as written, with no reconcile,
+    // at a save.
     public TypedValues Loaded { get; private set; }
 
     // The people, affiliations, journals and tag colours made on the page and
