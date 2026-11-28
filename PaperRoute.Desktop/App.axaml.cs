@@ -139,7 +139,8 @@ public partial class App : Application
                     PrivacyScrubber.ForThisProcess(restart.FileName ?? Environment.ProcessPath),
                     Console.Out,
                     PlatformCheck.DefaultRestartLimit,
-                    Environment.GetEnvironmentVariable);
+                    Environment.GetEnvironmentVariable,
+                    SystemTextSettings.Read);
                 desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
                 window.Closed += (_, _) =>
                 {

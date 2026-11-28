@@ -414,7 +414,10 @@ jobs:
   # the platform check are recorded, never judged: a shared runner without a
   # desktop session says nothing firm about speed, a desktop's file dialog
   # or its browser. A person on a real Ubuntu desktop answers those (the
-  # Linux checklist).
+  # Linux checklist). The platform check runs twice, as the display starts
+  # and again after xrdb (x11-xserver-utils) sets Xft.dpi to 144, so the
+  # summary shows whether that reaches the window's render scaling or the
+  # height of its text in pixels; both runs are recorded, neither judged.
   trial-linux-window:
     name: Avalonia Board trial (Linux window under Xvfb)
     runs-on: ubuntu-latest
@@ -435,7 +438,7 @@ jobs:
       - name: Install a virtual display, a window manager and their tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends xvfb openbox xdotool wmctrl x11-utils imagemagick
+          sudo apt-get install -y --no-install-recommends xvfb openbox xdotool wmctrl x11-utils x11-xserver-utils imagemagick
 
       - name: Publish the trial for Linux
         run: dotnet publish PaperRoute.Desktop/PaperRoute.Desktop.csproj --configuration Release --runtime linux-x64 --self-contained --output "$RUNNER_TEMP/board-trial"

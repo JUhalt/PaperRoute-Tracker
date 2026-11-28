@@ -104,6 +104,54 @@ public sealed partial class HeadlessLimitTests
         Assert.AreEqual(0, changes, "The headless platform raised a colour change.");
     }
 
+    // Limit 8: no system text size reaches headless, and Avalonia 12.1.6
+    // offers no text-size setting to follow. The public types of every
+    // Avalonia assembly the app loads (PaperRoute.Desktop's references,
+    // followed through the Avalonia assemblies, so the Windows, X11 and
+    // macOS back ends are among them), and of Avalonia.Headless, the
+    // platform these tests run on, which the app itself does not load, hold
+    // no type or member named like one. The test fails when an upgrade adds
+    // one, so that the text-size statement (HeadlessLimits.md row 8, the
+    // plan's section 9) is read again then. Its teeth: the same walk over
+    // the real types with a word they must hold ("FontSize") names two
+    // members it must find, so a scan that reads nothing fails; and the
+    // scan over a type that has text-size members must name each of them.
+    [TestMethod]
+    public void AvaloniaOffersNoTextSizeSetting()
+    {
+        IReadOnlyList<Assembly> assemblies = [.. AvaloniaAssembliesTheAppLoads(), typeof(HeadlessWindowExtensions).Assembly];
+        List<Type> types = assemblies.SelectMany(assembly => assembly.GetExportedTypes()).ToList();
+        TestContext.WriteLine($"Scanned {types.Count} public types in {assemblies.Count} assemblies: " +
+            string.Join(", ", assemblies.Select(assembly => assembly.GetName().Name + " " + assembly.GetName().Version)));
+        List<string> names = assemblies.Select(assembly => assembly.GetName().Name!).ToList();
+        foreach (string needed in new[] { "Avalonia.Base", "Avalonia.Controls", "Avalonia.Win32", "Avalonia.X11", "Avalonia.Native", "Avalonia.Headless" })
+        {
+            CollectionAssert.Contains(names, needed, $"The scan does not reach {needed}.");
+        }
+
+        // The scan reads the real types and their members: Avalonia 12.1.6
+        // has about 1,600 public types in these assemblies, and the same walk
+        // with the word "FontSize" finds the two members named here.
+        Assert.IsGreaterThanOrEqualTo(1000, types.Count, $"The scan read only {types.Count} public types, so it cannot show an absence.");
+        List<string> fontSize = MembersNamedLike(types, ["FontSize"]);
+        foreach (string member in new[] { "Avalonia.Controls.TextBlock.FontSize", "Avalonia.Controls.Documents.TextElement.FontSizeProperty" })
+        {
+            CollectionAssert.Contains(fontSize, member, $"The same walk with the word \"FontSize\" does not find {member}, so it does not read the real members.");
+        }
+
+        List<string> found = TextSizeMembers(types);
+        Assert.IsEmpty(found,
+            "Avalonia now offers what looks like a text-size setting, so the text-size statement (HeadlessLimits.md row 8, the plan's section 9) must be read again: " +
+            string.Join(", ", found));
+
+        // The scan's teeth.
+        string specimen = typeof(TextSizeSpecimen).FullName!;
+        CollectionAssert.AreEqual(
+            new[] { specimen + ".FontScale", specimen + ".TextScaleFactor", specimen + ".TextScalingChanged", specimen + ".TextSizeFactorFor" },
+            TextSizeMembers([typeof(TextSizeSpecimen)]),
+            "The scan must name every member of the specimen that is named like a text-size setting, and nothing else.");
+    }
+
     // The note names the plan's three limits, every test it names as a proof
     // is a test method of this project, and every rule's code file points to
     // the note. Then the same check, on a note and a file spoiled one way
@@ -289,6 +337,79 @@ public sealed partial class HeadlessLimitTests
 
         Assert.IsNotNull(folder, $"No PaperRoute.Desktop.Tests.csproj above {AppContext.BaseDirectory}.");
         return folder.FullName;
+    }
+
+    // The Avalonia assemblies PaperRoute.Desktop references, and the
+    // Avalonia assemblies they reference in turn, sorted by name.
+    private static IReadOnlyList<Assembly> AvaloniaAssembliesTheAppLoads()
+    {
+        var found = new SortedDictionary<string, Assembly>(StringComparer.Ordinal);
+        var waiting = new Queue<Assembly>([typeof(App).Assembly]);
+        while (waiting.Count > 0)
+        {
+            foreach (AssemblyName reference in waiting.Dequeue().GetReferencedAssemblies())
+            {
+                string name = reference.Name ?? string.Empty;
+                bool avalonia = name == "Avalonia" || name.StartsWith("Avalonia.", StringComparison.Ordinal);
+                if (avalonia && !found.ContainsKey(name))
+                {
+                    Assembly loaded = Assembly.Load(reference);
+                    found[name] = loaded;
+                    waiting.Enqueue(loaded);
+                }
+            }
+        }
+
+        return [.. found.Values];
+    }
+
+    // Every type and member whose name holds one of the words of a
+    // text-size setting, as "Type.Member", sorted.
+    private static List<string> TextSizeMembers(IEnumerable<Type> types) =>
+        MembersNamedLike(types, ["TextScal", "FontScal", "TextSizeFactor"]);
+
+    // Every type and member (accessors left out, as their property or event
+    // is named) whose name holds one of the words, ignoring case, as
+    // "Type.Member", sorted.
+    private static List<string> MembersNamedLike(IEnumerable<Type> types, IReadOnlyList<string> words)
+    {
+        bool Named(string name) => words.Any(word => name.Contains(word, StringComparison.OrdinalIgnoreCase));
+        var found = new List<string>();
+        foreach (Type type in types)
+        {
+            if (Named(type.Name))
+            {
+                found.Add(type.FullName ?? type.Name);
+            }
+
+            foreach (MemberInfo member in type.GetMembers(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly))
+            {
+                if (member is not MethodBase { IsSpecialName: true } && Named(member.Name))
+                {
+                    found.Add((type.FullName ?? type.Name) + "." + member.Name);
+                }
+            }
+        }
+
+        found.Sort(StringComparer.Ordinal);
+        return found;
+    }
+
+    // The scan's bad input: what a text-size setting in a later Avalonia
+    // might look like, beside a member that is not one.
+    private sealed class TextSizeSpecimen
+    {
+        public event EventHandler? TextScalingChanged;
+
+        public static double FontScale => 1;
+
+        public double TextScaleFactor { get; set; } = 1;
+
+        public double Width { get; set; }
+
+        public double TextSizeFactorFor(double size) => size * TextScaleFactor;
+
+        public void Raise() => TextScalingChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private static PixelSize FrameSize(Window window)

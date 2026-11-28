@@ -33,6 +33,7 @@ public sealed class PlatformCheckWindow
     private readonly string _path;
     private readonly TextWriter _output;
     private readonly Func<string, string?> _environment;
+    private readonly Func<SystemTextSetting>? _systemText;
     private readonly PrivacyScrubber _scrubber;
     private readonly PlatformCheck _check;
     private bool _loading;
@@ -47,7 +48,8 @@ public sealed class PlatformCheckWindow
         PrivacyScrubber scrubber,
         TextWriter output,
         TimeSpan restartLimit,
-        Func<string, string?> environment)
+        Func<string, string?> environment,
+        Func<SystemTextSetting>? systemText = null)
     {
         ArgumentNullException.ThrowIfNull(window);
         ArgumentNullException.ThrowIfNull(shell);
@@ -62,6 +64,7 @@ public sealed class PlatformCheckWindow
         _path = path;
         _output = output;
         _environment = environment;
+        _systemText = systemText;
         _scrubber = scrubber;
         _check = new PlatformCheck(actions, restart, scrubber, Say, restartLimit);
     }
@@ -79,8 +82,9 @@ public sealed class PlatformCheckWindow
         TextWriter output,
         TimeSpan restartLimit,
         Func<string, string?> environment,
-        Action? beforeClose = null) =>
-        new PlatformCheckWindow(window, shell, path, actions, restart, scrubber, output, restartLimit, environment).RunAsync(beforeClose);
+        Action? beforeClose = null,
+        Func<SystemTextSetting>? systemText = null) =>
+        new PlatformCheckWindow(window, shell, path, actions, restart, scrubber, output, restartLimit, environment, systemText).RunAsync(beforeClose);
 
     public async Task<int> RunAsync(Action? beforeClose = null)
     {
@@ -151,18 +155,65 @@ public sealed class PlatformCheckWindow
         return 1;
     }
 
-    // The window's render scaling and what Avalonia reports of the system's
-    // theme (PlatformSettings.GetColorValues), for the record only: a named
-    // exception in ThemeOwnership, since nothing here decides a variant.
-    public static PlatformFacts FactsFor(Window window, Func<string, string?> environment)
+    // The size of the body line whose height in pixels the check records.
+    public const double BodyLineFontSize = 13;
+
+    // The height, in layout units, of the fixed box whose height in pixels
+    // the check records.
+    public const double BoxSize = 100;
+
+    // The text of that body line.
+    public const string BodyLineText = "Submitted to the journal, under review";
+
+    // The window's render scaling, what Avalonia reports of the system's
+    // theme (PlatformSettings.GetColorValues, for the record only: a named
+    // exception in ThemeOwnership, since nothing here decides a variant), what
+    // the system says of its text size (systemText; the real reader is
+    // SystemTextSettings.Read, and without one nothing is read), and the
+    // heights in the window's device pixels of one 13 px body line in the
+    // window's font and one fixed box 100 layout units high: each laid-out
+    // height times the render scaling, so the box grows when everything grows
+    // and stays when only text does.
+    public static PlatformFacts FactsFor(Window window, Func<string, string?> environment, Func<SystemTextSetting>? systemText = null)
     {
         ArgumentNullException.ThrowIfNull(window);
         PlatformColorValues? colors = Application.Current?.PlatformSettings?.GetColorValues();
+        double scaling = window.RenderScaling;
         return Stamped(PlatformFacts.Read(
             environment,
-            window.RenderScaling,
+            scaling,
             colors?.ThemeVariant.ToString() ?? "unknown",
-            colors?.ContrastPreference.ToString() ?? "unknown"));
+            colors?.ContrastPreference.ToString() ?? "unknown")) with
+        {
+            SystemText = SystemTextOf(systemText),
+            BodyLinePixels = scaling * LaidOutHeight(new TextBlock { Text = BodyLineText, FontSize = BodyLineFontSize, FontFamily = window.FontFamily }),
+            BoxPixels = scaling * LaidOutHeight(new Border { Width = BoxSize, Height = BoxSize }),
+        };
+    }
+
+    // What the reader gives; a reader that throws is a fact too, by its type.
+    private static SystemTextSetting SystemTextOf(Func<SystemTextSetting>? systemText)
+    {
+        if (systemText is null)
+        {
+            return new SystemTextSetting(null, "not read: no reader was given", null);
+        }
+
+        try
+        {
+            return systemText();
+        }
+        catch (Exception ex)
+        {
+            return new SystemTextSetting(null, "not read: the reader failed (" + ex.GetType().Name + ")", null);
+        }
+    }
+
+    // The height a control asks for with no limit, in layout units.
+    private static double LaidOutHeight(Control control)
+    {
+        control.Measure(Size.Infinity);
+        return control.DesiredSize.Height;
     }
 
     // The trial's version as it was built: "0.1.0-trial+" and the hash of the
@@ -188,7 +239,7 @@ public sealed class PlatformCheckWindow
     {
         try
         {
-            return FactsFor(_window, _environment);
+            return FactsFor(_window, _environment, _systemText);
         }
         catch (Exception ex)
         {

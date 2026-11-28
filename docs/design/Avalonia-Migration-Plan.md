@@ -428,7 +428,7 @@ These need no issue of their own; they come with the units above.
 - Virtualised lists in place of the Board's card cache and idle fill (`Form1.vb:100-107`, `Form1.BoardFill.vb`).
 - Window chrome without `dwmapi` calls (`WindowChrome.vb:236-256`).
 
-Following the system text size, which the issue lists here, is not claimed: how Avalonia exposes it was not checked, so it is a risk in section 11 and an acceptance line of issue 4.
+Following the system text size, which the issue lists here, is not claimed. It is an acceptance line of issue 4 and a risk in section 11, and that line is not closed yet. What is checked so far (issue 4, November 2026): Avalonia 12.1.6 offers no text-size setting in its public API, the Windows, X11 and macOS back ends included (`AvaloniaOffersNoTextSizeSetting`, which fails when an upgrade adds a member named like one); and the platform check (`--platform-check`) now records the system's text setting (Windows' `TextScaleFactor`; GNOME's `text-scaling-factor` and `Xft.dpi`), the window's render scaling, and the heights in the window's device pixels of a 13 px body line in Inter and of a fixed box 100 layout units high, which grows only when everything grows (`ThePlatformCheckRecordsTextScaleScalingAndLineHeight`). The Linux window job under Xvfb runs the check at the default and again with `Xft.dpi: 144`, and judges neither. What the guest runs will add: the published trial's platform check in a Windows guest at Text size 100 % and 150 % and in an Ubuntu guest at text scaling 1.0 and 1.5, each with today's WinForms app opened beside it, and from them the statement of which happened (text grows, everything grows, or nothing changes), written here and in the limits of headless (`PaperRoute.Desktop.Tests/HeadlessLimits.md`, row 8). Whether v1.1 should then follow the system text size is a question for the maintainer.
 
 ---
 
@@ -479,7 +479,7 @@ One week, on a throwaway branch, not merged: the Board with its cards on the exa
 | AppImage needs FUSE that a stock system or the CI runner lacks; file dialogs need a D-Bus portal a minimal guest lacks; Avalonia renders badly in a VirtualBox guest (none checked). | Trial question 5. |
 | XWayland behaviour on GNOME Wayland (fractional scaling, input methods, "come forward") differs from an X11 session; Avalonia's own Wayland backend is a private preview. | The Linux gate in a GNOME Wayland session at 125% or 150%. |
 | Screen-reader parity falls short: Avalonia's Linux accessibility backend is new in 12.0. | An Orca pass over the trial's Board. |
-| Following the system text size may not be available or may differ per OS (how Avalonia exposes it was not checked). | Issue 4 (style system). |
+| Following the system text size may not be available or may differ per OS (Avalonia 12.1.6 offers no text-size setting, `AvaloniaOffersNoTextSizeSetting`; whether the system's setting reaches a window is still to be shown by issue 4's guest runs, section 9). | Issue 4 (style system). |
 | Owner-drawn lists lose keyboard maps or accessibility trees quietly (`DeadlineList.vb:64-75, 988-1060`; `JournalShortlistList.vb:50-60`). | Keyboard tests written before the page in issues 16 and 17. |
 | Pixel-based legibility rules differ between headless Skia and the screen. | Trial question 3: compare one R5 result with a screenshot. |
 | ClosedXML column widths on Linux without default fonts (not checked). | A core test exporting a spreadsheet on `ubuntu-latest` in stage 2. |
