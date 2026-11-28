@@ -482,8 +482,8 @@ public sealed partial class WorkingCopyTests : Board.StorageCheckedTests
         {
             [nameof(WorkingCopy.Original)] = "the saved record, never changed by the page",
             [nameof(WorkingCopy.Baseline)] = "what Working is compared with",
-            [nameof(WorkingCopy.Stamps)] = "what the load and steps left; follows the record, edits nothing",
-            [nameof(WorkingCopy.Loaded)] = "the typed fields as the load left them; what typing back writes, edits nothing",
+            [nameof(WorkingCopy.Stamps)] = "what the last load, discard or save and the steps left; follows the record, edits nothing",
+            [nameof(WorkingCopy.Loaded)] = "the typed fields as the last load, discard or save left them; what typing back writes, edits nothing",
             [nameof(WorkingCopy.Library)] = "the library on disk with Delta in it; Delta is counted",
             [nameof(WorkingCopy.Token)] = "names the record loaded",
             [nameof(WorkingCopy.IsRecovered)] = "counted through the empty Baseline of a draft",

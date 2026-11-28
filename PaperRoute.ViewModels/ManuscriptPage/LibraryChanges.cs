@@ -1,8 +1,9 @@
 namespace PaperRoute.ViewModels.ManuscriptPage;
 
 // The delta (build 9's design, 2.2): people, affiliations, journals and tag
-// colours made on the manuscript page and not saved yet. Save writes them onto
-// a fresh read of the author file (W2); Discard drops them. Today's
+// colours made on the manuscript page and not saved yet. The session's save
+// writes them onto a fresh read of the author file (S1); Discard and a save
+// that succeeded drop them (WorkingCopy). Today's
 // counterpart is the author library's dirty flag and the ids it held on disk
 // (EditManuscriptForm.vb:30-37).
 public sealed class LibraryChanges
@@ -35,6 +36,18 @@ public sealed class LibraryChanges
         {
             WorkTypeService.SetColor(library, entry.Tag, entry.Color);
         }
+    }
+
+    // A save wrote the author file and then failed to write the manuscripts:
+    // every record here is on disk now, so the next save has nothing to add
+    // (build 9's design, 2.5 step 9; today RememberAuthorLibraryOnDisk,
+    // EditManuscriptForm.vb:4653-4665). The record's own edits stay unsaved.
+    public void MarkWritten()
+    {
+        Authors.Clear();
+        Affiliations.Clear();
+        Journals.Clear();
+        TagColors.Clear();
     }
 
     private static void AddMissing<T>(List<T> into, IEnumerable<T> records, Func<T, Guid> id)

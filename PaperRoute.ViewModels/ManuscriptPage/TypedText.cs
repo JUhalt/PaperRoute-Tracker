@@ -20,15 +20,16 @@ public enum TypedField
 //   door, and only when its trimmed text differs from the copy's, so spaces
 //   at the ends are never a change (EditManuscriptForm.vb:593-594, 606-607).
 //   The box keeps the text as typed, so a space being typed is not eaten.
-// - Text typed back to the value the load left writes that value as it was
-//   (WorkingCopy.Loaded), so a title stored with spaces at its ends is not
-//   unsaved after a character is typed and removed. The load's value, not
-//   the original record's: the baseline is taken after the reconciliation,
-//   which can rewrite the target journal.
+// - Text typed back to the value the last load, discard or save left writes
+//   that value as it was (WorkingCopy.Loaded), so a title stored with spaces
+//   at its ends is not unsaved after a character is typed and removed. That
+//   value, not the original record's: a load's baseline is taken after the
+//   reconciliation, which can rewrite the target journal, and a save's from
+//   the record as written.
 // - After every change to the working copy, the box rereads it when the
 //   copy's trimmed value differs from the box's trimmed text: a step that
 //   changed the field wins, and a step that left it keeps what was typed.
-//   After a load or a discard the box shows the record as it is.
+//   After a load, a discard or a save the box shows the record as it is.
 public sealed class TypedText : ObservableObject
 {
     private readonly WorkingCopy _copy;
