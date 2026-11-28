@@ -267,6 +267,123 @@ public sealed partial class StartupFailureModelTests
         Assert.AreEqual(string.Empty, model.Status, "The status line is emptied when the work ends.");
     }
 
+    // Start-up design 3.2 row 28: the window stays usable while the picker
+    // waits (on one runner such a picker never returned, #451), so Close
+    // works then; but the restore is one recovery, and neither Use the
+    // Previous Save nor a second Restore begins until it is over.
+    [TestMethod]
+    public void NoOtherRecoveryBeginsWhileThePickerWaits()
+    {
+        var log = new CallLog();
+        using var recovery = new FakeStartupRecovery(log);
+        var questions = new RecordingStartupQuestions(log);
+        questions.HoldChoice();
+        var model = new StartupFailureViewModel(StorageFailure(), () => recovery, questions);
+        Assert.IsTrue(model.CanRecover, "A recovery may begin.");
+
+        Task restore = model.RestoreFromBackupAsync();
+        Assert.IsFalse(restore.IsCompleted, "The picker waits.");
+        Assert.IsFalse(model.CanRecover, "The offers are off while the picker waits.");
+        Assert.IsTrue(model.CanClose, "Close works while the picker waits.");
+
+        model.UsePreviousSave();
+        Task second = model.RestoreFromBackupAsync();
+        Assert.IsTrue(second.IsCompleted, "A second Restore is refused at once.");
+        CollectionAssert.AreEqual(new[] { "choose" }, log.Names, "Neither the previous save nor a second picker was taken while the picker waited.");
+        Assert.IsFalse(model.Recovered);
+
+        questions.ReleaseChoice("chosen.zip");
+        Run(restore);
+        CollectionAssert.AreEqual(new[] { "choose", "inspect chosen.zip", "confirm", "restore chosen.zip" }, log.Names, "The first restore goes on.");
+        Assert.IsTrue(model.Recovered);
+        Assert.IsFalse(model.CanRecover, "Nothing more is recovered once a recovery succeeded.");
+    }
+
+    // An answer that comes after the view closed goes no further: a picker
+    // reads nothing, a reading asks nothing, and a yes restores nothing.
+    [TestMethod]
+    public void NothingIsReadOrRestoredOnceTheViewClosed()
+    {
+        var pickLog = new CallLog();
+        using var picked = new FakeStartupRecovery(pickLog);
+        var pickQuestions = new RecordingStartupQuestions(pickLog);
+        pickQuestions.HoldChoice();
+        var model = new StartupFailureViewModel(StorageFailure(), () => picked, pickQuestions);
+        Task restore = model.RestoreFromBackupAsync();
+        model.Closed();
+        Assert.IsFalse(model.CanRecover, "Nothing is offered once the view closed.");
+        pickQuestions.ReleaseChoice("chosen.zip");
+        Run(restore);
+        CollectionAssert.AreEqual(new[] { "choose" }, pickLog.Names, "A picker that answers after the view closed reads and restores nothing.");
+        Assert.IsFalse(model.Recovered);
+
+        var readLog = new CallLog();
+        using var read = new FakeStartupRecovery(readLog);
+        read.HoldInspection();
+        var reading = new StartupFailureViewModel(StorageFailure(), () => read, new RecordingStartupQuestions(readLog) { Backup = "chosen.zip" });
+        Task readingRestore = reading.RestoreFromBackupAsync();
+        Assert.IsTrue(read.InspectionStarted.Wait(s_limit), "The backup's reading began.");
+        reading.Closed();
+        read.ReleaseInspection();
+        Run(readingRestore);
+        CollectionAssert.AreEqual(new[] { "choose", "inspect chosen.zip" }, readLog.Names, "A reading that ends after the view closed asks and restores nothing.");
+
+        var askLog = new CallLog();
+        using var asked = new FakeStartupRecovery(askLog);
+        var askQuestions = new RecordingStartupQuestions(askLog) { Backup = "chosen.zip" };
+        askQuestions.HoldConfirmation();
+        var asking = new StartupFailureViewModel(StorageFailure(), () => asked, askQuestions);
+        Task askingRestore = asking.RestoreFromBackupAsync();
+        Assert.IsTrue(askQuestions.ConfirmationAsked.Wait(s_limit), "The confirmation was asked.");
+        Assert.IsFalse(askingRestore.IsCompleted, "The confirmation waits.");
+        asking.Closed();
+        askQuestions.ReleaseConfirmation(true);
+        Run(askingRestore);
+        CollectionAssert.AreEqual(new[] { "choose", "inspect chosen.zip", "confirm" }, askLog.Names, "A yes that comes after the view closed restores nothing.");
+        Assert.IsFalse(asking.Recovered);
+    }
+
+    // Start-up design 3.2 rows 25 and 29: an operating-system shutdown waits
+    // for the work in hand, then closes, as today's window does. The wait
+    // ends with the work, on the worker, so a shutdown may hold the window's
+    // thread while it waits, as today's does; and it never throws.
+    [TestMethod]
+    public void AShutdownCanWaitForTheWork()
+    {
+        using var recovery = new FakeStartupRecovery();
+        var model = new StartupFailureViewModel(StorageFailure(), () => recovery, new RecordingStartupQuestions { Confirms = false });
+        Assert.IsTrue(model.WaitForWorkAsync().IsCompleted, "Nothing to wait for before any work.");
+        recovery.HoldInspection();
+        bool waitedWhileWorking = false;
+        bool waited = false;
+
+        WindowThread.Run(() =>
+        {
+            Task restore = model.RestoreFromBackupAsync();
+            Assert.IsTrue(recovery.InspectionStarted.Wait(s_limit), "The backup's reading began.");
+            Task wait = model.WaitForWorkAsync();
+            waitedWhileWorking = !wait.IsCompleted;
+            _ = Task.Run(recovery.ReleaseInspection);
+            waited = wait.Wait(s_limit);
+            return restore;
+        }, s_limit);
+
+        Assert.IsTrue(waitedWhileWorking, "The wait lasts while the work runs.");
+        Assert.IsTrue(waited, "The wait ended with the work while the window's thread was held.");
+        Assert.IsTrue(model.WaitForWorkAsync().IsCompleted && !model.IsWorking, "The work is over.");
+
+        using var failing = new FakeStartupRecovery { InspectionThrows = new InvalidDataException("This archive does not appear to be a PaperRoute backup.") };
+        failing.HoldInspection();
+        var failed = new StartupFailureViewModel(StorageFailure(), () => failing, new RecordingStartupQuestions());
+        Task failedRestore = failed.RestoreFromBackupAsync();
+        Assert.IsTrue(failing.InspectionStarted.Wait(s_limit), "The backup's reading began.");
+        Task failedWait = failed.WaitForWorkAsync();
+        failing.ReleaseInspection();
+        Assert.IsTrue(failedWait.Wait(s_limit), "The wait ends with work that failed.");
+        Assert.IsFalse(failedWait.IsFaulted, "The wait does not throw the work's error: the model reports it.");
+        Run(failedRestore);
+    }
+
     // Copy Details carries today's text: the title, what failed, the details
     // (file, folder, the error and what caused it) and the full error, then
     // the System section.
@@ -429,6 +546,8 @@ public sealed partial class StartupFailureModelTests
         Assert.AreNotEqual(window, log.ThreadOf("prepare 2"), "The storage step runs off the window's thread when it runs again.");
         Assert.AreEqual(window, log.ThreadOf("show"), "The failure is shown on the window's thread.");
     }
+
+    private static StartupFailure StorageFailure() => StartupFailure.ForStorage(new InvalidDataException("The test's failure."), s_schemaPath);
 
     private static void AssertNamesNoOne(string text, string user, string computer, string home, string what)
     {

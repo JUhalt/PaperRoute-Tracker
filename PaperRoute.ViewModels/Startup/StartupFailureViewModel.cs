@@ -22,7 +22,12 @@ namespace PaperRoute.ViewModels.Startup;
 //   a newer PaperRoute wrote the library.
 // - Restore reads the archive first, then asks, then restores; reading and
 //   restoring run on a worker while the status line says so, and a close is
-//   refused meanwhile (CanClose).
+//   refused meanwhile (CanClose), while an operating-system shutdown waits
+//   for the work to end (WaitForWorkAsync).
+// - A restore is one recovery from the picker to the end: no other begins
+//   meanwhile (CanRecover). Unlike today's picker, the new one is not modal
+//   to the window, so Close works while it waits, and an answer that comes
+//   after the view closed (Closed) reads, asks and restores nothing.
 // - A recovery that succeeds says what it put in place, and the model is then
 //   Recovered: the caller goes on with the recovered library. One that fails
 //   says why and changes nothing here.
@@ -58,7 +63,10 @@ public sealed class StartupFailureViewModel : ObservableObject
     private readonly IStartupQuestions _questions;
     private bool _isWorking;
     private bool _recovered;
+    private bool _restoring;
+    private bool _closed;
     private string _status = string.Empty;
+    private Task _work = Task.CompletedTask;
 
     public StartupFailureViewModel(StartupFailure failure, Func<IStartupRecovery> createRecovery, IStartupQuestions questions)
     {
@@ -121,8 +129,21 @@ public sealed class StartupFailureViewModel : ObservableObject
     public bool Recovered
     {
         get => _recovered;
-        private set => SetProperty(ref _recovered, value);
+        private set
+        {
+            if (SetProperty(ref _recovered, value))
+            {
+                OnPropertyChanged(nameof(CanRecover));
+            }
+        }
     }
+
+    // Whether a recovery may begin: not once one succeeded or the view
+    // closed, and not while a restore is under way, its picker and its
+    // confirmation included. The window stays usable while the picker waits
+    // (start-up design 3.2 row 28: on one runner such a picker never
+    // returned, #451), so Close works then, but the offers are turned off.
+    public bool CanRecover => !_restoring && !Recovered && !_closed;
 
     // The status line: the work in hand, or what the last recovery did or why it failed.
     public string Status
@@ -135,7 +156,7 @@ public sealed class StartupFailureViewModel : ObservableObject
     // file. Done when Recovered is true; otherwise Status says why.
     public void UsePreviousSave()
     {
-        if (!OffersPreviousSave || IsWorking || Recovered || _recovery is null)
+        if (!OffersPreviousSave || !CanRecover || _recovery is null)
         {
             return;
         }
@@ -156,17 +177,52 @@ public sealed class StartupFailureViewModel : ObservableObject
 
     // Restore From Backup...: asks for the archive, reads it on a worker,
     // asks to go on with its contents, then restores it on a worker. Nothing
-    // changes until the person says yes.
+    // changes until the person says yes. The whole of it is one recovery:
+    // no other begins meanwhile (CanRecover), and an answer that comes after
+    // the view closed goes no further.
     public async Task RestoreFromBackupAsync()
     {
-        if (!OffersRestore || IsWorking || Recovered || _recovery is null)
+        if (!OffersRestore || !CanRecover || _recovery is null)
         {
             return;
         }
 
         IStartupRecovery recovery = _recovery;
+        SetRestoring(true);
+        try
+        {
+            await RestoreAsync(recovery);
+        }
+        finally
+        {
+            SetRestoring(false);
+        }
+    }
+
+    // The view calls this once it has closed: a picker or a confirmation that
+    // answers afterwards, or a reading that ends afterwards, changes nothing.
+    // A person's close waits for CanClose; a shutdown first waits for the
+    // work (WaitForWorkAsync).
+    public void Closed()
+    {
+        if (!_closed)
+        {
+            _closed = true;
+            OnPropertyChanged(nameof(CanRecover));
+        }
+    }
+
+    // The work in hand, which an operating-system shutdown waits for before
+    // the view closes, as today's window does (StartupFailureForm.vb,
+    // OnFormClosing). It ends on the worker when the work ends, whatever the
+    // outcome, and never throws, so a shutdown may also hold the window's
+    // thread while it waits, as today's does. Done at once when nothing runs.
+    public Task WaitForWorkAsync() => _work;
+
+    private async Task RestoreAsync(IStartupRecovery recovery)
+    {
         string? backupPath = await _questions.ChooseBackupAsync();
-        if (string.IsNullOrEmpty(backupPath))
+        if (string.IsNullOrEmpty(backupPath) || _closed)
         {
             return;
         }
@@ -182,7 +238,13 @@ public sealed class StartupFailureViewModel : ObservableObject
             return;
         }
 
-        if (!await _questions.ConfirmRestoreAsync(inspection))
+        if (_closed)
+        {
+            return;
+        }
+
+        bool confirmed = await _questions.ConfirmRestoreAsync(inspection);
+        if (!confirmed || _closed)
         {
             return;
         }
@@ -289,13 +351,21 @@ public sealed class StartupFailureViewModel : ObservableObject
         Status = status;
         try
         {
-            return await Task.Run(work);
+            Task<T> running = Task.Run(work);
+            _work = running.ContinueWith(static _ => { }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+            return await running;
         }
         finally
         {
             Status = string.Empty;
             IsWorking = false;
         }
+    }
+
+    private void SetRestoring(bool restoring)
+    {
+        _restoring = restoring;
+        OnPropertyChanged(nameof(CanRecover));
     }
 
     private void Finish(string sentence)

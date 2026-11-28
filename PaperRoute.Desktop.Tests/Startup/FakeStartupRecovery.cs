@@ -86,10 +86,14 @@ internal sealed class FakeStartupRecovery : IStartupRecovery, IDisposable
 
 // The failure window's questions as a stand-in: the archive the test chose
 // (null for none) and the answer to the confirmation, each recorded in the
-// shared CallLog with its thread.
+// shared CallLog with its thread. Either can be held open until the test
+// answers it.
 internal sealed class RecordingStartupQuestions : IStartupQuestions
 {
     private readonly CallLog _log;
+    private readonly TaskCompletionSource _confirmationAsked = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private TaskCompletionSource<string?>? _heldChoice;
+    private TaskCompletionSource<bool>? _heldConfirmation;
 
     public RecordingStartupQuestions(CallLog? log = null)
     {
@@ -104,17 +108,34 @@ internal sealed class RecordingStartupQuestions : IStartupQuestions
 
     public BackupInspection? Asked { get; private set; }
 
+    // Done once the confirmation has been asked.
+    public Task ConfirmationAsked => _confirmationAsked.Task;
+
+    // The next picker waits until ReleaseChoice answers it, as a picker
+    // that is still open does.
+    public void HoldChoice() => _heldChoice = new TaskCompletionSource<string?>();
+
+    public void ReleaseChoice(string? backup) =>
+        (_heldChoice ?? throw new InvalidOperationException("No picker is held.")).SetResult(backup);
+
+    // The next confirmation waits until ReleaseConfirmation answers it.
+    public void HoldConfirmation() => _heldConfirmation = new TaskCompletionSource<bool>();
+
+    public void ReleaseConfirmation(bool confirms) =>
+        (_heldConfirmation ?? throw new InvalidOperationException("No confirmation is held.")).SetResult(confirms);
+
     public Task<string?> ChooseBackupAsync()
     {
         _log.Add("choose");
-        return Task.FromResult(Backup);
+        return _heldChoice?.Task ?? Task.FromResult(Backup);
     }
 
     public Task<bool> ConfirmRestoreAsync(BackupInspection backup)
     {
         _log.Add("confirm");
         Asked = backup;
-        return Task.FromResult(Confirms);
+        _confirmationAsked.TrySetResult();
+        return _heldConfirmation?.Task ?? Task.FromResult(Confirms);
     }
 }
 
