@@ -36,18 +36,20 @@ public sealed partial class FriendUseTests
 
         var listed = ReadList().Select(line => line.Id).ToHashSet(StringComparer.Ordinal);
 
-        string[] unlisted = [.. found.Uses
+        // Both directions in one message, so one run shows every difference.
+        var differences = new List<string>();
+        differences.AddRange(found.Uses
             .Where(use => !listed.Contains(use.Key))
-            .Select(use => $"{use.Key} (referenced by {string.Join(", ", use.Value)})")];
-        Assert.IsEmpty(unlisted,
-            "The interface's compiled code references Friend core items that " + ListName + " does not list. " +
-            "Add each with its declaration, its fate and the issue that carries the fate out:" +
-            Environment.NewLine + string.Join(Environment.NewLine, unlisted));
-
-        string[] stale = [.. listed.Where(id => !found.Uses.ContainsKey(id)).Order(StringComparer.Ordinal)];
-        Assert.IsEmpty(stale,
-            ListName + " lists Friend core items the interface no longer references (or that are Public now); remove them:" +
-            Environment.NewLine + string.Join(Environment.NewLine, stale));
+            .Select(use => $"not listed: {use.Key} (referenced by {string.Join(", ", use.Value)})"));
+        differences.AddRange(listed
+            .Where(id => !found.Uses.ContainsKey(id))
+            .Order(StringComparer.Ordinal)
+            .Select(id => $"listed, but not referenced as a Friend item: {id}"));
+        Assert.IsEmpty(differences,
+            ListName + " and the Friend core items the interface's compiled code references differ. " +
+            "Add a new reference with its declaration, its fate and the issue that carries the fate out; " +
+            "remove a line the interface no longer references or that is Public now:" +
+            Environment.NewLine + string.Join(Environment.NewLine, differences));
     }
 
     [TestMethod]
