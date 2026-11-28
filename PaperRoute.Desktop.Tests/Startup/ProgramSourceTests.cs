@@ -3,12 +3,13 @@ using System.Text.RegularExpressions;
 
 namespace PaperRoute.Desktop.Tests.Startup;
 
-// Velopack first (start-up design 2.4, step 0; today's Program.vb:39): inside
-// an installed copy, VelopackApp.Build().Run() may answer an install or update
-// hook, or apply a downloaded update, and end the process, so nothing may run
-// before it. Velopack cannot run in a test, so this is the one start-up check
-// made on the source text: Program.cs, copied to the test output as text
-// (Source\), the file that declares the app's entry point.
+// Velopack first (start-up design 2.4, step 0; today's Program.vb:39):
+// VelopackApp.Build().Run() may answer an install, update or uninstall hook
+// named by its own first argument (only Velopack's installer passes one), or,
+// inside an installed copy, apply a downloaded update, and end the process,
+// so nothing may run before it. Velopack cannot run in a test, so this is
+// the one start-up check made on the source text: Program.cs, copied to the
+// test output as text (Source\), the file that declares the app's entry point.
 [TestClass]
 public sealed partial class ProgramSourceTests
 {
@@ -26,7 +27,7 @@ public sealed partial class ProgramSourceTests
 
         string first = FirstStatementOfMain(File.ReadAllText(path));
         Assert.AreEqual(VelopackFirst, first,
-            $"Main's first statement must be {VelopackFirst} Velopack may have to answer an install or update hook, " +
+            $"Main's first statement must be {VelopackFirst} Velopack may have to answer an install, update or uninstall hook, " +
             "or apply an update, and end the process before anything else runs (start-up design 2.4, step 0). " +
             $"The first statement is: {first}");
     }

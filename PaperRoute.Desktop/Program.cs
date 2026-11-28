@@ -38,9 +38,10 @@ internal static class Program
     // measurement's, before anything is opened.
     //
     // Velopack comes before all of it, as in today's Program.vb:39 (start-up
-    // design 2.4, step 0; MainCallsVelopackFirst): inside an installed copy it
-    // may answer an install or update hook, or apply a downloaded update, and
-    // end the process. Outside one, as every trial run is, it writes a line
+    // design 2.4, step 0; MainCallsVelopackFirst): it may answer an install,
+    // update or uninstall hook named by its own first argument (only
+    // Velopack's installer passes one), or, inside an installed copy, apply a
+    // downloaded update, and end the process. Otherwise it writes a few lines
     // to its own log and returns. It comes before the command line is read,
     // so Velopack's own arguments never reach TrialOptions. The platform's
     // parts are registered after the command line is accepted and before the
