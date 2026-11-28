@@ -124,7 +124,7 @@
     <Setter Property="Cursor" Value="Hand" />
     <Setter Property="FocusAdorner">
       <FocusAdornerTemplate>
-        <Border BorderThickness="2" CornerRadius="4"
+        <Border BorderThickness="2" CornerRadius="{DynamicResource LinkFocusRadius}"
                 BorderBrush="{DynamicResource AccentSecondaryBrush}" />
       </FocusAdornerTemplate>
     </Setter>
@@ -164,8 +164,8 @@
     <Setter Property="TextWrapping" Value="Wrap" />
     <Setter Property="TextTrimming" Value="CharacterEllipsis" />
     <Setter Property="MaxLines" Value="2" />
-    <Setter Property="LineHeight" Value="18" />
-    <Setter Property="Height" Value="36" />
+    <Setter Property="LineHeight" Value="{DynamicResource CardTitleLineHeight}" />
+    <Setter Property="Height" Value="{DynamicResource CardTitleHeight}" />
   </Style>
 
   <!-- A card menu's Delete... (Form1.vb:3545); off in the trial, so Fluent's disabled ink shows over it. -->
