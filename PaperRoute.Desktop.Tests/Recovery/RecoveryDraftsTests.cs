@@ -124,6 +124,28 @@ public sealed partial class RecoveryDraftsTests
         CollectionAssert.AreEqual(before, File.ReadAllBytes(MainFile), "Y's unanswered draft in the main slot was written over.");
     }
 
+    // Rules 2 and 4: an earlier session's unanswered draft of a manuscript in
+    // the main slot is not written over by this session's draft of the same
+    // manuscript (the page has not opened it, so the new draft does not hold
+    // its changes); the new draft goes to the waiting slot, and after a crash
+    // the newer is offered first.
+    [TestMethod]
+    public void AnEarlierDraftOfTheSameManuscriptIsNotWrittenOver()
+    {
+        Keep(_data, s_x, "Old X", s_first);
+        byte[] before = File.ReadAllBytes(MainFile);
+        RecoveryDrafts drafts = Session(s_x);
+
+        Assert.IsTrue(drafts.WriteFrom(new TestDraftPage(s_x, "New X", s_second), RecoveryReasons.Shutdown), "The draft of X was not written.");
+
+        CollectionAssert.AreEqual(before, File.ReadAllBytes(MainFile), "The earlier session's unanswered draft of X was written over.");
+        Assert.AreEqual("New X", new RecoveryDraftStore(WaitingFolder(s_x)).Read()?.Manuscript.Title, "The new draft of X is not in X's waiting slot.");
+        RecoveryDrafts next = Session(s_x);
+        Assert.AreEqual("New X", next.PendingDraftFor(s_x)?.Manuscript.Title, "After a crash the newer draft of X is not the pending one.");
+        next.Adopt(s_x);
+        Assert.AreEqual("Old X", next.PendingDraftFor(s_x)?.Manuscript.Title, "Once the newer was opened, the older should be pending.");
+    }
+
     // Rule 2: drafts left in waiting slots by two sessions that crashed are
     // offered with the main slot's, the newest first.
     [TestMethod]
@@ -290,7 +312,8 @@ public sealed partial class RecoveryDraftsTests
         Assert.IsEmpty(Session(s_x).Offers, "The next start offers a draft that was discarded and closed away.");
     }
 
-    // S9: Discard can be undone until PaperRoute closes.
+    // S9: Discard can be undone until PaperRoute closes, even after the page
+    // saved or discarded that manuscript without opening the draft.
     [TestMethod]
     public void DiscardCanBeUndoneUntilClose()
     {
@@ -301,6 +324,10 @@ public sealed partial class RecoveryDraftsTests
         Assert.IsTrue(drafts.Discard(s_x));
         Assert.IsEmpty(drafts.Offers, "A discarded draft is still offered.");
         Assert.IsNull(drafts.PendingDraftFor(s_x), "A discarded draft is still pending.");
+        drafts.PageSaved(s_x);
+        drafts.PageDiscarded(s_x);
+        Assert.IsTrue(File.Exists(MainFile), "The page's save or discard deleted the discarded draft, so it cannot be undone.");
+        CollectionAssert.AreEqual(before, File.ReadAllBytes(MainFile), "The page's save or discard changed the discarded draft.");
         Assert.IsTrue(drafts.Undo(s_x), "Undo found no discarded draft.");
         Assert.AreEqual("Paper X", drafts.Offers.SingleOrDefault()?.Title, "After Undo the draft is not offered again.");
         Assert.AreEqual("Paper X", drafts.PendingDraftFor(s_x)?.Manuscript.Title, "After Undo the draft is not pending again.");
