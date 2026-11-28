@@ -152,7 +152,8 @@ public sealed class PlatformCheckWindow
     }
 
     // The window's render scaling and what Avalonia reports of the system's
-    // theme (PlatformSettings.GetColorValues).
+    // theme (PlatformSettings.GetColorValues), for the record only: a named
+    // exception in ThemeOwnership, since nothing here decides a variant.
     public static PlatformFacts FactsFor(Window window, Func<string, string?> environment)
     {
         ArgumentNullException.ThrowIfNull(window);

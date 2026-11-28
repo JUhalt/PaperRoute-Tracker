@@ -1,9 +1,13 @@
 <!--
   The rules of a Windows contrast theme that a token cannot carry (step 11).
-  ContrastTheme adds this file to the application's styles while a contrast
-  theme is on and takes it away when it goes off; it comes after the families,
-  so its setters win. The tokens themselves (every surface the window colour,
-  every ink the window text, and so on) are in ContrastTheme's dictionaries.
+  App.axaml loads this file always, after the families, so its setters win.
+  Every rule holds only inside a top level that carries the class contrast,
+  which AppTheme gives each top level exactly while it shows a contrast
+  variant: the rules come and go with the variant, template parts included.
+  (Adding and removing the file instead left its setters on template parts,
+  a hovered quiet button's outline and no motion, until a restart.) The
+  tokens themselves (every surface the window colour, every ink the window
+  text, and so on) are in ContrastTheme's dictionaries.
 
     pressed chip     the selection pair, outlined in its fill (FilterChip.vb:203-208, 226)
     chip focus       a 2 px ring in the text colour, not the hyperlink colour (FilterChip.vb:228-233)
@@ -20,13 +24,13 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
   <!-- Pressed chips, every tone. -->
-  <Style Selector="Button.chip:pressed /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.chip:pressed /template/ ContentPresenter#PART_ContentPresenter">
+  <Style Selector=":is(TopLevel).contrast Button.chip:pressed /template/ ContentPresenter#PART_ContentPresenter, :is(TopLevel).contrast ToggleButton.chip:pressed /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
     <Setter Property="Foreground" Value="{DynamicResource OnAccentTextBrush}" />
   </Style>
 
-  <Style Selector="Button.chip, ToggleButton.chip">
+  <Style Selector=":is(TopLevel).contrast Button.chip, :is(TopLevel).contrast ToggleButton.chip">
     <Setter Property="FocusAdorner">
       <FocusAdornerTemplate>
         <Border Margin="1.5" BorderThickness="2" CornerRadius="{DynamicResource FullRadius}"
@@ -35,42 +39,42 @@
     </Setter>
   </Style>
 
-  <Style Selector="Button.quiet">
+  <Style Selector=":is(TopLevel).contrast Button.quiet">
     <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
   </Style>
-  <Style Selector="Button.quiet:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.quiet:pressed /template/ ContentPresenter#PART_ContentPresenter">
+  <Style Selector=":is(TopLevel).contrast Button.quiet:pointerover /template/ ContentPresenter#PART_ContentPresenter, :is(TopLevel).contrast Button.quiet:pressed /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
   </Style>
 
   <!-- No motion. -->
-  <Style Selector="Border.card.interactive">
+  <Style Selector=":is(TopLevel).contrast Border.card.interactive">
     <Setter Property="Transitions" Value="{x:Null}" />
   </Style>
-  <Style Selector="Button /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.chip /template/ ContentPresenter#PART_ContentPresenter">
+  <Style Selector=":is(TopLevel).contrast Button /template/ ContentPresenter#PART_ContentPresenter, :is(TopLevel).contrast ToggleButton.chip /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Transitions" Value="{x:Null}" />
   </Style>
 
   <!-- Text selection. -->
-  <Style Selector="TextBox">
+  <Style Selector=":is(TopLevel).contrast TextBox">
     <Setter Property="SelectionBrush" Value="{DynamicResource AccentBrush}" />
     <Setter Property="SelectionForegroundBrush" Value="{DynamicResource OnAccentTextBrush}" />
   </Style>
 
   <!-- Drop-down lists. -->
   <!-- On :dropdownopen, not on every box: the template sets the popup's colours itself, and a value set in a template outranks a style without a pseudo-class. -->
-  <Style Selector="ComboBox:dropdownopen /template/ Border#PopupBorder">
+  <Style Selector=":is(TopLevel).contrast ComboBox:dropdownopen /template/ Border#PopupBorder">
     <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
   </Style>
-  <Style Selector="ComboBoxItem">
+  <Style Selector=":is(TopLevel).contrast ComboBoxItem">
     <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}" />
     <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}" />
   </Style>
-  <Style Selector="ComboBoxItem /template/ ContentPresenter#PART_ContentPresenter">
+  <Style Selector=":is(TopLevel).contrast ComboBoxItem /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}" />
     <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}" />
   </Style>
-  <Style Selector="ComboBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter, ComboBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter, ComboBoxItem:selected:pointerover /template/ ContentPresenter#PART_ContentPresenter, ComboBoxItem:pressed /template/ ContentPresenter#PART_ContentPresenter, ComboBoxItem:selected:pressed /template/ ContentPresenter#PART_ContentPresenter, ComboBoxItem:selected:focus /template/ ContentPresenter#PART_ContentPresenter">
+  <Style Selector=":is(TopLevel).contrast ComboBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter, :is(TopLevel).contrast ComboBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter, :is(TopLevel).contrast ComboBoxItem:selected:pointerover /template/ ContentPresenter#PART_ContentPresenter, :is(TopLevel).contrast ComboBoxItem:pressed /template/ ContentPresenter#PART_ContentPresenter, :is(TopLevel).contrast ComboBoxItem:selected:pressed /template/ ContentPresenter#PART_ContentPresenter, :is(TopLevel).contrast ComboBoxItem:selected:focus /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
     <Setter Property="Foreground" Value="{DynamicResource OnAccentTextBrush}" />
   </Style>

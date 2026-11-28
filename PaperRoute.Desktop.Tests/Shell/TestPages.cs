@@ -1,6 +1,7 @@
 using ManuscriptPipeline.Models;
 using PaperRoute.Desktop.Tests.Board;
 using PaperRoute.ViewModels;
+using PaperRoute.ViewModels.Notices;
 using PaperRoute.ViewModels.Session;
 using PaperRoute.ViewModels.Shell;
 
@@ -91,10 +92,19 @@ internal sealed class TestPages
     }
 }
 
-// Notices, kept for a test to read.
+// Notices, kept for a test to read: each result, each notice that stays as it
+// is shown, and each key that is withdrawn, in the order they came.
 internal sealed class NoticeLog : IInteractions
 {
     public List<string> Notices { get; } = [];
 
+    public List<StandingNotice> Shown { get; } = [];
+
+    public List<string> Withdrawn { get; } = [];
+
     public void Notice(string text) => Notices.Add(text);
+
+    public void Show(StandingNotice notice) => Shown.Add(notice);
+
+    public void Withdraw(string key) => Withdrawn.Add(key);
 }

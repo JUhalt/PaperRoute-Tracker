@@ -3,6 +3,7 @@ using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using PaperRoute.ViewModels.Board;
+using PaperRoute.ViewModels.Notices;
 using PaperRoute.ViewModels.Session;
 
 namespace PaperRoute.ViewModels;
@@ -41,9 +42,6 @@ public sealed partial class ShellViewModel : ObservableObject, IInteractions
 
     private readonly ILibrarySession _session;
 
-    [ObservableProperty]
-    private string _notice = LoadingText;
-
     // "7 manuscripts" under the brand once the Board has rendered; empty
     // before (Form1.Shell.vb:187-194, 420-426).
     [ObservableProperty]
@@ -54,6 +52,8 @@ public sealed partial class ShellViewModel : ObservableObject, IInteractions
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(board);
         _session = session;
+        NoticeStrip.Notice(LoadingText);
+        NoticeStrip.PropertyChanged += OnNoticeStripPropertyChanged;
         Board = board;
         Board.Interactions = this;
 
@@ -137,7 +137,18 @@ public sealed partial class ShellViewModel : ObservableObject, IInteractions
 
     public RailItemViewModel DeadlinesItem => RailPages[3];
 
-    void IInteractions.Notice(string text) => Notice = text ?? string.Empty;
+    // The notice strip (shell design 2.4): the status line and the notices
+    // that stay. Every notice goes through it.
+    public NoticeStripViewModel NoticeStrip { get; } = new();
+
+    // The strip's status line, which the window shows and the Board's tests read.
+    public string Notice => NoticeStrip.Status;
+
+    void IInteractions.Notice(string text) => NoticeStrip.Notice(text);
+
+    void IInteractions.Show(StandingNotice notice) => NoticeStrip.Show(notice);
+
+    void IInteractions.Withdraw(string key) => NoticeStrip.Withdraw(key);
 
     // Ctrl+1 and the rail's Board item (Form1.vb:2562-2565): the Board is the
     // page shown and the one checked in the rail.
@@ -154,7 +165,15 @@ public sealed partial class ShellViewModel : ObservableObject, IInteractions
 
     // F1 (d1 1.2): a notice only.
     [RelayCommand]
-    private void ShowHelp() => Notice = HelpNotice;
+    private void ShowHelp() => NoticeStrip.Notice(HelpNotice);
+
+    private void OnNoticeStripPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(NoticeStripViewModel.Status))
+        {
+            OnPropertyChanged(nameof(Notice));
+        }
+    }
 
     private void OnBoardPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
@@ -186,9 +205,9 @@ public sealed partial class ShellViewModel : ObservableObject, IInteractions
     [RelayCommand]
     private async Task LoadAsync(CancellationToken cancel)
     {
-        Notice = LoadingText;
+        NoticeStrip.Notice(LoadingText);
         await _session.LoadAsync(cancel);
-        Notice = _session.StartupNotice;
+        NoticeStrip.Notice(_session.StartupNotice);
         if (_session.Kind == LibraryKind.Snapshot)
         {
             OnPropertyChanged(nameof(BannerText));
