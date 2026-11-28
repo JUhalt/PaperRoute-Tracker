@@ -288,13 +288,14 @@ try {
     Invoke-PlatformCheck 'platform check' 'platform' 'platform-check' 'platform-check-xvfb.json'
     $dpiFile = Join-Path $Out 'xft-dpi-144.txt'
     Set-Content -LiteralPath $dpiFile -Value 'Xft.dpi: 144' -Encoding ascii
-    Invoke-Tool 'xrdb' @('-merge', $dpiFile) | Out-Null
+    # -nocpp: the one line needs no C preprocessor, so a runner without cpp merges it too.
+    Invoke-Tool 'xrdb' @('-nocpp', '-merge', $dpiFile) | Out-Null
     $dpi = @(Invoke-Tool 'xrdb' @('-query') | Where-Object { $_ -like 'Xft.dpi:*' })
     if ($dpi.Count -gt 0) {
         Note 'Xft.dpi for the second platform check' ($dpi[0] -replace '^Xft\.dpi:\s*', '')
         Invoke-PlatformCheck 'platform check at Xft.dpi 144' 'platform-dpi144' 'platform-check-dpi144' 'platform-check-xvfb-dpi144.json'
     }
-    else { Note 'Xft.dpi for the second platform check' 'not set (xrdb did not answer), so the second run was skipped' }
+    else { Note 'Xft.dpi for the second platform check' 'Xft.dpi not set after xrdb -merge (see tools-stderr.txt), so the second run was skipped' }
 }
 catch {
     Note 'stopped early' $_.Exception.Message
