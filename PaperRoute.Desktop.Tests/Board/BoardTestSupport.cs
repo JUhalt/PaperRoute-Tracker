@@ -62,6 +62,19 @@ internal sealed class MemorySession : ILibrarySession
     // Nothing is written: the library and its settings live in memory only.
     public Task<bool> SaveSettingsAsync() => Task.FromResult(false);
 
+    public bool IsWorking => false;
+
+    public bool SaveFailed => false;
+
+    // Never raised: nothing here saves.
+    public event EventHandler? StateChanged
+    {
+        add { }
+        remove { }
+    }
+
+    public Task<SaveOutcome> SaveAsync(CancellationToken cancel) => Task.FromResult(SaveOutcome.Refused);
+
     public bool WaitForWork() => false;
 
     public void Dispose()

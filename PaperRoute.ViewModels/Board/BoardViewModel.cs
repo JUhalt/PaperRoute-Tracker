@@ -190,6 +190,17 @@ public sealed partial class BoardViewModel : ObservableObject, IPage
     {
         _searchDebouncer.Stop();
 
+        // No reader touches the library while a save runs (shell design 2.6
+        // rule 4): the save normalises each manuscript in place on its worker,
+        // and today's guard stops the search's wait for the same reason
+        // (Form1.LibraryWork.vb:82-84). The render is held, whatever asked for
+        // it; the session raises LibraryChanged once the save has ended, and
+        // the Board renders then, with the search and filters as they stand.
+        if (_session.IsWorking)
+        {
+            return;
+        }
+
         IReadOnlyList<Manuscript> library = _session.Manuscripts;
         List<Manuscript> all = library.Where(manuscript => manuscript is not null).ToList();
         AppSettings settings = _session.Settings ?? new AppSettings();

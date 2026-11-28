@@ -62,7 +62,7 @@ public sealed class LibrarySessionTests
         Assert.HasCount(3, session.AuthorLibrary.Authors);
         Assert.AreEqual(3, session.SearchIndex.AuthorCount);
         Assert.IsNotNull(session.Settings);
-        Assert.IsTrue(session.IsReadOnly);
+        Assert.IsFalse(session.IsReadOnly, "The example is the one kind of library that may be saved (shell design 2.6).");
         Assert.AreEqual(LibraryKind.Example, session.Kind);
         Assert.AreEqual(LargeLibraryFixture.Today, session.Today);
     }
@@ -120,34 +120,51 @@ public sealed class LibrarySessionTests
             LargeLibraryFixture.Today));
     }
 
-    // Lock 3 of d1 1.3: the session has no member that could save, back up or
-    // restore the library. Its one write, the settings save, is the single
-    // name let through here; TheSessionWritesOnlyThroughItsSaveMembers pins
-    // it (shell design 2.5).
+    // Lock 3 of d1 1.3: the session has no member that could back up or
+    // restore the library (those come with #434), and no save beyond the
+    // library save of shell design 2.6, exactly as 2.6 gives it:
+    // SaveAsync(CancellationToken) returning Task<SaveOutcome>, IsWorking and
+    // SaveFailed to read only, and StateChanged. The name is kept from the
+    // build-5 test, which let only the settings save through.
     [TestMethod]
     public void TheSessionHasNoSaveBackupOrRestoreMember()
     {
-        string[] words = ["Save", "Backup", "Restore", "Recover", "Write", "Delete"];
+        string[] words = ["Backup", "Restore", "Recover"];
         foreach (Type type in new[] { typeof(ILibrarySession), typeof(DiskLibrarySession) })
         {
-            foreach (MemberInfo member in type.GetMembers(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static)
-                .Where(member => member.Name != nameof(ILibrarySession.SaveSettingsAsync)))
+            foreach (MemberInfo member in type.GetMembers(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static))
             {
                 Assert.IsFalse(
                     words.Any(word => member.Name.Contains(word, StringComparison.OrdinalIgnoreCase)),
-                    $"{type.Name}.{member.Name} looks like a library write; the session saves only its settings.");
+                    $"{type.Name}.{member.Name} looks like a backup or restore; the session has none.");
             }
+
+            MethodInfo save = type.GetMethod(nameof(ILibrarySession.SaveAsync), [typeof(CancellationToken)])
+                ?? throw new AssertFailedException($"{type.Name} has no SaveAsync(CancellationToken).");
+            Assert.AreEqual(typeof(Task<SaveOutcome>), save.ReturnType, $"{type.Name}.SaveAsync returns Saved, Refused or Failed.");
+            foreach (string flag in new[] { nameof(ILibrarySession.IsWorking), nameof(ILibrarySession.SaveFailed) })
+            {
+                PropertyInfo property = type.GetProperty(flag)
+                    ?? throw new AssertFailedException($"{type.Name} has no {flag}.");
+                Assert.AreEqual(typeof(bool), property.PropertyType, $"{type.Name}.{flag} is a bool.");
+                Assert.IsFalse(property.SetMethod?.IsPublic ?? false, $"{type.Name}.{flag} can be set from outside: only the session's own work changes it.");
+            }
+
+            EventInfo changed = type.GetEvent(nameof(ILibrarySession.StateChanged))
+                ?? throw new AssertFailedException($"{type.Name} has no StateChanged.");
+            Assert.AreEqual(typeof(EventHandler), changed.EventHandlerType);
         }
     }
 
-    // The session's writes, by name (shell design 2.5): no member named
-    // Backup, Restore, Recover, Write or Delete, and SaveSettingsAsync, which
-    // returns Task<bool>, is the only member with Save in its name. The
-    // library save is not built in build 5 (the design's question 3).
+    // The session's writes, by name (shell design 2.5 and 2.6): no member
+    // named Backup, Restore, Recover, Write or Delete, and the members with
+    // Save in their names are exactly the settings save, the library save and
+    // its failure flag (property accessors aside): nothing more.
     [TestMethod]
     public void TheSessionWritesOnlyThroughItsSaveMembers()
     {
         string[] words = ["Backup", "Restore", "Recover", "Write", "Delete"];
+        string[] expected = [nameof(ILibrarySession.SaveAsync), nameof(ILibrarySession.SaveFailed), nameof(ILibrarySession.SaveSettingsAsync)];
         foreach (Type type in new[] { typeof(ILibrarySession), typeof(DiskLibrarySession) })
         {
             MemberInfo[] members = type.GetMembers(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static);
@@ -159,11 +176,13 @@ public sealed class LibrarySessionTests
             }
 
             string[] saves = [.. members
+                .Where(member => member is not MethodBase { IsSpecialName: true })
                 .Where(member => member.Name.Contains("Save", StringComparison.OrdinalIgnoreCase))
                 .Select(member => member.Name)
-                .Distinct(StringComparer.Ordinal)];
-            CollectionAssert.AreEqual(new[] { nameof(ILibrarySession.SaveSettingsAsync) }, saves,
-                $"{type.Name}'s only save member is the settings save; the library save comes with the first issue that changes the library.");
+                .Distinct(StringComparer.Ordinal)
+                .Order(StringComparer.Ordinal)];
+            CollectionAssert.AreEqual(expected, saves,
+                $"{type.Name}'s save members are the settings save, the library save and its failure flag (shell design 2.6), and nothing more.");
             MethodInfo save = type.GetMethod(nameof(ILibrarySession.SaveSettingsAsync), Type.EmptyTypes)
                 ?? throw new AssertFailedException($"{type.Name} has no SaveSettingsAsync().");
             Assert.AreEqual(typeof(Task<bool>), save.ReturnType);

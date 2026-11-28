@@ -1,4 +1,4 @@
-M:ManuscriptPipeline.Services.ManuscriptRepository.Save(System.Collections.Generic.List{ManuscriptPipeline.Models.Manuscript});The Board trial is read-only: it never saves the library (d1 1.3, lock 3)
+M:ManuscriptPipeline.Services.ManuscriptRepository.Save(System.Collections.Generic.List{ManuscriptPipeline.Models.Manuscript});The library is saved only by DiskLibrarySession.SaveOnWorker, through the repository whose load gave it, for the kinds of library that may save (the example alone), under a #pragma (shell design 2.6, lock 3)
 M:ManuscriptPipeline.Services.ManuscriptRepository.UseBackup;The Board trial is read-only: it never restores from a backup (d1 1.3, lock 3)
 M:ManuscriptPipeline.Services.AuthorLibraryRepository.Save(ManuscriptPipeline.Models.AuthorLibraryData);The Board trial is read-only: it never saves the author library (d1 1.3, lock 3)
 M:ManuscriptPipeline.Services.AuthorLibraryRepository.SaveKeepingJournals(ManuscriptPipeline.Models.AuthorLibraryData);The Board trial is read-only: it never saves the author library (d1 1.3, lock 3)
