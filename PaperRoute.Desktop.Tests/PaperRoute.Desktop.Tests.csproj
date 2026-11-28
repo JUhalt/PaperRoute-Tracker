@@ -37,7 +37,9 @@
     <None Update="Parity\*.tsv" CopyToOutputDirectory="PreserveNewest" />
     <!-- What headless cannot show, written beside the checks (HeadlessLimitTests reads it). -->
     <None Update="HeadlessLimits.md" CopyToOutputDirectory="PreserveNewest" />
-    <!-- The app's .axaml files as text, for the token tests (T1, T2, T3) to read the values and uses themselves. Content, not None: Avalonia's build removes every None item named *.axaml. -->
+    <!-- Real faults the legibility rules find, each with its issue until fixed (KnownFailuresTests reads it). -->
+    <None Update="Legibility\KnownFailures.tsv" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The app's .axaml files as text, for the token tests (R1, its completeness guard, T3) to read the values and uses themselves. Content, not None: Avalonia's build removes every None item named *.axaml. -->
     <Content Include="..\PaperRoute.Desktop\**\*.axaml" Exclude="..\PaperRoute.Desktop\bin\**;..\PaperRoute.Desktop\obj\**" LinkBase="Axaml" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
