@@ -2,6 +2,7 @@ using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using PaperRoute.ViewModels.Session;
+using PaperRoute.ViewModels.Shell;
 
 namespace PaperRoute.ViewModels.Board;
 
@@ -16,7 +17,8 @@ namespace PaperRoute.ViewModels.Board;
 // puts a card's first tag in the search. Step 8's view brings the notices of
 // the controls it shows: View in Deadlines and the welcome's links. A shelf
 // is realized (its cards made by the view) when it is first shown (d1 4.4).
-public sealed partial class BoardViewModel : ObservableObject
+// It is a page (shell design 2.3): titled, kept, and never refusing a leave.
+public sealed partial class BoardViewModel : ObservableObject, IPage
 {
     // Form1.vb boardSearchDebounceTimer (:79-81).
     public static readonly TimeSpan SearchDelay = TimeSpan.FromMilliseconds(200);
@@ -152,6 +154,9 @@ public sealed partial class BoardViewModel : ObservableObject
     // Where the Board's notices go: the shell's notice strip. Null until the
     // shell is made, and then a notice is dropped.
     public IInteractions? Interactions { get; set; }
+
+    // The page host's name while the Board is shown.
+    string IPage.Title => "Board";
 
     // The welcome's "Explore an example library" line is left out of the
     // example window (Form1.Welcome.vb:215); the trial opens only the example.
