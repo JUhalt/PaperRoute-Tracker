@@ -238,15 +238,17 @@ public sealed partial class StartupFailureModelTests
         Assert.IsFalse(restoring.Recovered);
     }
 
-    // While the backup is read, the status line says so and a person's close
-    // is refused; when the reading ends, Close works again (#295).
+    // While the backup is read, and again while it is restored, the status
+    // line says which, in today's words, and a person's close is refused;
+    // when the work ends, Close works again (#295).
     [TestMethod]
     public void CloseIsRefusedWhileWorkRuns()
     {
         using var recovery = new FakeStartupRecovery();
         recovery.HoldInspection();
+        recovery.HoldRestore();
         var model = new StartupFailureViewModel(StartupFailure.ForStorage(new InvalidDataException("The test's failure."), s_schemaPath),
-            () => recovery, new RecordingStartupQuestions { Confirms = false });
+            () => recovery, new RecordingStartupQuestions { Confirms = true });
         var changed = new List<string?>();
         model.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
         Assert.IsTrue(model.CanClose, "Close works before any work.");
@@ -256,15 +258,21 @@ public sealed partial class StartupFailureModelTests
 
         Assert.IsTrue(model.IsWorking, "The work is in hand.");
         Assert.IsFalse(model.CanClose, "A close is refused while the work runs.");
-        Assert.AreEqual(StartupFailureViewModel.ReadingTheBackup, model.Status, "The status line says what is happening.");
+        Assert.AreEqual("Reading the backup...", model.Status, "The status line says the backup is being read.");
         CollectionAssert.Contains(changed, nameof(StartupFailureViewModel.CanClose), "The view hears that Close is refused.");
 
         recovery.ReleaseInspection();
+        Assert.IsTrue(recovery.RestoreStarted.Wait(s_limit), "The restore began.");
+        Assert.IsTrue(model.IsWorking, "The work is in hand.");
+        Assert.IsFalse(model.CanClose, "A close is refused while the restore runs.");
+        Assert.AreEqual("Restoring the backup...", model.Status, "The status line says the backup is being restored.");
+
+        recovery.ReleaseRestore();
         Run(restore);
 
         Assert.IsFalse(model.IsWorking);
         Assert.IsTrue(model.CanClose, "Close works once the work ends.");
-        Assert.AreEqual(string.Empty, model.Status, "The status line is emptied when the work ends.");
+        Assert.AreEqual("PaperRoute restored 3 manuscripts from the backup.", model.Status, "The work's status gives way to the result.");
     }
 
     // Start-up design 3.2 row 28: the window stays usable while the picker

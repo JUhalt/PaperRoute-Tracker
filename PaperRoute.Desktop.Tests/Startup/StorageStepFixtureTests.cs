@@ -177,32 +177,48 @@ public sealed class StorageStepFixtureTests
     }
 
     // The test assembly's storage guard (AssemblySetup): running every
-    // fixture, recovery included, resolves no default root, and leaves the
-    // guard's own folder, where a default root would now land, as it was.
+    // fixture, recovery included, resolves no default root. Under the guard's
+    // override that count cannot rise, so the default roots are pointed for
+    // this test at a folder of its own, made empty, which must stay empty
+    // whatever ran before. (The tests run one at a time: AssemblySetup.)
     [TestMethod]
     public void EveryFixtureLeavesNoDefaultRootUse()
     {
         using StorageFixture newer = StorageFixture.Make(StorageFixture.NewerSchema);
         using StorageFixture legacy = StorageFixture.Make(StorageFixture.LegacyFolder);
         using StorageFixture old = StorageFixture.Make(StorageFixture.OldSchemaDamagedWithGoodPreviousSave);
-        SortedDictionary<string, string> guardBefore = StorageFixture.HashesOf(AssemblySetup.StorageRoot);
+        string defaults = Path.Combine(Path.GetTempPath(), "PaperRoute-TrialTests-Defaults-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(defaults);
+        string? guard = StorageEnvironment.RootOverride;
         int usesBefore = StorageEnvironment.DefaultRootUses;
-
-        foreach (StorageFixture fixture in new[] { newer, legacy, old })
+        string[] written;
+        StorageEnvironment.RootOverride = defaults;
+        try
         {
-            Run(fixture.Step().RunAsync(failure =>
+            foreach (StorageFixture fixture in new[] { newer, legacy, old })
             {
-                var model = new StartupFailureViewModel(failure, fixture.Recovery, new RecordingStartupQuestions());
-                model.UsePreviousSave();
-                _ = model.CopyText();
-                return Task.FromResult(model.Recovered);
-            }));
+                Run(fixture.Step().RunAsync(failure =>
+                {
+                    var model = new StartupFailureViewModel(failure, fixture.Recovery, new RecordingStartupQuestions());
+                    model.UsePreviousSave();
+                    _ = model.CopyText();
+                    return Task.FromResult(model.Recovered);
+                }));
+            }
+
+            written = [.. Directory.EnumerateFileSystemEntries(defaults, "*", SearchOption.AllDirectories)
+                .Select(entry => Path.GetRelativePath(defaults, entry).Replace('\\', '/'))
+                .Order(StringComparer.Ordinal)];
+        }
+        finally
+        {
+            StorageEnvironment.RootOverride = guard;
+            Directory.Delete(defaults, recursive: true);
         }
 
         Assert.AreEqual(0, usesBefore, "No default root answered before the fixtures ran.");
         Assert.AreEqual(0, StorageEnvironment.DefaultRootUses, "No default root answered while the fixtures ran.");
-        StorageFixture.AssertSame(guardBefore, StorageFixture.HashesOf(AssemblySetup.StorageRoot),
-            "The fixtures wrote nowhere the core's default roots lead.");
+        Assert.IsEmpty(written, $"The fixtures wrote where the core's default roots lead: {string.Join(", ", written)}");
     }
 
     private static T Run<T>(Task<T> work) => work.WaitAsync(s_limit).GetAwaiter().GetResult();

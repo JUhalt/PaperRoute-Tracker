@@ -6,13 +6,15 @@ namespace PaperRoute.Desktop.Tests.Startup;
 // The failure window's recovery as a stand-in (start-up design 4, build 6 F1):
 // each check answers as the test sets it, each action is recorded in the
 // shared CallLog with the thread it ran on, and nothing touches a file. The
-// backup's reading can be held at a gate, so a test sees the work in hand
-// without racing it.
+// backup's reading and its restore can each be held at a gate, so a test
+// sees the work in hand without racing it.
 internal sealed class FakeStartupRecovery : IStartupRecovery, IDisposable
 {
     private readonly CallLog _log;
     private readonly ManualResetEventSlim _inspectionStarted = new(false);
     private readonly ManualResetEventSlim _inspectionReleased = new(true);
+    private readonly ManualResetEventSlim _restoreStarted = new(false);
+    private readonly ManualResetEventSlim _restoreReleased = new(true);
 
     public FakeStartupRecovery(CallLog? log = null)
     {
@@ -48,6 +50,14 @@ internal sealed class FakeStartupRecovery : IStartupRecovery, IDisposable
 
     public void ReleaseInspection() => _inspectionReleased.Set();
 
+    // Set once the restore has begun on its thread.
+    public ManualResetEventSlim RestoreStarted => _restoreStarted;
+
+    // The next restore waits until ReleaseRestore.
+    public void HoldRestore() => _restoreReleased.Reset();
+
+    public void ReleaseRestore() => _restoreReleased.Set();
+
     public bool PreviousSaveIsValid() => ChecksThrow is null ? PreviousSaveValid : throw ChecksThrow;
 
     public bool LibraryIsFromANewerPaperRoute() => ChecksThrow is null ? FromANewerPaperRoute : throw ChecksThrow;
@@ -73,14 +83,23 @@ internal sealed class FakeStartupRecovery : IStartupRecovery, IDisposable
     public RestoreResult RestoreFromBackup(string backupZipPath)
     {
         _log.Add("restore " + backupZipPath);
+        _restoreStarted.Set();
+        if (!_restoreReleased.Wait(TimeSpan.FromSeconds(60)))
+        {
+            throw new TimeoutException("The test never released the restore.");
+        }
+
         return RestoreThrows is null ? Result : throw RestoreThrows;
     }
 
     public void Dispose()
     {
         _inspectionReleased.Set();
+        _restoreReleased.Set();
         _inspectionStarted.Dispose();
         _inspectionReleased.Dispose();
+        _restoreStarted.Dispose();
+        _restoreReleased.Dispose();
     }
 }
 
