@@ -43,6 +43,11 @@ public sealed class PageCatalogTests
         {
             CollectionAssert.Contains(RailGlyphs.Names.ToArray(), row.Glyph, $"{row.Key}'s icon is one the rail draws.");
         }
+
+        CollectionAssert.AreEqual(
+            new[] { PageKey.Settings },
+            PageCatalog.Standard.Rows.Where(row => !row.Kept).Select(row => row.Key).ToArray(),
+            "Every page is kept but Settings, which remembers nothing of the last visit (3.1 row 16, #375).");
     }
 
     [TestMethod]

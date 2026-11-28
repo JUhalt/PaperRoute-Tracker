@@ -36,22 +36,16 @@ internal sealed class FakePage(PageKey key) : IPage
     }
 }
 
-// A navigator over fake pages, with a library held in memory: the eight
-// pages of build 5, every one kept but Settings, as the real catalog has
-// them (shell design 3.1 row 16). Every page made is counted.
+// A navigator over fake pages, with a library held in memory: the real
+// catalog's rows with only the factory swapped, so which pages are kept is
+// what the catalog ships (shell design 3.1 row 16). Every page made is
+// counted.
 internal sealed class TestPages
 {
-    private static readonly PageKey[] s_keys =
-    [
-        PageKey.Board, PageKey.Library, PageKey.Journals, PageKey.Deadlines,
-        PageKey.Insights, PageKey.ImportExport, PageKey.Manuscript, PageKey.Settings,
-    ];
-
     public TestPages(params Manuscript[] manuscripts)
     {
         Session = new MemorySession(manuscripts, Papers.Today);
-        Catalog = new PageCatalog(s_keys.Select(key => new PageCatalogRow(
-            key, key.Name, Glyph: null, Digit: null, RailPlace.None, Kept: key != PageKey.Settings, Make: _ => Make(key))));
+        Catalog = new PageCatalog(PageCatalog.Standard.Rows.Select(row => row with { Make = _ => Make(row.Key) }));
         Navigator = new Navigator(Catalog, Session, new NoticeLog(), new QueuedUiDispatcher(), new ManualDebouncer());
     }
 
