@@ -35,7 +35,8 @@ public sealed class NoticeStripViewModel : ObservableObject
     public void Notice(string? text) => Status = text ?? string.Empty;
 
     // Shows a notice that stays. One already shown under the same key goes,
-    // and the new one takes the place of the newest of its kind.
+    // and the new one goes in as the newest of its kind, above the others of
+    // that kind.
     public void Show(StandingNotice notice)
     {
         ArgumentNullException.ThrowIfNull(notice);
