@@ -1,0 +1,23 @@
+{
+  "ManuscriptId": "8a3e5d21-6c4b-4f70-a2d9-1e5b7c3f9d02",
+  "WrittenAtUtc": "2026-11-03T17:40:00Z",
+  "Reason": "an error ended the session",
+  "Manuscript": {
+    "Id": "8a3e5d21-6c4b-4f70-a2d9-1e5b7c3f9d02",
+    "Title": "Edited under v1.0.1",
+    "CurrentStage": "Idea",
+    "Location": "Pipeline",
+    "Tags": []
+  },
+  "UnsavedLibrary": {
+    "Authors": [
+      {
+        "Id": "c5d7e9f1-2a4b-4c6d-8e0f-1a3b5c7d9e03",
+        "GivenName": "Ada",
+        "FamilyName": "Lookup"
+      }
+    ],
+    "Affiliations": [],
+    "TagColors": []
+  }
+}

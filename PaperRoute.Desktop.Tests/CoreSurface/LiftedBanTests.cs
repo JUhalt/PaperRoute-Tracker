@@ -90,10 +90,13 @@ public sealed partial class LiftedBanTests
             }
         }
 
+        // A member is lifted by its own line, or by its type's when the whole
+        // type is banned (RecoveryDraftStore).
         string[] lifts = [.. lifted.Select(ban => ban.Id)];
         foreach ((string id, string reason) in ReadAllowed())
         {
-            if (reason.StartsWith(PersonsStorage, StringComparison.Ordinal) && !lifts.Contains(id, StringComparer.Ordinal))
+            if (reason.StartsWith(PersonsStorage, StringComparison.Ordinal) &&
+                !lifts.Contains(id, StringComparer.Ordinal) && !lifts.Contains(TypeOf(id), StringComparer.Ordinal))
             {
                 problems.Add($"allowed-core-references.txt: {id} writes the person's storage, but {ListName} names no owner for it.");
             }
@@ -397,6 +400,21 @@ public sealed partial class LiftedBanTests
         }
 
         return regions;
+    }
+
+    // "M:Ns.Type.Member(args)" or "F:Ns.Type.Field" to "T:Ns.Type"; a type's
+    // own ID is returned as it is.
+    private static string TypeOf(string id)
+    {
+        if (id.StartsWith("T:", StringComparison.Ordinal))
+        {
+            return id;
+        }
+
+        int open = id.IndexOf('(', StringComparison.Ordinal);
+        string head = open < 0 ? id : id[..open];
+        int dot = head.LastIndexOf('.');
+        return dot < 2 ? id : "T:" + head[2..dot];
     }
 
     private static bool Names(string text, string name) =>
