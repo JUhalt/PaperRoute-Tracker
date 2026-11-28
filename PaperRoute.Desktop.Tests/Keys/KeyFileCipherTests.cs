@@ -82,7 +82,9 @@ public sealed class KeyFileCipherTests
         byte[] other = RandomNumberGenerator.GetBytes(KeyFileCipher.KeySize);
         byte[] file = KeyFileCipher.Encrypt(key, s_clear);
 
-        Assert.ThrowsExactly<AuthenticationTagMismatchException>(() => KeyFileCipher.Decrypt(other, file), "A file opened with another key.");
+        // Any CryptographicException, as the key store asks: the exact type is
+        // the provider's (CNG, OpenSSL or CryptoKit).
+        Assert.Throws<CryptographicException>(() => KeyFileCipher.Decrypt(other, file), "A file opened with another key.");
         Assert.ThrowsExactly<ArgumentException>(() => KeyFileCipher.Decrypt(key.AsSpan(0, 16), file), "A key of the wrong size was used.");
     }
 

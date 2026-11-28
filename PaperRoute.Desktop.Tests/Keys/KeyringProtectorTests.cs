@@ -125,7 +125,8 @@ public sealed class KeyringProtectorTests
     }
 
     // A good key file, then a protector whose keyring fails each way: the key
-    // store reads no key and throws nothing.
+    // store reads no key and throws nothing. The protector may make a master
+    // key, and still a read never stores one: only a save may.
     [TestMethod]
     [DataRow("Locked")]
     [DataRow("Unreachable")]
@@ -150,6 +151,7 @@ public sealed class KeyringProtectorTests
 
         Assert.IsTrue(FastForward(clock, () => store.Load(Name)) is null, $"The key 'openalex' was read through a keyring that is {how}.");
         Assert.IsFalse(FastForward(clock, () => store.HasKey(Name)), $"The key 'openalex' was reported kept through a keyring that is {how}.");
+        Assert.AreEqual(0, keyring.SetCalls, $"Reading through a keyring that is {how} stored a master key.");
     }
 
     [TestMethod]

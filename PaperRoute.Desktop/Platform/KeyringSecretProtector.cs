@@ -31,6 +31,12 @@ namespace PaperRoute.Desktop.Platform;
 //   keyring is being asked, the fetch starts on a worker, and MasterKeyReady
 //   says when to try again.
 // - A failed fetch is asked again at the next use after a minute.
+// - "No such item" is not kept: while the keyring holds no master key, each
+//   read asks it again (on the interface thread, each starts a fetch on a
+//   worker), so a key made meanwhile by the copy that holds the library is
+//   found. Where key files exist and the keyring lost its item, every HasKey
+//   and Load asks the keyring once more (#435 reads keys off the interface
+//   thread and shows such a key as stored but unreadable).
 //
 // Every failure is a CryptographicException in Unprotect, which the key store
 // reads as "no key", and an InvalidOperationException with the reason in
