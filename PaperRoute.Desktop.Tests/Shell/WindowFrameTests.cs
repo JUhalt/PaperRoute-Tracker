@@ -211,6 +211,52 @@ public sealed class WindowFrameTests : StorageCheckedTests
         Assert.AreEqual(2, askedOnAllow, "The second close asked the page again.");
     }
 
+    // A close while the page has not yet answered the last one (its question
+    // to the person still open) is refused without asking the page again;
+    // the window closes once the page answers yes.
+    [TestMethod]
+    public void ASecondCloseWhileThePageIsAskedAsksNothing()
+    {
+        var session = new MemorySession([], Papers.Today);
+        var page = new FakePage(PageKey.Library) { HeldAnswer = new TaskCompletionSource<bool>() };
+
+        (bool closedWhileAsked, int askedWhileAsked, bool closed, int asked) = Headless.Run(() =>
+        {
+            ShellViewModel shell = App.CreateShell(session);
+            shell.CurrentPage = page;
+            var window = new MainWindow { DataContext = shell };
+            bool isClosed = false;
+            window.Closed += (_, _) => isClosed = true;
+            window.Show();
+            try
+            {
+                window.Close();
+                Dispatcher.UIThread.RunJobs();
+                window.Close();
+                Dispatcher.UIThread.RunJobs();
+                (bool open, int questions) = (isClosed, page.LeaveQuestions);
+
+                page.HeldAnswer.SetResult(true);
+                BoardWindow.WaitFor(() => isClosed, TimeSpan.FromSeconds(30));
+                return (open, questions, isClosed, page.LeaveQuestions);
+            }
+            finally
+            {
+                page.HeldAnswer.TrySetResult(true);
+                if (!isClosed)
+                {
+                    page.HeldAnswer = null;
+                    window.Close();
+                }
+            }
+        });
+
+        Assert.IsFalse(closedWhileAsked, "The window closed while its page had not answered.");
+        Assert.AreEqual(1, askedWhileAsked, "The second close asked the page again while its first question was open.");
+        Assert.IsTrue(closed, "The window did not close once its page answered yes.");
+        Assert.AreEqual(1, asked, "The page was asked again after it answered.");
+    }
+
     // A close while the load runs (3.1 row 5): the window stays open while the
     // load's worker is held, the load is cancelled (it reads no manuscripts,
     // so the data folder the repository's load would create never appears,
