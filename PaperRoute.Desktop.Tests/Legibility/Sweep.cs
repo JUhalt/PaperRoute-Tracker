@@ -97,6 +97,13 @@ internal static class Sweep
     // brush is not opaque, names the cause; the commonest colour of its own
     // pixels (its shown bounds less its visible children's) catches a
     // template part or an opacity.
+    //
+    // A shape (Ellipse, Rectangle, Path) paints a Fill, not a background, so
+    // it is not a part and R5 does not judge it: a light route dot or icon in
+    // Dark would pass. As a visible child, its bounds are also left out of
+    // its parent's own pixels. The design's words, "paints a background",
+    // allow this; a later rule that judges fills adds a Shape case to
+    // BackgroundOf.
     private static List<PaintedPart> Parts(Window window, FramePixels frame, string subject, string themeCase)
     {
         var parts = new List<PaintedPart>();

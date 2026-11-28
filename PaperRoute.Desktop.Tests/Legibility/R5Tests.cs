@@ -89,7 +89,8 @@ public sealed class R5Tests : StorageCheckedTests
     }
 
     // What R5 reports today on every subject, listed failures included
-    // (KnownFailuresTests.KnownFailuresAreCurrent), with nothing written.
+    // (KnownFailuresTests.KnownFailuresAreCurrent), with no measurement file
+    // written (the sweep's pictures are saved again).
     internal static IReadOnlyList<Finding> CurrentFindings(TestContext context)
     {
         var parts = new List<PaintedPart>();

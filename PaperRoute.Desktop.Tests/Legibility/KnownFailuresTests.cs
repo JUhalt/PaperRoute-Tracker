@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using PaperRoute.Desktop.Tests.Board;
 using PaperRoute.Desktop.Tests.Styles;
 
 namespace PaperRoute.Desktop.Tests.Legibility;
@@ -6,9 +7,11 @@ namespace PaperRoute.Desktop.Tests.Legibility;
 // The known-failures list stays current (the harness design, part 2.4): an
 // entry a rule no longer reports is stale, every entry carries its issue, and
 // the number of entries is written here too, so the list cannot grow unseen.
+// It opens the example library (through R5's sweep), so it checks, as every
+// test that opens a library does, that no default storage root answered.
 // Limits of headless: HeadlessLimits.md
 [TestClass]
-public sealed partial class KnownFailuresTests
+public sealed partial class KnownFailuresTests : StorageCheckedTests
 {
     // How many entries KnownFailures.tsv holds. Change it with the list.
     private const int ExpectedCount = 0;
