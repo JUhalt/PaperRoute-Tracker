@@ -1,5 +1,5 @@
 # tree
-Window | name="PaperRoute Board Trial - Example Library" | help="" | id="" | tabstop=no | tab=-
+Window | name="PaperRoute Tracker - Example Library" | help="" | id="" | tabstop=no | tab=-
   Group | name="WindowChrome" | help="" | id="AvaloniaWindowChrome" | tabstop=no | tab=-
   None | name="" | help="" | id="" | tabstop=no | tab=-
     None | name="" | help="" | id="PART_TransparencyFallback" | tabstop=no | tab=-
@@ -9,7 +9,7 @@ Window | name="PaperRoute Board Trial - Example Library" | help="" | id="" | tab
       None | name="" | help="" | id="PART_ContentPresenter" | tabstop=no | tab=-
         None | name="" | help="" | id="" | tabstop=no | tab=-
           None | name="Example library" | help="" | id="Banner" | tabstop=no | tab=-
-            Text | name="Example library: a fictional research group's manuscripts, to explore and to teach with. Change anything; it is discarded when this window closes, and your own library is never opened. Trial build: nothing is saved." | help="" | id="BannerText" | tabstop=no | tab=-
+            Text | name="Example library: a fictional research group's manuscripts, to explore and to teach with. Change anything; it is discarded when this window closes, and your own library is never opened." | help="" | id="BannerText" | tabstop=no | tab=-
           None | name="" | help="" | id="Rail" | tabstop=no | tab=-
             None | name="" | help="" | id="" | tabstop=no | tab=-
               None | name="" | help="" | id="" | tabstop=no | tab=-

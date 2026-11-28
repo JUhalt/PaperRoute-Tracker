@@ -68,6 +68,7 @@ public interface ILibrarySession : IDisposable
     // cannot deadlock on the interface thread. True when a worker was running.
     // For the shutdown path only. A settings save held during that load is
     // written later, on the caller's context, which the shutdown path is
-    // blocking: B5 writes it itself after this wait, or accepts its loss.
+    // blocking: the shutdown path accepts its loss, since it would write the
+    // settings that load read (ShellViewModel.CloseAsync).
     bool WaitForWork();
 }

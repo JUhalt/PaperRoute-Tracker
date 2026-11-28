@@ -1003,7 +1003,10 @@ internal sealed class BoardWindow : IDisposable
             ((IInteractions)shell).Notice(session.StartupNotice);
         }
 
-        var window = new MainWindow { DataContext = shell, Width = width, Height = height };
+        // The Board's tests size the window to the widths they test, some
+        // under the frame's minimum (960x680, WindowFrameTests), and narrow it
+        // after it is shown, so the helper lifts the minimum.
+        var window = new MainWindow { DataContext = shell, MinWidth = 0, MinHeight = 0, Width = width, Height = height };
         if (variant is not null)
         {
             window.RequestedThemeVariant = variant;

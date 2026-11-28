@@ -38,8 +38,8 @@ param(
 
 $ErrorActionPreference = 'Continue'
 # The main window's title starts with this and goes on with " - <library>"; the
-# platform check's file dialog starts with the same words and goes on differently.
-$MainTitle = '^PaperRoute Board Trial( - |$)'
+# platform check's file dialog is told apart by its own words.
+$MainTitle = '^PaperRoute Tracker( - |$)'
 $DialogTitle = 'platform check: choose any file'
 $LibraryEnding = 'TestResults/v11-trial/large-500'
 
