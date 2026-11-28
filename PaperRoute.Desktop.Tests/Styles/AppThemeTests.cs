@@ -183,17 +183,18 @@ public sealed class AppThemeTests
         Assert.IsEmpty(findings, "Code other than AppTheme sets a theme variant or reads the system's contrast state:" + Environment.NewLine + string.Join(Environment.NewLine, findings));
     }
 
-    // The owner check's teeth: a view that sets its window's variant, an
-    // XAML attribute, and a view model of the shell that asks Avalonia for the
-    // contrast preference are each named; the same words in a comment, and
-    // AppTheme's own, are not.
+    // The owner check's teeth: a view that sets its window's variant (plainly
+    // and with ??=), an XAML attribute, a style's Setter, XAML's
+    // property-element form, and a view model of the shell that asks Avalonia
+    // for the contrast preference are each named; the same words in a
+    // comment, a comparison, and AppTheme's own, are not.
     [TestMethod]
     public void TheOwnerCheckFindsASecondWriterAndASecondReader()
     {
         (string Path, string Text)[] files =
         [
-            ("BoardView.axaml.cs", "namespace PaperRoute.Desktop;\r\n// RequestedThemeVariant = ThemeVariant.Dark is AppTheme's job.\r\npublic partial class BoardView\r\n{\r\n    void Pin(Window window) => window.RequestedThemeVariant = ThemeVariant.Dark;\r\n}\r\n"),
-            ("MainWindow.axaml", "<Window xmlns=\"https://github.com/avaloniaui\"\r\n        <!-- RequestedThemeVariant=\"Dark\" -->\r\n        RequestedThemeVariant=\"Light\">\r\n</Window>\r\n"),
+            ("BoardView.axaml.cs", "namespace PaperRoute.Desktop;\r\n// RequestedThemeVariant = ThemeVariant.Dark is AppTheme's job.\r\npublic partial class BoardView\r\n{\r\n    void Pin(Window window) => window.RequestedThemeVariant = ThemeVariant.Dark;\r\n    void Keep(Window window) => window.RequestedThemeVariant ??= ThemeVariant.Dark;\r\n    bool IsDark(Window window) => window.RequestedThemeVariant == ThemeVariant.Dark;\r\n}\r\n"),
+            ("MainWindow.axaml", "<Window xmlns=\"https://github.com/avaloniaui\"\r\n        <!-- RequestedThemeVariant=\"Dark\" -->\r\n        RequestedThemeVariant=\"Light\">\r\n  <Window.Styles>\r\n    <Style Selector=\"Border.region\">\r\n      <Setter Property=\"RequestedThemeVariant\" Value=\"Dark\" />\r\n    </Style>\r\n  </Window.Styles>\r\n  <Window.RequestedThemeVariant>Dark</Window.RequestedThemeVariant>\r\n</Window>\r\n"),
             ("Shell/NoticeStrip.cs", "bool high = Application.Current!.PlatformSettings!.GetColorValues().ContrastPreference == ColorContrastPreference.High;\r\n"),
             ("Styles/AppTheme.cs", "_application.RequestedThemeVariant = variant;\r\nFollow(ContrastPreference.FromPlatform(_application.PlatformSettings));\r\n"),
         ];
@@ -204,7 +205,10 @@ public sealed class AppThemeTests
             new[]
             {
                 "BoardView.axaml.cs:5: sets a theme variant: void Pin(Window window) => window.RequestedThemeVariant = ThemeVariant.Dark;",
+                "BoardView.axaml.cs:6: sets a theme variant: void Keep(Window window) => window.RequestedThemeVariant ??= ThemeVariant.Dark;",
                 "MainWindow.axaml:3: sets a theme variant: RequestedThemeVariant=\"Light\">",
+                "MainWindow.axaml:6: sets a theme variant: <Setter Property=\"RequestedThemeVariant\" Value=\"Dark\" />",
+                "MainWindow.axaml:9: sets a theme variant: <Window.RequestedThemeVariant>Dark</Window.RequestedThemeVariant>",
                 "Shell/NoticeStrip.cs:1: reads the system's colour values: bool high = Application.Current!.PlatformSettings!.GetColorValues().ContrastPreference == ColorContrastPreference.High;",
             },
             findings,

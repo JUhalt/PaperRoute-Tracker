@@ -13,9 +13,10 @@ internal static partial class ThemeOwnership
 {
     private static readonly Rule[] s_rules =
     [
-        // Application, window or any other scope; a property assignment, an
-        // object initializer, an XAML attribute, or the property object
-        // itself (SetValue, Bind, SetCurrentValue).
+        // Application, window or any other scope; a property assignment
+        // (plain or ??=), an object initializer, an XAML attribute, a style's
+        // Setter (Property="RequestedThemeVariant"), XAML's property-element
+        // form, or the property object itself (SetValue, Bind, SetCurrentValue).
         new("sets a theme variant", WriterPattern(), ["Styles/AppTheme.cs"]),
 
         // Avalonia's report of the system's theme and contrast preference, and its change event.
@@ -90,7 +91,7 @@ internal static partial class ThemeOwnership
         return path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) ? LineCommentPattern().Replace(normal, string.Empty) : normal;
     }
 
-    [GeneratedRegex(@"\bRequestedThemeVariant(Property\b|\s*=(?!=))")]
+    [GeneratedRegex(@"\bRequestedThemeVariant(Property\b|\s*(\?\?)?=(?!=)|""|>)")]
     private static partial Regex WriterPattern();
 
     [GeneratedRegex(@"\bGetColorValues\s*\(|\bColorValuesChanged\b")]
