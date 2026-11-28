@@ -44,7 +44,9 @@ public interface IManuscriptSection
     string Title { get; }
 
     // A new record, and again after Discard and after a save: rows are
-    // rebuilt from the copy given, and every editor is closed.
+    // rebuilt from the copy given, and every editor is closed. Attach reads
+    // the copy only and never edits it: after a save it runs while the copy
+    // is still frozen, so an edit there would be refused.
     void Attach(WorkingCopy copy);
 
     // After the copy's Changed: rows reconciled by id.

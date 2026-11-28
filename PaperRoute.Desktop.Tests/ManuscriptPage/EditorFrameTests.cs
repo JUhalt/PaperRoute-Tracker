@@ -772,14 +772,16 @@ public sealed class EditorFrameTests : StorageCheckedTests
     public async Task ASecondSaveThroughTheFrameKeepsTheFirstSavesStageChangeAndItsEvent()
     {
         Page page = Page.Open(SubmittablePaper());
-        var accepted = new List<(bool Frozen, PaperStage Committed)>();
+        // What the session's record holds as each save is accepted: the
+        // stage shows the first save committed first, the title the second.
+        var accepted = new List<(bool Frozen, PaperStage Stage, string Title)>();
         int token = page.Frame.Copy.Token;
         page.Frame.Copy.Changed += (_, _) =>
         {
             if (page.Frame.Copy.Token != token)
             {
                 token = page.Frame.Copy.Token;
-                accepted.Add((page.Frame.Copy.IsFrozen, page.Saved.CurrentStage));
+                accepted.Add((page.Frame.Copy.IsFrozen, page.Saved.CurrentStage, page.Saved.Title));
             }
         };
         page.Frame.Copy.HoldStage(PaperStage.Submitted);
@@ -796,7 +798,7 @@ public sealed class EditorFrameTests : StorageCheckedTests
             Assert.IsTrue(await page.Frame.SaveAsync());
         }
 
-        CollectionAssert.AreEqual(new[] { (true, PaperStage.Submitted), (true, PaperStage.Submitted) }, accepted,
+        CollectionAssert.AreEqual(new[] { (true, PaperStage.Submitted, "A Study of Tests"), (true, PaperStage.Submitted, "A Second Title") }, accepted,
             "Each save must be committed to the session's record and then accepted inside the freeze.");
         Manuscript second = page.Store.Candidates[1];
         Assert.AreEqual("A Second Title", second.Title);

@@ -114,6 +114,9 @@ public sealed partial class ManuscriptEditorViewModel : ObservableObject
     [ObservableProperty]
     private IReadOnlyList<FieldProblem> _problems = [];
 
+    // savingTimer is the frame's own: never ShellServices.Debouncer, which
+    // the Board's search uses, because a debouncer holds one pending action
+    // and each would drop the other's.
     public ManuscriptEditorViewModel(IManuscriptStore store, IInteractions interactions, IDebouncer savingTimer, IEnumerable<IManuscriptSection> sections)
     {
         ArgumentNullException.ThrowIfNull(store);
