@@ -5,7 +5,7 @@ M:ManuscriptPipeline.Services.AuthorLibraryRepository.SaveKeepingJournals(Manusc
 T:ManuscriptPipeline.Services.PortableRestoreService;The Board trial is read-only: it never restores a backup (d1 1.3, lock 3)
 T:ManuscriptPipeline.Services.StartupRecoveryService;The Board trial is read-only: it never restores a backup or a previous save (d1 1.3, lock 3)
 T:ManuscriptPipeline.Services.ProtectedKeyStore;The Board trial is read-only: it never saves or removes a stored key (d1 1.3, lock 3)
-M:ManuscriptPipeline.Services.AppSettingsService.Save(ManuscriptPipeline.Models.AppSettings);The Board trial is read-only: it never saves settings (d1 1.3, lock 3)
+M:ManuscriptPipeline.Services.AppSettingsService.Save(ManuscriptPipeline.Models.AppSettings);Settings are saved only by DiskLibrarySession.WriteSettings, through the service that loaded them, into the session's own settings folder, under a #pragma (shell design 2.5, lock 3)
 M:ManuscriptPipeline.Services.CitationStore.Save(ManuscriptPipeline.Models.CitationSnapshot);The Board trial is read-only: it never saves citations (d1 1.3, lock 3)
 M:ManuscriptPipeline.Services.ExampleLibraryService.Seed(System.DateTime,ManuscriptPipeline.Models.OnlineServicesSettings);The example's seed saves the library: only TrialStartup calls it, into the example's own session, under a #pragma (d1 1.3, lock 3)
 M:ManuscriptPipeline.Services.StorageMigrationService.EnsureCurrentStorage;The Board trial never migrates storage (d1 1.3, lock 3)

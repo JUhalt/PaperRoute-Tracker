@@ -59,6 +59,9 @@ internal sealed class MemorySession : ILibrarySession
         return Task.FromResult(true);
     }
 
+    // Nothing is written: the library and its settings live in memory only.
+    public Task<bool> SaveSettingsAsync() => Task.FromResult(false);
+
     public bool WaitForWork() => false;
 
     public void Dispose()

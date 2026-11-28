@@ -322,9 +322,11 @@ public static class TrialStartup
 
     private static void SeedExample(DateTime today)
     {
-        // Lock 3's one allowed write (d1 1.3): the example's Seed saves its four
-        // files into the example's own session folder, which StartExample set
-        // up and End deletes. Every other save stays banned (BannedSymbols.txt).
+        // One of lock 3's two allowed writes (d1 1.3; the other is the
+        // session's settings save, DiskLibrarySession.WriteSettings): the
+        // example's Seed saves its four files into the example's own session
+        // folder, which StartExample set up and End deletes. Every other save
+        // stays banned (BannedSymbols.txt).
 #pragma warning disable RS0030
         ExampleLibraryService.Seed(today);
 #pragma warning restore RS0030

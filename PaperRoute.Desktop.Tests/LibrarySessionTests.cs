@@ -1,5 +1,8 @@
 using System.Reflection;
+using System.Security.Cryptography;
+using System.Text.Json;
 using Avalonia.Controls;
+using ManuscriptPipeline.Models;
 using ManuscriptPipeline.Services;
 using PaperRoute.TestFixtures;
 using PaperRoute.ViewModels;
@@ -118,20 +121,205 @@ public sealed class LibrarySessionTests
     }
 
     // Lock 3 of d1 1.3: the session has no member that could save, back up or
-    // restore the library.
+    // restore the library. Its one write, the settings save, is the single
+    // name let through here; TheSessionWritesOnlyThroughItsSaveMembers pins
+    // it (shell design 2.5).
     [TestMethod]
     public void TheSessionHasNoSaveBackupOrRestoreMember()
     {
         string[] words = ["Save", "Backup", "Restore", "Recover", "Write", "Delete"];
         foreach (Type type in new[] { typeof(ILibrarySession), typeof(DiskLibrarySession) })
         {
-            foreach (MemberInfo member in type.GetMembers(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static))
+            foreach (MemberInfo member in type.GetMembers(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static)
+                .Where(member => member.Name != nameof(ILibrarySession.SaveSettingsAsync)))
             {
                 Assert.IsFalse(
                     words.Any(word => member.Name.Contains(word, StringComparison.OrdinalIgnoreCase)),
-                    $"{type.Name}.{member.Name} looks like a write; the trial's session only reads.");
+                    $"{type.Name}.{member.Name} looks like a library write; the session saves only its settings.");
             }
         }
+    }
+
+    // The session's writes, by name (shell design 2.5): no member named
+    // Backup, Restore, Recover, Write or Delete, and SaveSettingsAsync, which
+    // returns Task<bool>, is the only member with Save in its name. The
+    // library save is not built in build 5 (the design's question 3).
+    [TestMethod]
+    public void TheSessionWritesOnlyThroughItsSaveMembers()
+    {
+        string[] words = ["Backup", "Restore", "Recover", "Write", "Delete"];
+        foreach (Type type in new[] { typeof(ILibrarySession), typeof(DiskLibrarySession) })
+        {
+            MemberInfo[] members = type.GetMembers(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static);
+            foreach (MemberInfo member in members)
+            {
+                Assert.IsFalse(
+                    words.Any(word => member.Name.Contains(word, StringComparison.OrdinalIgnoreCase)),
+                    $"{type.Name}.{member.Name} looks like a write; the session writes only through its save members.");
+            }
+
+            string[] saves = [.. members
+                .Where(member => member.Name.Contains("Save", StringComparison.OrdinalIgnoreCase))
+                .Select(member => member.Name)
+                .Distinct(StringComparer.Ordinal)];
+            CollectionAssert.AreEqual(new[] { nameof(ILibrarySession.SaveSettingsAsync) }, saves,
+                $"{type.Name}'s only save member is the settings save; the library save comes with the first issue that changes the library.");
+            MethodInfo save = type.GetMethod(nameof(ILibrarySession.SaveSettingsAsync), Type.EmptyTypes)
+                ?? throw new AssertFailedException($"{type.Name} has no SaveSettingsAsync().");
+            Assert.AreEqual(typeof(Task<bool>), save.ReturnType);
+        }
+    }
+
+    // Settings are saved through the session's own folder and nothing else
+    // (shell design 2.5). Before a load there are no settings to save, so a
+    // save then writes nothing; after it, only settings.json and its backup
+    // change, and a new session reads the saved value back.
+    [TestMethod]
+    public async Task ASettingsSaveWritesOnlyTheSettingsFiles()
+    {
+        LargeLibraryFixture.WriteExample(_root);
+        using DiskLibrarySession session = OpenSession();
+        IReadOnlyDictionary<string, string> unloaded = FileState(_root);
+
+        Assert.IsFalse(await session.SaveSettingsAsync(), "Before a load there are no loaded settings to save.");
+        CollectionAssert.AreEquivalent(unloaded.ToArray(), FileState(_root).ToArray(), "A save before the load wrote something.");
+
+        await session.LoadAsync(CancellationToken.None);
+        IReadOnlyDictionary<string, string> before = FileState(_root);
+        bool collapsed = !session.Settings.NavigationCollapsed;
+        session.Settings.NavigationCollapsed = collapsed;
+        Assert.IsTrue(await session.SaveSettingsAsync());
+        IReadOnlyDictionary<string, string> after = FileState(_root);
+
+        string[] changed = [.. after.Keys.Union(before.Keys)
+            .Where(file => !before.TryGetValue(file, out string? was) || !after.TryGetValue(file, out string? now) || was != now)
+            .Order(StringComparer.Ordinal)];
+        CollectionAssert.Contains(changed, "settings.json", "The save did not write settings.json.");
+        CollectionAssert.IsSubsetOf(changed, new[] { "settings.json", "settings.bak" }, "The settings save changed other files: " + string.Join(", ", changed));
+        Assert.IsTrue(before.Keys.All(after.ContainsKey), "The settings save removed a file.");
+
+        using DiskLibrarySession again = OpenSession();
+        await again.LoadAsync(CancellationToken.None);
+        Assert.AreEqual(collapsed, again.Settings.NavigationCollapsed, "A new session reads the saved settings back.");
+    }
+
+    // Critic M5, settings half: an unreadable settings.json beside a good
+    // settings.bak. The service that loaded knows the file was unreadable, so
+    // its save sets the file aside; a new service would not, and its write
+    // would make the unreadable file the new settings.bak, losing the only
+    // good copy (AppSettingsService.vb:68-75, 102-107).
+    [TestMethod]
+    public async Task ASettingsSaveAfterAnUnreadableFileSetsItAside()
+    {
+        const string Unreadable = "{ this is not settings";
+        const string Good = "{ \"FileDrawerSuggestionThreshold\": 7 }";
+        string settingsFile = Path.Combine(_root, "settings.json");
+        string backupFile = Path.Combine(_root, "settings.bak");
+        string asideFile = Path.Combine(_root, "settings.unreadable.json");
+        await File.WriteAllTextAsync(settingsFile, Unreadable);
+        await File.WriteAllTextAsync(backupFile, Good);
+        using DiskLibrarySession session = OpenSession();
+        await session.LoadAsync(CancellationToken.None);
+        Assert.AreEqual(7, session.Settings.FileDrawerSuggestionThreshold, "The load fell back to settings.bak.");
+
+        Assert.IsTrue(await session.SaveSettingsAsync());
+
+        Assert.AreEqual(Good, await File.ReadAllTextAsync(backupFile),
+            "settings.bak no longer holds the good backup: the unreadable settings.json was kept as the backup over it.");
+        Assert.IsTrue(File.Exists(asideFile), "The unreadable settings.json was not set aside as settings.unreadable.json.");
+        Assert.AreEqual(Unreadable, await File.ReadAllTextAsync(asideFile));
+        using DiskLibrarySession again = OpenSession();
+        await again.LoadAsync(CancellationToken.None);
+        Assert.AreEqual(7, again.Settings.FileDrawerSuggestionThreshold, "The saved settings.json is readable and holds the settings in use.");
+    }
+
+    // On the interface thread, held during a load (critic S3): requests made
+    // while a load runs write nothing then, and one write runs when it ends.
+    // One write only: a second would have kept the first as settings.bak.
+    [TestMethod]
+    public async Task ASettingsSaveDuringALoadIsWrittenOnceAfterIt()
+    {
+        string settingsFile = Path.Combine(_root, "settings.json");
+        using var held = new HeldLoad(_root);
+        Task<bool> load = held.StartLoad();
+
+        Task<bool> first = held.Session.SaveSettingsAsync();
+        Task<bool> second = held.Session.SaveSettingsAsync();
+
+        Assert.IsFalse(first.IsCompleted, "A settings save during a load is held until the load ends.");
+        Assert.IsFalse(second.IsCompleted, "A settings save during a load is held until the load ends.");
+        Assert.IsFalse(File.Exists(settingsFile), "A settings save wrote while the load ran.");
+
+        held.Release();
+        Assert.IsTrue(await load);
+        Assert.IsTrue(await first, "The held save was written when the load ended.");
+        Assert.IsTrue(await second, "The held save was written when the load ended.");
+        Assert.IsTrue(File.Exists(settingsFile), "The held save wrote no settings.json.");
+        Assert.IsFalse(File.Exists(Path.Combine(_root, "settings.bak")), "The held requests were written more than once.");
+    }
+
+    // With no load running, each save is written at once on the caller's
+    // thread and reads Settings as it is then, so the last request wins.
+    [TestMethod]
+    public async Task TwoQuickSettingsSavesRememberTheLast()
+    {
+        using DiskLibrarySession session = OpenSession();
+        await session.LoadAsync(CancellationToken.None);
+
+        session.Settings.NavigationCollapsed = true;
+        Task<bool> first = session.SaveSettingsAsync();
+        session.Settings.NavigationCollapsed = false;
+        Task<bool> second = session.SaveSettingsAsync();
+
+        Assert.IsTrue(first.IsCompleted && second.IsCompleted, "With no load running, a settings save is written at once.");
+        Assert.IsTrue(await first);
+        Assert.IsTrue(await second);
+        using DiskLibrarySession again = OpenSession();
+        await again.LoadAsync(CancellationToken.None);
+        Assert.IsFalse(again.Settings.NavigationCollapsed, "The last request was not the one remembered.");
+        using JsonDocument backup = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(_root, "settings.bak")));
+        Assert.IsTrue(backup.RootElement.GetProperty(nameof(AppSettings.NavigationCollapsed)).GetBoolean(),
+            "The first request was written before the second and kept as settings.bak.");
+    }
+
+    // A write that fails returns false and throws nothing, as today's save
+    // catches IOException and UnauthorizedAccessException
+    // (Form1.Online.vb:117). The failure is a file where the settings folder
+    // should be, so the write cannot create its folder.
+    [TestMethod]
+    public async Task AFailedSettingsSaveReturnsFalse()
+    {
+        string settingsFolder = Path.Combine(_root, "settings");
+        using var session = new DiskLibrarySession(
+            Path.Combine(_root, "data"),
+            Path.Combine(_root, "library"),
+            settingsFolder,
+            LibraryKind.Example,
+            LargeLibraryFixture.Today);
+        await session.LoadAsync(CancellationToken.None);
+        await File.WriteAllTextAsync(settingsFolder, "not a folder");
+        session.Settings.NavigationCollapsed = true;
+
+        Assert.IsFalse(await session.SaveSettingsAsync(), "A failed settings write returns false.");
+        Assert.AreEqual("not a folder", await File.ReadAllTextAsync(settingsFolder), "The failed write changed the file in its way.");
+    }
+
+    // A snapshot writes nothing (critic N8): its settings save is refused and
+    // no file in the copy or its source changes.
+    [TestMethod]
+    public async Task ASnapshotRefusesASettingsSave()
+    {
+        string source = Path.Combine(_root, "Lab library");
+        string sessionFolder = Path.Combine(_root, "session");
+        LargeLibraryFixture.WriteExample(source);
+        SnapshotCopy copy = ReadOnlySnapshot.Copy(source, Path.Combine(sessionFolder, "current-data"), sessionFolder);
+        using var session = new DiskLibrarySession(copy, Path.Combine(sessionFolder, "managed-library"), LargeLibraryFixture.Today);
+        await session.LoadAsync(CancellationToken.None);
+        IReadOnlyDictionary<string, string> before = FileState(_root);
+        session.Settings.NavigationCollapsed = !session.Settings.NavigationCollapsed;
+
+        Assert.IsFalse(await session.SaveSettingsAsync(), "A snapshot's settings save is refused.");
+        CollectionAssert.AreEquivalent(before.ToArray(), FileState(_root).ToArray(), "A snapshot's settings save wrote a file.");
     }
 
     // A load is library work (ManuscriptRepository.Load can write), so it runs
@@ -219,6 +407,14 @@ public sealed class LibrarySessionTests
         _root,
         LibraryKind.Example,
         LargeLibraryFixture.Today);
+
+    // Every file under root, by its path relative to root ("/" between
+    // folders), with a hash of its bytes.
+    private static IReadOnlyDictionary<string, string> FileState(string root) =>
+        Directory.GetFiles(root, "*", SearchOption.AllDirectories).ToDictionary(
+            file => Path.GetRelativePath(root, file).Replace('\\', '/'),
+            file => Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(file))),
+            StringComparer.Ordinal);
 
     // A session over root whose first load stops in its prepare step (the
     // step the example's seed runs in) until Release: the load has started,
