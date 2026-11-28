@@ -1,3 +1,4 @@
+using System.Net.Sockets;
 using PaperRoute.Desktop.Platform;
 using PaperRoute.ViewModels.Platform;
 
@@ -91,11 +92,47 @@ public sealed class InstanceHoldTests
         });
         Assert.IsTrue(arrived.Wait(Wait), $"A come-forward request made before Listen was lost ({which}).");
 
-        // A second request, after Listen: requests are served one at a time, so
-        // when it has arrived, a duplicate of the first would have too.
+        // A second request, after Listen. The second wait ends at any delivery,
+        // a duplicate of the first included, so the count is read only once the
+        // hold has served everything sent so far.
         Assert.IsTrue(form.AskToComeForward(root, Limit), $"A start after Listen could not reach the holder ({which}).");
         Assert.IsTrue(arrived.Wait(Wait), $"A come-forward request made after Listen was lost ({which}).");
+        WaitUntilServed(hold);
         Assert.AreEqual(2, Volatile.Read(ref delivered), $"Two requests, one before Listen and one after, were not delivered once each ({which}).");
+    }
+
+    // Returns once the hold has served every request sent to it so far, its
+    // callbacks included, so a count read afterwards is final. The Unix form
+    // serves one connection at a time and accepts the next only after the
+    // previous callback returned: a connection that sends nothing is closed
+    // by the holder only after everything before it. The other forms are
+    // released: the Windows listener delivers a pending signal before it
+    // stops (WaitAny prefers the activate event), and Dispose joins it.
+    internal static void WaitUntilServed(IInstanceHold hold)
+    {
+        if (hold is not UnixInstanceHold unix)
+        {
+            hold.Dispose();
+            return;
+        }
+
+        Assert.IsNotNull(unix.SocketPath, "The hold has no socket, so nothing it served can be waited for.");
+        using var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+        socket.ReceiveTimeout = (int)Wait.TotalMilliseconds;
+        socket.Connect(new UnixDomainSocketEndPoint(unix.SocketPath));
+        socket.Shutdown(SocketShutdown.Send);
+        int read;
+        try
+        {
+            read = socket.Receive(new byte[1]);
+        }
+        catch (SocketException ex)
+        {
+            Assert.Fail($"The holder did not close a connection that sent nothing, so what it served before cannot be known: {ex.SocketErrorCode}.");
+            return;
+        }
+
+        Assert.AreEqual(0, read, "The holder wrote to a connection that sent nothing.");
     }
 
     [TestMethod]

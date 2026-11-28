@@ -100,8 +100,10 @@ public sealed class UnixHoldTests
         Assert.IsNull(hold.SocketPath, "A socket path too long for the system was reported as bound.");
         Assert.IsTrue(_notes.Exists(note => note.Contains("will not bring this window forward", StringComparison.Ordinal)),
             "Come forward was turned off without a line saying so.");
-        hold.Listen(() => Assert.Fail("A hold with come forward off delivered a request."));
 
+        // Listen still works, but with no socket nothing can deliver a request:
+        // unreachable is shown by the second copy's answer, not by a callback.
+        hold.Listen(() => { });
         var second = new UnixSingleInstance(folder, _notes.Add);
         Assert.IsFalse(second.AskToComeForward(root, InstanceHoldTests.Limit), "A second start reported reaching a holder that has no socket.");
         Assert.IsNull(second.TryHold(root), "With come forward off, a second hold on the library succeeded.");
@@ -170,10 +172,11 @@ public sealed class UnixHoldTests
             Send(hold.SocketPath, other);
         }
 
-        // Requests are served one at a time, in order: when the real one has
-        // arrived, every line before it has been read.
+        // The wait ends at any delivery, one made for a wrong line included, so
+        // the count is read only once the hold has served everything sent.
         Assert.IsTrue(form.AskToComeForward(root, InstanceHoldTests.Limit), "A second start could not reach the holder.");
         Assert.IsTrue(arrived.Wait(InstanceHoldTests.Wait), "The real come-forward request did not arrive after the other lines.");
+        InstanceHoldTests.WaitUntilServed(hold);
         Assert.AreEqual(1, Volatile.Read(ref delivered), "The holder acted on a line that is not the come-forward request.");
     }
 
