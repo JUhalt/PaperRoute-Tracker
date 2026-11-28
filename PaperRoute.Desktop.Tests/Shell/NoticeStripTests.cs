@@ -57,16 +57,30 @@ public sealed class NoticeStripTests
     [TestMethod]
     public void TheSameKeyReplacesNotStacks()
     {
+        // The old notice sits below a newer one of its kind, so its old place
+        // and the new one's place differ: a replacement in the old place fails.
         var strip = new NoticeStripViewModel();
+        StandingNotice network = Standing("network", "PaperRoute cannot reach the network.", NoticeKind.Warning);
         StandingNotice update = Standing("update-available", "PaperRoute 1.1.1 is available.", NoticeKind.Info);
         strip.Show(Standing("storage", "The library folder is read-only.", NoticeKind.Warning));
+        strip.Show(network);
         strip.Show(update);
         StandingNotice worse = Standing("storage", "The library folder cannot be reached.", NoticeKind.Failure);
 
         strip.Show(worse);
 
-        CollectionAssert.AreEqual(new[] { worse, update }, strip.StandingNotices.ToArray(),
-            "A notice shown again under its key replaces the old one, in the new one's place; it does not stack.");
+        CollectionAssert.AreEqual(new[] { worse, network, update }, strip.StandingNotices.ToArray(),
+            "A notice shown again under its key replaces the old one and goes where its kind ranks it, a Failure above the Warnings; it does not stack.");
+
+        // Of the same kind: the notice shown again is the newest of its kind.
+        StandingNotice folder = Standing("folder", "The attachments folder is read-only.", NoticeKind.Warning);
+        StandingNotice networkAgain = Standing("network", "PaperRoute still cannot reach the network.", NoticeKind.Warning);
+        strip.Show(folder);
+
+        strip.Show(networkAgain);
+
+        CollectionAssert.AreEqual(new[] { worse, networkAgain, folder, update }, strip.StandingNotices.ToArray(),
+            "A notice shown again under its key goes above the others of its kind, as the newest of them.");
     }
 
     [TestMethod]
