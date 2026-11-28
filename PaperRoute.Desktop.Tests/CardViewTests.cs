@@ -834,7 +834,7 @@ public sealed class CardViewTests : StorageCheckedTests
     {
         Assert.IsTrue(TargetSurfaceCatalog.Surfaces.Count > 0, "The catalog lists at least one surface.");
         CollectionAssert.AllItemsAreUnique(TargetSurfaceCatalog.Surfaces.Select(surface => surface.Key).ToList());
-        CollectionAssert.Contains(TargetSurfaceCatalog.Surfaces.Select(surface => surface.Key).ToList(), "Board");
+        CollectionAssert.Contains(TargetSurfaceCatalog.Surfaces.Select(surface => surface.Key).ToList(), "Page/Board");
 
         foreach (TargetSurface surface in TargetSurfaceCatalog.Surfaces)
         {
@@ -856,7 +856,7 @@ public sealed class CardViewTests : StorageCheckedTests
             Assert.AreEqual(surface.ViewType.FullName, type, $"{surface.Key}: the factory built the view it names.");
             Assert.IsGreaterThan(1, colours, $"{surface.Key}: the view renders.");
             TestContext.WriteLine($"{surface.Key}: {type}, {cards} card views");
-            if (surface.Key == "Board")
+            if (surface.Key == "Page/Board")
             {
                 Assert.AreEqual(5, cards, "The Board shows the example's five Pipeline cards.");
             }

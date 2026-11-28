@@ -207,7 +207,7 @@ The internal project/folder name remains `ManuscriptPipeline` for compatibility 
 - ClosedXML for Excel workbook support
 - The Anthropic .NET SDK for the optional AI assistant's Claude requests
 - System.Text.Json for local persistence
-- GitHub Actions for Windows CI and release builds, and for building and testing the core library on Ubuntu
+- GitHub Actions for Windows CI and release builds, for building and testing the core library on Ubuntu, and, in a report-only job that never fails a pull request, for building and testing it on macOS
 - Velopack for Windows installation and automatic updates
 
 ## Independence

@@ -33,11 +33,15 @@
     <None Update="CoreSurface\allowed-core-references.txt" CopyToOutputDirectory="PreserveNewest" />
     <!-- The accessibility trees and Tab orders the Board must keep (AccessibilityTreeTests). -->
     <None Update="Expected\*.txt" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The target catalog and the parity map as data (ParityMapTests); PaperRoute.Tests links parity-map.tsv for its key lock. -->
+    <None Update="Parity\*.tsv" CopyToOutputDirectory="PreserveNewest" />
     <!-- What headless cannot show, written beside the checks (HeadlessLimitTests reads it). -->
     <None Update="HeadlessLimits.md" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Real faults the legibility rules find, each with its issue until fixed (KnownFailuresTests reads it). -->
+    <None Update="Legibility\KnownFailures.tsv" CopyToOutputDirectory="PreserveNewest" />
     <!-- The User Guide, whose keyboard section names the keys the chord parser must accept (KeyboardHelperTests). -->
     <None Include="..\docs\USER_GUIDE.md" Link="Input\USER_GUIDE.md" CopyToOutputDirectory="PreserveNewest" />
-    <!-- The app's .axaml files as text, for the token tests (T1, T2, T3) to read the values and uses themselves. Content, not None: Avalonia's build removes every None item named *.axaml. -->
+    <!-- The app's .axaml files as text, for the token tests (R1, its completeness guard, T3) to read the values and uses themselves. Content, not None: Avalonia's build removes every None item named *.axaml. -->
     <Content Include="..\PaperRoute.Desktop\**\*.axaml" Exclude="..\PaperRoute.Desktop\bin\**;..\PaperRoute.Desktop\obj\**" LinkBase="Axaml" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
