@@ -134,6 +134,52 @@ public sealed class LibrarySessionTests
         }
     }
 
+    // A load is library work (ManuscriptRepository.Load can write), so it runs
+    // one at a time (shell design 2.5, critic M4). The first load is held in
+    // its prepare step, before it reads anything; a second load meanwhile is
+    // refused at once, runs no prepare and creates no data folder.
+    [TestMethod]
+    public async Task ASecondLoadWhileOneRunsIsRefusedAndWritesNothing()
+    {
+        using var held = new HeldLoad(_root);
+        int changes = 0;
+        held.Session.LibraryChanged += (_, _) => changes++;
+        Task<bool> first = held.StartLoad();
+
+        Task<bool> second = held.Session.LoadAsync(CancellationToken.None);
+
+        Assert.IsTrue(second.IsCompleted, "A load refused while another runs returns at once.");
+        Assert.IsFalse(await second, "A second load while one runs is refused.");
+        Assert.IsFalse(Directory.Exists(held.DataDirectory), "The refused load wrote nothing: the data folder was not created.");
+        Assert.AreEqual(1, held.PrepareRuns, "The refused load ran no work of its own.");
+        Assert.AreEqual(0, changes);
+
+        held.Release();
+        Assert.IsTrue(await first, "The first load finishes.");
+        Assert.IsTrue(Directory.Exists(held.DataDirectory), "The first load read the library, creating its data folder as the repository does.");
+        Assert.AreEqual(1, changes, "Only the first load published.");
+        Assert.IsTrue(await held.Session.LoadAsync(CancellationToken.None), "Once the first load has ended, a new one runs.");
+    }
+
+    // The shutdown wait (shell design 2.5) blocks on the worker itself until
+    // it ends, and returns at once when nothing runs.
+    [TestMethod]
+    public async Task WaitForWorkReturnsWhenTheWorkerEnds()
+    {
+        using var held = new HeldLoad(_root);
+        Assert.IsFalse(held.Session.WaitForWork(), "Nothing runs before the first load.");
+        Task<bool> load = held.StartLoad();
+
+        Task<bool> waiting = Task.Run(held.Session.WaitForWork);
+        Assert.IsFalse(waiting.Wait(TimeSpan.FromMilliseconds(300)), "WaitForWork returned while the worker was still held.");
+
+        held.Release();
+        Assert.IsTrue(waiting.Wait(TimeSpan.FromSeconds(30)), "WaitForWork did not return once the worker ended.");
+        Assert.IsTrue(waiting.Result, "WaitForWork waited for a running worker.");
+        Assert.IsTrue(await load);
+        Assert.IsFalse(held.Session.WaitForWork(), "Nothing runs after the load.");
+    }
+
     // The window binds its notice to the shell (compiled binding, x:DataType).
     [TestMethod]
     public void TheWindowShowsTheShellsNotice()
@@ -173,4 +219,56 @@ public sealed class LibrarySessionTests
         _root,
         LibraryKind.Example,
         LargeLibraryFixture.Today);
+
+    // A session over root whose first load stops in its prepare step (the
+    // step the example's seed runs in) until Release: the load has started,
+    // and has read and written nothing yet.
+    private sealed class HeldLoad : IDisposable
+    {
+        private readonly ManualResetEventSlim _entered = new();
+        private readonly ManualResetEventSlim _gate = new();
+        private int _prepareRuns;
+
+        public HeldLoad(string root)
+        {
+            DataDirectory = Path.Combine(root, "data");
+            Session = new DiskLibrarySession(
+                DataDirectory,
+                Path.Combine(root, "library"),
+                root,
+                LibraryKind.Example,
+                LargeLibraryFixture.Today,
+                prepare: () =>
+                {
+                    Interlocked.Increment(ref _prepareRuns);
+                    _entered.Set();
+                    _gate.Wait(TimeSpan.FromSeconds(60));
+                },
+                snapshot: null);
+        }
+
+        public DiskLibrarySession Session { get; }
+
+        public string DataDirectory { get; }
+
+        public int PrepareRuns => Volatile.Read(ref _prepareRuns);
+
+        // Starts the first load and returns once it is held.
+        public Task<bool> StartLoad()
+        {
+            Task<bool> load = Session.LoadAsync(CancellationToken.None);
+            Assert.IsTrue(_entered.Wait(TimeSpan.FromSeconds(30)), "The load did not reach its prepare step.");
+            return load;
+        }
+
+        public void Release() => _gate.Set();
+
+        // The two events are left undisposed: a worker still held when a test
+        // fails must find its gate open, not disposed.
+        public void Dispose()
+        {
+            _gate.Set();
+            Session.Dispose();
+        }
+    }
 }

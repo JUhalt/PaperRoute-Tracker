@@ -33,6 +33,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The session's tests hold a load in its prepare step (the internal constructor) to show that library work runs one at a time. -->
+    <InternalsVisibleTo Include="PaperRoute.Desktop.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\PaperRoute.Core\PaperRoute.Core.vbproj" />
   </ItemGroup>
 

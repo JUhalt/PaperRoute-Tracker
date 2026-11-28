@@ -53,11 +53,13 @@ internal sealed class MemorySession : ILibrarySession
 
     public void RaiseChanged() => LibraryChanged?.Invoke(this, EventArgs.Empty);
 
-    public Task LoadAsync(CancellationToken cancel)
+    public Task<bool> LoadAsync(CancellationToken cancel)
     {
         RaiseChanged();
-        return Task.CompletedTask;
+        return Task.FromResult(true);
     }
+
+    public bool WaitForWork() => false;
 
     public void Dispose()
     {

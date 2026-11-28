@@ -15,6 +15,13 @@ public sealed class DiskLibrarySession : ILibrarySession
     // example's seed (TrialStartup). Null when there is none, or once done.
     private Action? _prepare;
 
+    // One piece of library work at a time. _loading is true from the start of
+    // a load until it has published on the caller's context; _worker is the
+    // load's worker task, which WaitForWork waits on.
+    private readonly object _work = new();
+    private bool _loading;
+    private Task? _worker;
+
     private IReadOnlyList<Manuscript> _manuscripts = [];
     private bool _disposed;
 
@@ -92,20 +99,63 @@ public sealed class DiskLibrarySession : ILibrarySession
 
     public event EventHandler? LibraryChanged;
 
-    public async Task LoadAsync(CancellationToken cancel)
+    public async Task<bool> LoadAsync(CancellationToken cancel)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
         // Off the interface thread (d1 3.4); the await comes back on the
         // caller's context, where the results are published.
-        LoadResult result = await Task.Run(() => Read(cancel), cancel);
+        Task<LoadResult> worker;
+        lock (_work)
+        {
+            if (_loading)
+            {
+                return false;
+            }
 
-        _manuscripts = result.Manuscripts;
-        AuthorLibrary = result.AuthorLibrary;
-        SearchIndex = new AuthorLibrarySearchIndex(result.AuthorLibrary);
-        Settings = result.Settings;
-        StartupNotice = result.Notice;
-        LibraryChanged?.Invoke(this, EventArgs.Empty);
+            _loading = true;
+            worker = Task.Run(() => Read(cancel), cancel);
+            _worker = worker;
+        }
+
+        try
+        {
+            LoadResult result = await worker;
+
+            _manuscripts = result.Manuscripts;
+            AuthorLibrary = result.AuthorLibrary;
+            SearchIndex = new AuthorLibrarySearchIndex(result.AuthorLibrary);
+            Settings = result.Settings;
+            StartupNotice = result.Notice;
+            LibraryChanged?.Invoke(this, EventArgs.Empty);
+            return true;
+        }
+        finally
+        {
+            lock (_work)
+            {
+                _loading = false;
+            }
+        }
+    }
+
+    public bool WaitForWork()
+    {
+        Task? worker;
+        lock (_work)
+        {
+            worker = _worker;
+        }
+
+        if (worker is null || worker.IsCompleted)
+        {
+            return false;
+        }
+
+        // The wait handle, not Wait(): it neither runs the worker inline on
+        // this thread nor throws what the worker ended in.
+        ((IAsyncResult)worker).AsyncWaitHandle.WaitOne();
+        return true;
     }
 
     public void Dispose()

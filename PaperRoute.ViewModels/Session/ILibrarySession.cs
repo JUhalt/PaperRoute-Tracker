@@ -37,6 +37,17 @@ public interface ILibrarySession : IDisposable
     event EventHandler? LibraryChanged;
 
     // Reads the library off the interface thread and returns to the caller's
-    // context to publish it.
-    Task LoadAsync(CancellationToken cancel);
+    // context to publish it. A load is library work, because
+    // ManuscriptRepository.Load can write (it creates the data folder,
+    // recovers staged moves and can rebuild the main file from its backup), so
+    // it runs one at a time: while one runs, another returns false at once and
+    // reads and writes nothing.
+    Task<bool> LoadAsync(CancellationToken cancel);
+
+    // Blocks until a running worker ends, with no time limit, as today's
+    // shutdown waits for library work (Form1.LibraryWork.vb:180-190). It waits
+    // on the worker itself, never on the task the interface awaits, so it
+    // cannot deadlock on the interface thread. True when a worker was running.
+    // For the shutdown path only.
+    bool WaitForWork();
 }
