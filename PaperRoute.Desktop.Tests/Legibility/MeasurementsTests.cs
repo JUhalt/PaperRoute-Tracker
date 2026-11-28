@@ -19,7 +19,7 @@ public sealed class MeasurementsTests
         string folder = Path.Combine(AssemblySetup.StorageRoot, "measurements-" + Guid.NewGuid().ToString("N"));
         string path = Measurements.Write(folder, "R0", "Light", ["name", "ratio"], [["first", Measurements.Number(4.5)], ["second", Measurements.Number(21)]]);
 
-        Assert.AreEqual(Path.Combine(folder, "legibility-R0-Light.txt"), path, "The file is named by its rule and theme case.");
+        Assert.AreEqual(Path.Combine(folder, "legibility-r0-light.txt"), path, "The file is named by its rule and theme case.");
         Assert.AreEqual(
             "name\tratio\nfirst\t4.50\nsecond\t21.00\n",
             Encoding.UTF8.GetString(File.ReadAllBytes(path)),

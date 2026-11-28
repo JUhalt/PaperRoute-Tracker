@@ -75,7 +75,8 @@ public partial class App : Application
 
     // The computed brushes (ThemeTokens) join Tokens.axaml's Light and Dark
     // dictionaries before any control looks them up, and the two contrast
-    // dictionaries join them after (ContrastTheme, which derives its own); text
+    // dictionaries join them after (ContrastTheme, which derives its own); then
+    // AppTheme, the one owner of the theme variant, takes it, at System; text
     // boxes get their placeholder at full strength (InputTemplates).
     public override void Initialize()
     {
@@ -86,6 +87,7 @@ public partial class App : Application
         }
 
         ContrastTheme.Register(Resources);
+        AppTheme.Of(this);
         InputTemplates.Register();
     }
 
@@ -96,8 +98,8 @@ public partial class App : Application
             // A Windows contrast theme, at start and whenever it changes
             // (d1 5.2). The window's activation reads it again, for a switch
             // between two contrast themes that Avalonia might not report.
-            ContrastPreference contrast = ContrastPreference.FromPlatform(PlatformSettings);
-            ContrastTheme.Follow(this, contrast);
+            AppTheme theme = AppTheme.Of(this);
+            theme.FollowPlatform();
 
             if (_session is not null && _measureFile is not null)
             {
@@ -113,7 +115,7 @@ public partial class App : Application
 
             ShellViewModel? shell = _session is null ? null : CreateShell(_session);
             var window = new MainWindow { DataContext = shell };
-            window.Activated += (_, _) => contrast.Refresh();
+            window.Activated += (_, _) => theme.Refresh();
             if (shell is not null && _platformCheckFile is not null)
             {
                 // The check loads the library once the window is open, then

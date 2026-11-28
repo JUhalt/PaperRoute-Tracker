@@ -9,8 +9,8 @@ namespace PaperRoute.Desktop.Tests.Legibility;
 // Light, Dark, and Windows' four contrast themes, named by their theme files,
 // each with the six system colours SystemContrastColors holds for it. The
 // headless platform reports Light with no contrast (HeadlessLimits.md, row
-// 4), so a case drives the theme itself: a variant, or a contrast preference
-// through ContrastTheme.Follow.
+// 4), so a case drives the theme itself, through AppTheme: an appearance, or
+// a contrast preference over the appearance it is entered from.
 // Limits of headless: HeadlessLimits.md
 internal sealed record ThemeCase(string Name, ThemeVariant? Variant, SystemContrastColors? Contrast)
 {
@@ -43,14 +43,16 @@ internal sealed record ThemeCase(string Name, ThemeVariant? Variant, SystemContr
     public void Apply(Application application, ThemeVariant? contrastBase = null)
     {
         ArgumentNullException.ThrowIfNull(application);
+        AppTheme theme = AppTheme.Of(application);
         if (Contrast is { } colors)
         {
-            application.RequestedThemeVariant = contrastBase ?? ThemeVariant.Light;
-            ContrastTheme.Follow(application, new ContrastPreference(true, colors));
+            theme.Appearance = contrastBase == ThemeVariant.Dark ? Appearance.Dark : Appearance.Light;
+            theme.Follow(new ContrastPreference(true, colors));
         }
         else
         {
-            application.RequestedThemeVariant = Variant;
+            theme.Follow(new ContrastPreference(false, SystemContrastColors.Fallback));
+            theme.Appearance = Variant == ThemeVariant.Dark ? Appearance.Dark : Appearance.Light;
         }
 
         Dispatcher.UIThread.RunJobs();

@@ -14,7 +14,7 @@ namespace PaperRoute.Desktop.Tests.Legibility;
 // the sweep judges nothing yet: for every text element of every subject and
 // case it writes the token ratio where one exists, the strongest-pixel
 // ratio, the full-ink pixel count and the margin over 4.5, the thinnest
-// margin first, to legibility-R7-<case>.txt beside the pictures, the same
+// margin first, to legibility-r7-<case>.txt beside the pictures, the same
 // form on every system, so the two runners' files can be laid side by side.
 // R7's judging function (Rules.R7) is built and proved by R7_FindsFaintText;
 // the commit that turns the sweep's verdict on comes later.
@@ -108,7 +108,7 @@ public sealed class R7Tests : StorageCheckedTests
 
     // Writes every text's measurements, the thinnest margin first (then by
     // subject and element, so the order is the same wherever the margins
-    // are), to legibility-R7-<case>.txt in the folder; returns its path.
+    // are), to legibility-r7-<case>.txt in the folder; returns its path.
     private static string Write(string folder, string themeCase, IEnumerable<DrawnText> texts) =>
         Measurements.Write(
             folder,

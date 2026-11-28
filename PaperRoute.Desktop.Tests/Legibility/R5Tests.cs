@@ -6,7 +6,7 @@ namespace PaperRoute.Desktop.Tests.Legibility;
 // R5, no light parts in Dark (the harness design, part 2.4), as a sweep over
 // every subject the harness can build (Sweep.Subjects), with the empty
 // allow-list (R5AllowList), judging. Every part's two readings go to
-// legibility-R5-Dark.txt beside the pictures, the thinnest margin first.
+// legibility-r5-dark.txt beside the pictures, the thinnest margin first.
 // Limits of headless: HeadlessLimits.md
 [TestClass]
 public sealed class R5Tests : StorageCheckedTests
@@ -103,7 +103,7 @@ public sealed class R5Tests : StorageCheckedTests
     }
 
     // Writes every part's readings, the thinnest margin first, to
-    // legibility-R5-<case>.txt in the folder; returns the file's path.
+    // legibility-r5-<case>.txt in the folder; returns the file's path.
     private static string Write(string folder, string themeCase, IEnumerable<PaintedPart> parts) =>
         Measurements.Write(
             folder,
