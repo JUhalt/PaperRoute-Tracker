@@ -258,6 +258,31 @@ public sealed class LibrarySessionTests
         Assert.IsFalse(File.Exists(Path.Combine(_root, "settings.bak")), "The held requests were written more than once.");
     }
 
+    // A load replaces Settings with what it read (ILibrarySession), so a
+    // change made to Settings while a load runs is lost, and the save held
+    // during that load writes the loaded settings. A caller such as the rail's
+    // collapse toggle (B12) changes Settings after LibraryChanged, or applies
+    // its change again then.
+    [TestMethod]
+    public async Task ASettingsChangeDuringALoadIsReplacedByTheLoad()
+    {
+        await File.WriteAllTextAsync(Path.Combine(_root, "settings.json"), "{ \"NavigationCollapsed\": false }");
+        using var held = new HeldLoad(_root);
+        Task<bool> load = held.StartLoad();
+        AppSettings during = held.Session.Settings;
+        during.NavigationCollapsed = true;
+        Task<bool> save = held.Session.SaveSettingsAsync();
+
+        held.Release();
+        Assert.IsTrue(await load);
+        Assert.IsTrue(await save, "The held save was written when the load ended.");
+        Assert.AreNotSame(during, held.Session.Settings, "The load replaces Settings with what it read.");
+        Assert.IsFalse(held.Session.Settings.NavigationCollapsed, "The settings in use are the loaded ones, without the change made during the load.");
+        using DiskLibrarySession again = OpenSession();
+        await again.LoadAsync(CancellationToken.None);
+        Assert.IsFalse(again.Settings.NavigationCollapsed, "The held save wrote the loaded settings, not the change made during the load.");
+    }
+
     // With no load running, each save is written at once on the caller's
     // thread and reads Settings as it is then, so the last request wins.
     [TestMethod]

@@ -4,7 +4,7 @@ namespace PaperRoute.ViewModels.Session;
 // build 5 takes it (d1 3.1; shell design 2.5). It loads, and it saves the
 // settings it loaded; it never saves the library. There is deliberately no
 // library save, backup or restore member (lock 3 of d1 1.3), and tests pin
-// that: SaveSettingsAsync is its one write.
+// that: SaveSettingsAsync is its one save member.
 public interface ILibrarySession : IDisposable
 {
     LibraryKind Kind { get; }
@@ -53,10 +53,13 @@ public interface ILibrarySession : IDisposable
     // once on the caller's thread, returning a finished task, unless a load
     // runs; then the request is held, and one write runs on the caller's
     // context when the load ends. The write reads Settings when it runs, so
-    // quick requests remember the last. False, with nothing written, when the
-    // write fails (an IOException or UnauthorizedAccessException, as
-    // Form1.Online.vb:117 catches), for a snapshot, and before a load has
-    // read settings to save.
+    // quick requests remember the last. A load replaces Settings with what it
+    // read, so a change made to Settings while a load runs is lost, and a save
+    // held during that load writes the loaded settings: a caller changes
+    // Settings after LibraryChanged, or applies its change again then. False,
+    // with nothing written, when the write fails (an IOException or
+    // UnauthorizedAccessException, as Form1.Online.vb:117 catches), for a
+    // snapshot, and before a load has read settings to save.
     Task<bool> SaveSettingsAsync();
 
     // Blocks until a running worker ends, with no time limit, as today's
