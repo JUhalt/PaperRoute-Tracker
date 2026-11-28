@@ -70,6 +70,9 @@ internal sealed class TestPages
 
     public List<FakePage> Made { get; } = [];
 
+    // A page whose factory throws, as a broken page would.
+    public PageKey? Broken { get; set; }
+
     public IReadOnlyList<FakePage> MadeFor(PageKey key) => [.. Made.Where(page => page.Key == key)];
 
     // The page of that key made last.
@@ -77,6 +80,11 @@ internal sealed class TestPages
 
     private FakePage Make(PageKey key)
     {
+        if (key == Broken)
+        {
+            throw new InvalidOperationException($"The {key} page is broken.");
+        }
+
         var page = new FakePage(key);
         Made.Add(page);
         return page;

@@ -15,7 +15,7 @@ public sealed class Navigator : INavigator
     private readonly Stack<PageRequest> _back = new();
     private readonly Stack<PageRequest> _forward = new();
 
-    // A move is under way: its leave guard, Hidden, the page being made and
+    // A move is under way: its leave guard, the page being made, Hidden and
     // Shown. Another move is refused meanwhile.
     private bool _moving;
 
@@ -139,7 +139,8 @@ public sealed class Navigator : INavigator
 
     // One switch, history aside. The page shown, asked again, only takes a
     // new section (3.1 row 17); otherwise the page shown is asked whether it
-    // may be left, then hidden, and the page asked for is shown.
+    // may be left, the page asked for is made, the page left is hidden, and
+    // the page asked for is shown.
     private async Task<Move> MoveAsync(PageRequest request)
     {
         PageCatalogRow row = _catalog.Find(request.Page);
@@ -154,17 +155,16 @@ public sealed class Navigator : INavigator
             return Move.Stayed;
         }
 
-        if (CurrentPage is { } leaving)
+        IPage? leaving = CurrentPage;
+        if (leaving is not null && !await leaving.CanLeaveAsync())
         {
-            if (!await leaving.CanLeaveAsync())
-            {
-                return Move.Refused;
-            }
-
-            leaving.Hidden();
+            return Move.Refused;
         }
 
+        // The page is made before the page left is hidden, so a factory that
+        // throws leaves the page shown as it was, never hidden while shown.
         IPage page = PageFor(row);
+        leaving?.Hidden();
         if (request.Page == PageKey.Manuscript && Current is { } from && from.Page != PageKey.Manuscript)
         {
             Origin = from.Page;

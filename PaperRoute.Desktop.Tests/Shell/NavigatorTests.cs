@@ -313,6 +313,31 @@ public sealed class NavigatorTests
         Assert.HasCount(2, board.ShownWith);
     }
 
+    // Not in the design's list: a page whose factory throws leaves the page
+    // shown as it was, not told it is hidden while still shown, and the
+    // navigator free for the next move.
+    [TestMethod]
+    public async Task APageThatCannotBeMadeLeavesThePageShownAsItWas()
+    {
+        var pages = new TestPages();
+        Navigator navigator = pages.Navigator;
+        await navigator.GoAsync(s_board);
+        await navigator.GoAsync(s_library);
+        FakePage library = pages.Page(PageKey.Library);
+        pages.Broken = PageKey.Journals;
+
+        await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => navigator.GoAsync(s_journals));
+
+        Assert.AreEqual(s_library, navigator.Current);
+        Assert.AreSame(library, navigator.CurrentPage);
+        Assert.AreEqual(0, library.HiddenCount, "The page still shown is not hidden.");
+        HistoryIs(navigator.BackHistory, "Nothing is recorded.", s_board);
+
+        pages.Broken = null;
+        Assert.IsTrue(await navigator.GoAsync(s_journals), "The next move goes.");
+        Assert.AreEqual(1, library.HiddenCount);
+    }
+
     // Not in the design's list: a page that asks to switch pages from its
     // Shown or Hidden is refused at once, as the page contract says, and the
     // move under way finishes as if alone.
