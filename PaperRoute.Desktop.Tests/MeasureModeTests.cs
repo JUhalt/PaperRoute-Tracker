@@ -17,6 +17,10 @@ namespace PaperRoute.Desktop.Tests;
 [TestClass]
 public sealed class MeasureModeTests : StorageCheckedTests
 {
+    // The refusal of an unknown idle side: every side a real window can run,
+    // which leaves out the scaling sides (headless only).
+    private const string SidesMessage = "\"--after-idle\" needs one of none, width, half, prepared, mid-step, key-none, key-step, timer-none, timer-on, search-pending, search-refreshed, maximise-none, maximise-prepared, theme-none, theme-prepared after it.";
+
     private string _root = string.Empty;
 
     [TestInitialize]
@@ -65,6 +69,16 @@ public sealed class MeasureModeTests : StorageCheckedTests
 
         Assert.IsTrue(TrialOptions.TryParse(["--MEASURE", @"C:\m.json"], out TrialOptions? upper, out error), error);
         Assert.AreEqual(@"C:\m.json", upper.MeasureFile, "Arguments are read without regard to case, as the others are.");
+        Assert.IsNull(upper.AfterIdle, "A run told no idle side is today's run.");
+
+        foreach (string side in IdleSides.All.Where(side => !IdleSides.HeadlessOnly(side)))
+        {
+            Assert.IsTrue(TrialOptions.TryParse(["--measure", @"C:\m.json", "--after-idle", side], out TrialOptions? sided, out error), error);
+            Assert.AreEqual(side, sided.AfterIdle);
+        }
+
+        Assert.IsTrue(TrialOptions.TryParse(["--after-idle", "prepared", "--snapshot-from", @"C:\Libraries\Large", "--measure", @"C:\m.json"], out TrialOptions? first, out error), error);
+        Assert.AreEqual("prepared", first.AfterIdle, "The side may come before --measure.");
     }
 
     [TestMethod]
@@ -75,6 +89,14 @@ public sealed class MeasureModeTests : StorageCheckedTests
     [DataRow(new[] { "--measure", @"C:\a.json", "--self-check" }, "\"--measure\" opens a window and \"--self-check\" opens none: give one or the other.")]
     [DataRow(new[] { "--self-check", "--measure", @"C:\a.json" }, "\"--measure\" opens a window and \"--self-check\" opens none: give one or the other.")]
     [DataRow(new[] { "--measure", @"C:\a.json", "--today", "2026-10-16" }, "\"--today\" is accepted only with \"--snapshot-from\".")]
+    [DataRow(new[] { "--measure", @"C:\a.json", "--after-idle" }, SidesMessage)]
+    [DataRow(new[] { "--measure", @"C:\a.json", "--after-idle", "all" }, SidesMessage)]
+    [DataRow(new[] { "--measure", @"C:\a.json", "--after-idle", "Prepared" }, SidesMessage)]
+    [DataRow(new[] { "--measure", @"C:\a.json", "--after-idle", "none", "--after-idle", "prepared" }, "\"--after-idle\" is given twice.")]
+    [DataRow(new[] { "--after-idle", "prepared" }, "\"--after-idle\" is accepted only with \"--measure\".")]
+    [DataRow(new[] { "--self-check", "--after-idle", "none" }, "\"--after-idle\" is accepted only with \"--measure\".")]
+    [DataRow(new[] { "--measure", @"C:\a.json", "--after-idle", "scaling-prepared" }, "\"--after-idle scaling-prepared\" changes the display scaling, which a real window cannot do by itself; that side runs headless only.")]
+    [DataRow(new[] { "--measure", @"C:\a.json", "--after-idle", "scaling-none" }, "\"--after-idle scaling-none\" changes the display scaling, which a real window cannot do by itself; that side runs headless only.")]
     public void MeasureRefusesACommandLineItCannotRun(string[] args, string message)
     {
         Assert.IsFalse(TrialOptions.TryParse(args, out TrialOptions? options, out string? error), string.Join(" ", args));
@@ -199,6 +221,7 @@ public sealed class MeasureModeTests : StorageCheckedTests
         Assert.AreEqual(Environment.ProcessorCount, root.GetProperty("processors").GetInt32());
         CollectionAssert.AreEqual(new[] { "stage-back-to-all" }, root.GetProperty("waitingForRowsOfN").EnumerateArray().Select(item => item.GetString()).ToArray());
         Assert.IsFalse(root.TryGetProperty("error", out _), "No error when the run finished.");
+        Assert.IsFalse(root.TryGetProperty("idlePreparation", out _), "A run told no idle side writes no idlePreparation.");
 
         List<string> rows = root.GetProperty("rows").EnumerateArray().Select(row =>
             string.Join(" | ",
@@ -244,6 +267,166 @@ public sealed class MeasureModeTests : StorageCheckedTests
         using JsonDocument stoppedDocument = JsonDocument.Parse(stopped.ToJson());
         Assert.AreEqual("TimeoutException: no frame", stoppedDocument.RootElement.GetProperty("error").GetString());
         Assert.AreEqual(0, stoppedDocument.RootElement.GetProperty("rows").GetArrayLength());
+    }
+
+    // A run told an idle side records, per library, what preparation did
+    // before the first switch: the side, the steps and their card views,
+    // whether Published was prepared, why preparation stopped (null, or the
+    // preparer's reason) and whether the switch after idle was timed, with
+    // the card views it made (null when it was not timed), and what the wait
+    // before the switch did: the idle period waited, to 0.1 ms, and the
+    // frames drawn from the end of preparation to the switch.
+    [TestMethod]
+    public void TheJsonOfARunToldAnIdleSideRecordsWhatPreparationDid()
+    {
+        var report = new BoardMeasurementReport
+        {
+            Mode = "headless", MachineName = "TEST-PC", Dpi = 96, Option = "b", ResetThreshold = 64,
+            Day = new DateTime(2026, 11, 27), DaySource = "the computer's date", Build = "Release", Multiplier = 1,
+            TakenAt = new DateTime(2026, 11, 27, 9, 0, 0), HeldLibrary = "500",
+            IdlePreparation =
+            [
+                new IdlePreparationRecord("example", IdleSides.Prepared, 5, 4, true, null, true, 0, 1000.44, 1),
+                new IdlePreparationRecord("500", IdleSides.Prepared, 3, 6, false, HiddenShelfPreparer.SlowSliceReason, false, null, 1001.26, 1),
+            ],
+        };
+
+        using JsonDocument document = JsonDocument.Parse(report.ToJson());
+        JsonElement[] idle = document.RootElement.GetProperty("idlePreparation").EnumerateArray().ToArray();
+        Assert.HasCount(2, idle);
+        string Describe(JsonElement item) => string.Join(" | ",
+            item.GetProperty("library").GetString(),
+            item.GetProperty("side").GetString(),
+            item.GetProperty("stepsRun").GetInt32().ToString(CultureInfo.InvariantCulture),
+            item.GetProperty("viewsMade").GetInt32().ToString(CultureInfo.InvariantCulture),
+            item.GetProperty("prepared").GetBoolean() ? "prepared" : "not prepared",
+            item.GetProperty("skippedReason").ValueKind == JsonValueKind.Null ? "null" : item.GetProperty("skippedReason").GetString(),
+            item.GetProperty("firstSwitchTaken").GetBoolean() ? "taken" : "not taken",
+            item.GetProperty("viewsMadeAtSwitch").ValueKind == JsonValueKind.Null ? "null" : item.GetProperty("viewsMadeAtSwitch").GetInt32().ToString(CultureInfo.InvariantCulture),
+            item.GetProperty("idleWaitMs").GetDouble().ToString(CultureInfo.InvariantCulture),
+            item.GetProperty("framesBeforeSwitch").GetInt32().ToString(CultureInfo.InvariantCulture));
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "example | prepared | 5 | 4 | prepared | null | taken | 0 | 1000.4 | 1",
+                "500 | prepared | 3 | 6 | not prepared | slow slice | not taken | null | 1001.3 | 1",
+            },
+            idle.Select(Describe).ToArray());
+
+        string table = report.ToTable();
+        StringAssert.Contains(table, "Idle side prepared (500): 3 preparation steps made 6 card views; Published not prepared at the switch; preparation stopped: slow slice; the first switch after idle was made but not timed.");
+        StringAssert.Contains(table, "Idle side prepared (example): 5 preparation steps made 4 card views; Published prepared at the switch; preparation not stopped; the first switch after idle made 0 card views.");
+
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "none", "width", "half", "prepared", "mid-step", "key-none", "key-step", "timer-none", "timer-on", "search-pending", "search-refreshed",
+                "maximise-none", "maximise-prepared", "scaling-none", "scaling-prepared", "theme-none", "theme-prepared",
+            },
+            IdleSides.All.ToArray());
+        CollectionAssert.AreEqual(new int?[] { 0, 1, 3, null, 4, 0, 4, 0, null, null, null, 0, null, 0, null, 0, null }, IdleSides.All.Select(IdleSides.StepsFor).ToArray());
+        CollectionAssert.AreEqual(
+            new[] { "switch", "switch", "switch", "switch", "switch", "key", "key", "timer", "timer", "search", "search", "maximise", "maximise", "scaling", "scaling", "theme", "theme" },
+            IdleSides.All.Select(IdleSides.ScenarioOf).ToArray());
+        CollectionAssert.AreEqual(new[] { "timer-on" }, IdleSides.All.Where(IdleSides.ByTimer).ToArray(), "Only timer-on lets the Board's own idle timer prepare Published.");
+        CollectionAssert.AreEqual(new[] { "scaling-none", "scaling-prepared" }, IdleSides.All.Where(IdleSides.HeadlessOnly).ToArray(), "Only the scaling sides are headless only.");
+        Assert.AreEqual(HiddenShelfPreparer.LadderSteps + 1, IdleSides.StepsFor(IdleSides.MidStep), "The steps before the last are W and the ladder's capped steps.");
+        Assert.IsFalse(IdleSides.IsKnown("Prepared"), "Sides are written in lower case.");
+
+        // Every side of a scenario writes the same rows, so two sides of one
+        // scenario can be paired; the switch scenario's rows are IdleRows.
+        // Both sides of the search scenario prepare: they differ in the idle
+        // refresh (row 8), so it has no side without preparation.
+        foreach (IGrouping<string, string> scenario in IdleSides.All.GroupBy(IdleSides.ScenarioOf))
+        {
+            Assert.IsGreaterThanOrEqualTo(2, scenario.Count(), $"The scenario {scenario.Key} has two sides at least.");
+            Assert.AreEqual(scenario.Key != IdleSides.SearchScenario, scenario.Any(side => !IdleSides.Prepares(side)), $"The scenario {scenario.Key} has a side without preparation, but for search.");
+            Assert.IsTrue(scenario.Any(IdleSides.Prepares), $"The scenario {scenario.Key} has a side with preparation.");
+            Assert.AreEqual(1, scenario.Select(side => string.Join(",", BoardMeasurement.IdleRowsFor(side))).Distinct().Count(), $"Every side of the scenario {scenario.Key} writes the same rows.");
+        }
+
+        CollectionAssert.AreEqual(BoardMeasurement.IdleRows.ToArray(), BoardMeasurement.IdleRowsFor(IdleSides.Prepared).ToArray(), "The switch scenario writes the idle rows.");
+    }
+
+    // The counts the other scenarios add to the idle record (IdleSides), in
+    // the JSON and the table: the scenario, the steps of the session, the
+    // steps a key or a click met and their card views, every card view made
+    // in that row (on mid-step the switch's own is the row's less the
+    // step's, so the table says the switch made none), the refresh steps,
+    // whether Published's rows were stale at the switch, the managed heap
+    // before and after preparation, the frame after each step and the time
+    // from a change to the switch; each null or empty where the scenario has
+    // none.
+    [TestMethod]
+    public void TheJsonOfARunToldAScenarioRecordsItsCounts()
+    {
+        var report = new BoardMeasurementReport
+        {
+            Mode = "headless", MachineName = "TEST-PC", Dpi = 96, Option = "b", ResetThreshold = 64,
+            Day = new DateTime(2026, 11, 27), DaySource = "the computer's date", Build = "Release", Multiplier = 1,
+            TakenAt = new DateTime(2026, 11, 27, 9, 0, 0), HeldLibrary = "500",
+            IdlePreparation =
+            [
+                new IdlePreparationRecord("500", IdleSides.ThemePrepared, 5, 21, true, null, true, 0, 1000.2, 1)
+                {
+                    SessionSteps = 6, RefreshSteps = 1, ManagedBytesBefore = 10 * 1024 * 1024, ManagedBytesAfter = 12 * 1024 * 1024,
+                    StepFrameMs = [4.04, 5.06, 6, 7, 8, 9],
+                },
+                new IdlePreparationRecord("500", IdleSides.MidStep, 4, 11, false, null, true, 0, 1000.2, 1)
+                {
+                    SessionSteps = 5, StepsMet = 1, StepsMetViews = 10, ViewsMadeInRow = 10, StepFrameMs = [1, 2, 3, 4],
+                },
+                new IdlePreparationRecord("500", IdleSides.MaximisePrepared, 5, 21, false, null, true, 3, 1000.2, 2)
+                {
+                    SessionSteps = 5, RowsStaleAtSwitch = true, ChangeToSwitchMs = 41.26,
+                },
+            ],
+        };
+
+        using JsonDocument document = JsonDocument.Parse(report.ToJson());
+        JsonElement[] idle = document.RootElement.GetProperty("idlePreparation").EnumerateArray().ToArray();
+        static string Number(JsonElement item, string name) =>
+            item.GetProperty(name).ValueKind == JsonValueKind.Null ? "null" : item.GetProperty(name).GetDouble().ToString(CultureInfo.InvariantCulture);
+        string Describe(JsonElement item) => string.Join(" | ",
+            item.GetProperty("scenario").GetString(),
+            Number(item, "sessionSteps"),
+            Number(item, "stepsMet"),
+            Number(item, "stepsMetViews"),
+            Number(item, "viewsMadeInRow"),
+            Number(item, "refreshSteps"),
+            item.GetProperty("rowsStaleAtSwitch").GetBoolean() ? "stale" : "current",
+            Number(item, "managedBytesBefore"),
+            Number(item, "managedBytesAfter"),
+            string.Join(",", item.GetProperty("stepFrameMs").EnumerateArray().Select(frame => frame.GetDouble().ToString(CultureInfo.InvariantCulture))),
+            Number(item, "changeToSwitchMs"));
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "theme | 6 | null | null | null | 1 | current | 10485760 | 12582912 | 4,5.1,6,7,8,9 | null",
+                "switch | 5 | 1 | 10 | 10 | null | current | null | null | 1,2,3,4 | null",
+                "maximise | 5 | null | null | null | null | stale | null | null |  | 41.3",
+            },
+            idle.Select(Describe).ToArray());
+
+        string table = report.ToTable();
+        StringAssert.Contains(table, "Idle side theme-prepared (500): 5 preparation steps made 21 card views; Published prepared at the switch; preparation not stopped; the first switch after idle made 0 card views. 6 steps in the session; Published's rows current at the switch; 1 idle refresh steps; managed memory 10.0 MB before preparation, 12.0 MB after.");
+        StringAssert.Contains(table, "Idle side mid-step (500): 4 preparation steps made 11 card views; Published not prepared at the switch; preparation not stopped; the first switch after idle made 0 card views. 5 steps in the session; Published's rows current at the switch; 1 steps met by the key or the click (10 card views; 10 made in that row in all).");
+        StringAssert.Contains(table, "Idle side maximise-prepared (500): 5 preparation steps made 21 card views; Published not prepared at the switch; preparation not stopped; the first switch after idle made 3 card views. 5 steps in the session; Published's rows stale at the switch; 41 ms from the change to the switch.");
+    }
+
+    // The maximise scenario's restore takes the shelf host back to its size
+    // before the maximise within half a pixel per side, so a real window at
+    // a scaling other than 100% that comes back a fraction of a pixel off
+    // does not end the run in error; a larger difference still does.
+    [TestMethod]
+    public void ARestoreWithinHalfAPixelIsTheSizeBefore()
+    {
+        var before = new Avalonia.Size(1264, 737);
+        Assert.IsTrue(BoardMeasurement.Restored(before, before), "The same size is restored.");
+        Assert.IsTrue(BoardMeasurement.Restored(new Avalonia.Size(1264.4, 736.6), before), "A fraction of a pixel off on each side is restored.");
+        Assert.IsTrue(BoardMeasurement.Restored(new Avalonia.Size(1264 + BoardMeasurement.RestoreTolerance, 737), before), "Exactly the tolerance off is restored.");
+        Assert.IsFalse(BoardMeasurement.Restored(new Avalonia.Size(1265, 737), before), "A whole pixel wider is not restored.");
+        Assert.IsFalse(BoardMeasurement.Restored(new Avalonia.Size(1264, 736.4), before), "More than half a pixel shorter is not restored.");
     }
 
     // ---- The UI probe ----

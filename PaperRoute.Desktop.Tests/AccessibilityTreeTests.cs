@@ -92,7 +92,9 @@ public sealed class AccessibilityTreeTests : StorageCheckedTests
         Compare("board-tree-500", text);
     }
 
-    private void Compare(string name, string actual)
+    // Also used by HiddenShelfPreparationTests, which repeat these walks with
+    // the hidden Published shelf prepared.
+    internal static void Compare(string name, string actual)
     {
         string expectedPath = Path.Combine(AppContext.BaseDirectory, "Expected", name + ".txt");
         string expected = File.Exists(expectedPath) ? File.ReadAllText(expectedPath).Replace("\r\n", "\n", StringComparison.Ordinal) : string.Empty;

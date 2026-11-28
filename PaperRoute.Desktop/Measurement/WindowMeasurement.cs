@@ -28,8 +28,10 @@ public static class WindowMeasurement
 
     // Measures, writes the JSON at path (accepted by BoardMeasurementReport.RefusalFor)
     // and returns the exit code: 0 when every row was measured, else 1 (the
-    // JSON then holds the rows measured so far and the error).
-    public static int Run(ILibrarySession session, string path, string daySource)
+    // JSON then holds the rows measured so far and the error). afterIdle is
+    // the run's side of a with-and-without comparison of idle preparation
+    // ("--after-idle", IdleSides), or null for today's run.
+    public static int Run(ILibrarySession session, string path, string daySource, string? afterIdle = null)
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
@@ -40,7 +42,7 @@ public static class WindowMeasurement
         // the screen, so the scroll row waits by design. The set-up is timed
         // so the process-start row can leave it out (ProcessStartRow).
         var setUp = Stopwatch.StartNew();
-        var measurement = new BoardMeasurement(WaitForFrame) { FrameWaits = true };
+        var measurement = new BoardMeasurement(WaitForFrame) { FrameWaits = true, AfterIdle = afterIdle };
         RunConditions conditions = RunConditions.Begin();
         setUp.Stop();
         string library = session.Kind == LibraryKind.Snapshot ? "snapshot" : "example";
@@ -81,6 +83,7 @@ public static class WindowMeasurement
             Error = error,
             Rows = measurement.Rows,
             Conditions = measured,
+            IdlePreparation = measurement.IdlePreparation,
         };
 
         try

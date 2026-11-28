@@ -38,8 +38,20 @@ function Assert-That([bool] $condition, [string] $what) {
 }
 
 # One run's JSON, shaped like the trial's report: the example library's rows
-# (never held) and the 500 library's.
-function New-RunJson($ui, $runUi, [double] $watchUi, [double] $riseUi, $conditions, [bool] $noPrimary = $false, [string] $primaryRule = 'enforced') {
+# (never held) and the 500 library's. $primaryRule is the rule of today's
+# primary row. A run told an idle side ($idle, a
+# hashtable: Side, and Skipped, the reason preparation stopped or null) has
+# the real idle rows in place of today's first switch, with the primary row
+# $idlePrimary: the two preparation rows (about 0 on the side none, more on
+# prepared), the first switch after idle and its paint (left out, with the
+# switch, when preparation stopped or noPrimary is set), and an
+# idlePreparation record as the measurement writes it for that side. Its
+# optional keys: JsonSide (the side the JSON names, when it is not Side),
+# NoRecord (no idlePreparation), TodayRows (today's rows with the record) and
+# InsideRow (preparation stopped by the step met inside the row a key or a
+# click meets: the rows are all written and the switch was timed).
+$idlePrimary = 'first-switch-published-after-idle'
+function New-RunJson($ui, $runUi, [double] $watchUi, [double] $riseUi, $conditions, [bool] $noPrimary = $false, $idle = $null, [string] $primaryRule = 'enforced') {
     $row = {
         param($library, $id, $budget, $rule, $uiMs, $runUiMs)
         [ordered]@{
@@ -50,17 +62,79 @@ function New-RunJson($ui, $runUi, [double] $watchUi, [double] $riseUi, $conditio
         }
     }
     $rows = [Collections.Generic.List[object]]::new()
-    $rows.Add((& $row 'example' $primary 250 'report-only' 999 900))
-    $rows.Add((& $row '500' $rise 100 'waiting: over under rows of N too' $riseUi $null))
-    if (-not $noPrimary) { $rows.Add((& $row '500' $primary 250 $primaryRule $ui $runUi)) }
+    if ($null -ne $idle -and -not $idle.ContainsKey('TodayRows')) {
+        $stopped = $null -ne $idle.Skipped -and -not $idle.ContainsKey('InsideRow')
+        $prepare = if ($idle.Side -in 'none', 'key-none', 'timer-none', 'maximise-none', 'scaling-none', 'theme-none') { 0.2 } else { 60 }
+        $rows.Add((& $row 'example' $idlePrimary 100 'report-only' 999 900))
+        $rows.Add((& $row '500' 'prepare-published-idle' 50 'report-only' $prepare $prepare))
+        $rows.Add((& $row '500' 'prepare-published-longest-step' 250 'report-only' ($prepare / 3) ($prepare / 3)))
+        # The search scenario's rows: the searches about alike on both
+        # sides, the refreshes about 0 on search-pending and more on
+        # search-refreshed, by design.
+        if ($idle.Side -like 'search-*') {
+            $refresh = if ($idle.Side -eq 'search-refreshed') { 45 } else { 0.2 }
+            $search = if ($idle.Side -eq 'search-refreshed') { 29 } else { 30 }
+            $rows.Add((& $row '500' 'search-keystroke-published-prepared' 50 'report-only' $search $search))
+            $rows.Add((& $row '500' 'refresh-published-after-search' 250 'report-only' $refresh $refresh))
+            $rows.Add((& $row '500' 'search-cleared-published-prepared' 50 'report-only' $search $search))
+            $rows.Add((& $row '500' 'refresh-published-after-clear' 250 'report-only' $refresh $refresh))
+        }
+        # The key scenario's primary row, the keystroke that meets a step,
+        # takes the run's UI; its first switch after idle reads higher on
+        # key-none, whose switch makes the shelf's first screen, and lower
+        # on key-step, prepared before it, by design.
+        if ($idle.Side -like 'key-*') {
+            $rows.Add((& $row '500' 'search-keystroke-step-due' 50 'report-only' $ui $runUi))
+        }
+        # The theme scenario's rows: the theme change dearer on
+        # theme-prepared (restyling the prepared hidden views), the refresh
+        # about 0 on theme-none, by design.
+        if ($idle.Side -like 'theme-*') {
+            $theme = if ($idle.Side -eq 'theme-prepared') { 80 } else { 60 }
+            $refresh = if ($idle.Side -eq 'theme-prepared') { 45 } else { 0.2 }
+            $rows.Add((& $row '500' 'theme-change' 250 'report-only' $theme $theme))
+            $rows.Add((& $row '500' 'refresh-published-after-theme' 250 'report-only' $refresh $refresh))
+        }
+        if (-not $noPrimary -and -not $stopped) {
+            $switchUi = if ($idle.Side -eq 'key-none') { 200 } elseif ($idle.Side -eq 'key-step') { 20 } else { $ui }
+            $switchRunUi = if ($idle.Side -like 'key-*') { $switchUi } else { $runUi }
+            $rows.Add((& $row '500' $idlePrimary 100 'report-only' $switchUi $switchRunUi))
+            $rows.Add((& $row '500' 'first-switch-published-after-idle-paint' 250 'report-only' 40 40))
+        }
+    } else {
+        $rows.Add((& $row 'example' $primary 250 'report-only' 999 900))
+        $rows.Add((& $row '500' $rise 100 'waiting: over under rows of N too' $riseUi $null))
+        if (-not $noPrimary) { $rows.Add((& $row '500' $primary 250 $primaryRule $ui $runUi)) }
+    }
     $rows.Add((& $row '500' $watch 250 'enforced' $watchUi $watchUi))
-    [ordered]@{
+    $json = [ordered]@{
         mode = 'headless'; machineName = $machine; dpi = 96; option = 'b'; syncIntoResetThreshold = 64; day = '2026-11-21'
         daySource = "the computer's date"; build = 'Release'; budgetMultiplier = 1; takenAt = '2026-11-21T22:00:00'; processors = 12
         operatingSystem = 'canned'; heldLibrary = '500'; waitingForRowsOfN = @($rise)
         rows = $rows.ToArray()
         conditions = $conditions
-    } | ConvertTo-Json -Depth 6
+    }
+    # A run told an idle side records what preparation did before the
+    # switch, as the measurement does for that side: none runs no step and
+    # its switch makes the 21 card views; prepared makes them in 5 steps; a
+    # stopped preparation made 6 in 3 steps and its switch was not timed.
+    if ($null -ne $idle -and -not $idle.ContainsKey('NoRecord')) {
+        $side = if ($idle.ContainsKey('JsonSide')) { $idle.JsonSide } else { $idle.Side }
+        $record = if ($idle.ContainsKey('InsideRow')) {
+            [ordered]@{ stepsRun = 4; viewsMade = 12; prepared = $false; skippedReason = $idle.Skipped; firstSwitchTaken = $true; viewsMadeAtSwitch = 0; stoppedInsideRow = $true }
+        } elseif ($null -ne $idle.Skipped) {
+            [ordered]@{ stepsRun = 3; viewsMade = 6; prepared = $false; skippedReason = $idle.Skipped; firstSwitchTaken = $false; viewsMadeAtSwitch = $null }
+        } elseif ($idle.Side -eq 'none') {
+            [ordered]@{ stepsRun = 0; viewsMade = 0; prepared = $false; skippedReason = $null; firstSwitchTaken = $true; viewsMadeAtSwitch = 21 }
+        } else {
+            [ordered]@{ stepsRun = 5; viewsMade = 21; prepared = $true; skippedReason = $null; firstSwitchTaken = $true; viewsMadeAtSwitch = 0 }
+        }
+        $entry = [ordered]@{ library = '500'; side = $side }
+        foreach ($key in $record.Keys) { $entry[$key] = $record[$key] }
+        $entry['idleWaitMs'] = 1000.4; $entry['framesBeforeSwitch'] = 1
+        $json['idlePreparation'] = @($entry)
+    }
+    $json | ConvertTo-Json -Depth 6
 }
 
 function New-Conditions($disturbed = $false, $others = 6.0) {
@@ -73,12 +147,16 @@ function New-Conditions($disturbed = $false, $others = 6.0) {
 # 50), BWatch/AWatch, BCond/ACond (conditions, or 'none' for null),
 # BNoPrimary/ANoPrimary (the primary row left out), BUiNull/AUiNull (its UI
 # null), BOutlasted/AOutlasted and BTimedOut/ATimedOut (the record's facts),
-# SkipSecond (the second run not run) and OmitSecond (the sitting stopped
-# before the second run). $primaryRule is the primary row's rule in every
-# run. Each sitting starts a minute after the last, as real ones do, so no
-# two canned sittings have the same record.
+# SkipSecond (the second run not run), OmitSecond (the sitting stopped
+# before the second run) and BIdle/AIdle (the run's idle side: New-RunJson's
+# $idle). A sitting given idle sides names first-switch-published-after-idle
+# as its primary row and no row expected to rise, as the method's command
+# line does, unless $primaryRow names another. $primaryRule is today's
+# primary row's rule in every run. Each
+# sitting starts a minute after the last, as real ones do, so no two canned
+# sittings have the same record.
 $script:sittingMinute = 0
-function New-Sitting([string] $name, [int] $planned, [object[]] $pairs, [string] $primaryRule = 'enforced') {
+function New-Sitting([string] $name, [int] $planned, [object[]] $pairs, [string] $beforeIdle = '', [string] $afterIdle = '', [string] $primaryRule = 'enforced', [string] $primaryRow = '') {
     $folder = Join-Path $WorkFolder $name
     New-Item -ItemType Directory -Force -Path $folder | Out-Null
     $runs = [Collections.Generic.List[object]]::new()
@@ -101,14 +179,17 @@ function New-Sitting([string] $name, [int] $planned, [object[]] $pairs, [string]
                 $runs.Add([ordered]@{ pair = $pair; order = $order; name = $side; file = $file; exit = $null; seconds = 0; loadOutlasted = $false; skipped = $true })
                 continue
             }
-            New-RunJson $ui $runUi $watchUi 90 $conditions ($p.ContainsKey("${key}NoPrimary")) $primaryRule | Set-Content -LiteralPath (Join-Path $folder $file) -Encoding utf8NoBOM
+            $idle = if ($p.ContainsKey("${key}Idle")) { $p["${key}Idle"] } else { $null }
+            New-RunJson $ui $runUi $watchUi 90 $conditions ($p.ContainsKey("${key}NoPrimary")) $idle $primaryRule | Set-Content -LiteralPath (Join-Path $folder $file) -Encoding utf8NoBOM
             $runs.Add([ordered]@{ pair = $pair; order = $order; name = $side; file = $file; exit = 1; seconds = 30
                 loadOutlasted = $p.ContainsKey("${key}Outlasted"); timedOut = $p.ContainsKey("${key}TimedOut") })
         }
     }
     $script:sittingMinute++
-    [ordered]@{ mode = 'headless'; beforeName = 'before'; afterName = 'after'; pairs = $planned; primaryRow = $primary
-        expectedToRise = @($rise); load = 'None'; startedAt = ([DateTime]::new(2026, 11, 21, 22, 0, 0).AddMinutes($script:sittingMinute).ToString('yyyy-MM-dd HH:mm')); runs = $runs.ToArray() } |
+    $sittingPrimary = if ($primaryRow) { $primaryRow } elseif ($beforeIdle) { $idlePrimary } else { $primary }
+    $sittingRise = @(if (-not $beforeIdle) { $rise })
+    [ordered]@{ mode = 'headless'; beforeName = 'before'; afterName = 'after'; pairs = $planned; primaryRow = $sittingPrimary
+        expectedToRise = $sittingRise; load = 'None'; beforeIdle = $beforeIdle; afterIdle = $afterIdle; startedAt = ([DateTime]::new(2026, 11, 21, 22, 0, 0).AddMinutes($script:sittingMinute).ToString('yyyy-MM-dd HH:mm')); runs = $runs.ToArray() } |
         ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $folder 'sitting.json') -Encoding utf8NoBOM
     return $folder
 }
@@ -326,6 +407,159 @@ Assert-That ($secondsRange.Count -eq 1 -and [int] $secondsRange[0].MinRange -eq 
 Assert-That ($threadsRange.Count -eq 1 -and [int] $threadsRange[0].MinRange -eq 1 -and [int] $threadsRange[0].MaxRange -eq 6) "-Threads runs from 1 to 6 (got $(@($threadsRange | ForEach-Object { "$($_.MinRange) to $($_.MaxRange)" }) -join ', '))"
 $threadsDefault = @($loadCommand.ScriptBlock.Ast.ParamBlock.Parameters | Where-Object { $_.Name.VariablePath.UserPath -eq 'Threads' } | ForEach-Object { if ($null -ne $_.DefaultValue) { $_.DefaultValue.Extent.Text } })
 Assert-That ($threadsDefault.Count -eq 1 -and $threadsDefault[0] -eq '6') "-Threads is 6 unless set (got $($threadsDefault -join ', '))"
+
+# Pairs of a sitting of idle sides: before told before, after told after.
+function Set-IdleSides([object[]] $pairs, [string] $before, [string] $after) {
+    foreach ($p in $pairs) { $p['BIdle'] = @{ Side = $before; Skipped = $null }; $p['AIdle'] = @{ Side = $after; Skipped = $null } }
+    return , $pairs
+}
+
+# 23. Idle sides: the same build with --after-idle none before and prepared
+# after, runs shaped as the measurement writes them (the idle rows in place
+# of today's first switch; the side none's record with no step and 21 card
+# views made at the switch). Pair 2's after run stopped its preparation (a
+# slow step), so its first switch after idle was not timed: dropped, its
+# pair replaced, and listed apart as a drop that depends on a timing. Kept:
+# 10 pairs, 9 lower. The two preparation rows read higher on prepared in
+# every pair, by design: reported, and neither is flagged as a watch row.
+$pairs = Set-IdleSides (New-Pairs 11 -higher 7) 'none' 'prepared'
+$pairs[1]['AIdle'] = @{ Side = 'prepared'; Skipped = 'slow slice' }
+$sided = New-Sitting 'idle-sides' 10 $pairs 'none' 'prepared'
+$r = Invoke-Check 'idle sides, a preparation stopped' @($sided)
+Assert-That ($r.Verdict -eq 'gain shown' -and $r.Lower -eq 9 -and $r.Pairs -eq 10 -and $r.Replaced -eq 1) "gain shown, 9 of 10, 1 replaced (got $($r.Verdict), $($r.Lower) of $($r.Pairs), $($r.Replaced) replaced)"
+Assert-That (@($r.Lines | Where-Object { $_ -like '*dropped: pair 2 after: idle preparation stopped (slow slice), so its first switch after idle was not timed*' }).Count -eq 1) 'the stopped preparation is listed with its reason'
+Assert-That (@($r.Lines | Where-Object { $_ -like '*1 runs stopped their idle preparation*whether a step is slow is a timing*' }).Count -eq 1) 'the stopped preparation is listed apart as a drop that depends on a timing'
+Assert-That (@($r.Lines | Where-Object { $_ -like 'Idle sides: before runs with --after-idle none, after with --after-idle prepared.*' }).Count -eq 1) 'the summary names the idle sides'
+Assert-That (@($r.Lines | Where-Object { $_ -like 'after: *idle side prepared' }).Count -eq 1) "the after build's facts name its idle side"
+Assert-That (@($r.WatchHigher).Count -eq 0 -and @($r.WatchBlocking).Count -eq 0) "no watch row is flagged (got higher: $(@($r.WatchHigher) -join ', '))"
+foreach ($id in 'prepare-published-idle', 'prepare-published-longest-step') {
+    Assert-That (@($r.Lines | Where-Object { $_ -like "  $id (idle preparation, before the switch): after higher in 10 of 10 pairs. Reported; it does not block." }).Count -eq 1) "$id is reported and does not block"
+}
+# The report-only primary row is compared between the two sides of the
+# sitting, not between builds.
+Assert-That (@($r.Lines | Where-Object { $_ -like "    ${idlePrimary}: UI * ms. Report-only: compared only between the two sides of the sitting, never with a budget. Beside it: *" }).Count -eq 2) 'the primary row of idle sides is compared between the two sides of the sitting'
+Assert-That (@($r.Lines | Where-Object { $_ -like 'Reversed sitting:*' }).Count -eq 0) 'none against prepared is not a reversed sitting'
+
+# 23b. A second sitting of the same sides, pooled: the preparation rows are
+# higher again, and still do not block.
+$again = New-Sitting 'idle-sides-again' 10 (Set-IdleSides (New-Pairs 10 -higher 4) 'none' 'prepared') 'none' 'prepared'
+$r = Invoke-Check 'idle sides, two sittings pooled' @($again, $sided)
+Assert-That (@($r.WatchHigher).Count -eq 0 -and @($r.WatchBlocking).Count -eq 0) "pooled, no watch row is flagged or blocks (got blocking: $(@($r.WatchBlocking) -join ', '))"
+
+# 24. A sitting of other idle sides is not pooled with it.
+$other = New-Sitting 'idle-sides-half' 10 (Set-IdleSides (New-Pairs 10) 'none' 'half') 'none' 'half'
+$refused = $false
+try { & $pairsScript -Analyze $sided -Pool $other -PassThru | Out-Null } catch { $refused = $_.Exception.Message -like '*differs in afterIdle*' }
+Assert-That $refused 'a sitting of other idle sides is not pooled'
+
+# 25. A run whose JSON does not carry the side its build was given: pair 3's
+# after run names the side none (the option did not reach the test host),
+# pair 5's before run has no idlePreparation. Both are dropped with their
+# reason and their pairs replaced; 10 pairs kept, 9 lower.
+$pairs = Set-IdleSides (New-Pairs 12 -higher 7) 'none' 'prepared'
+$pairs[2]['AIdle'] = @{ Side = 'prepared'; Skipped = $null; JsonSide = 'none' }
+$pairs[4]['BIdle'] = @{ Side = 'none'; Skipped = $null; NoRecord = $true }
+$r = Invoke-Check 'idle sides, a run of the wrong side' @(New-Sitting 'idle-wrong-side' 10 $pairs 'none' 'prepared')
+Assert-That ($r.Verdict -eq 'gain shown' -and $r.Lower -eq 9 -and $r.Pairs -eq 10 -and $r.Replaced -eq 2) "gain shown, 9 of 10, 2 replaced (got $($r.Verdict), $($r.Lower) of $($r.Pairs), $($r.Replaced) replaced)"
+Assert-That (@($r.Lines | Where-Object { $_ -like '*dropped: pair 3 after: told the idle side prepared, but its JSON says the side none*' }).Count -eq 1) 'a run naming another side is dropped with its reason'
+Assert-That (@($r.Lines | Where-Object { $_ -like '*dropped: pair 5 before: told the idle side none, but its JSON has no idlePreparation*' }).Count -eq 1) 'a sided run with no idle record is dropped with its reason'
+
+# 26. Every after run names the side none while the record says prepared:
+# each is dropped, so the sitting is void, never judged as none against
+# prepared.
+$pairs = Set-IdleSides (New-Pairs 10) 'none' 'prepared'
+foreach ($p in $pairs) { $p['AIdle'] = @{ Side = 'prepared'; Skipped = $null; JsonSide = 'none' } }
+$r = Invoke-Check 'idle sides, every after run of the side none' @(New-Sitting 'idle-all-none' 10 $pairs 'none' 'prepared')
+Assert-That ($r.Verdict -eq 'void') "void (got $($r.Verdict))"
+
+# 27. A sitting of no idle sides with a run that carries an idle record: it
+# is dropped with its reason; 10 pairs kept, 9 lower.
+$pairs = New-Pairs 11 -higher 7
+$pairs[3]['BIdle'] = @{ Side = 'prepared'; Skipped = $null; TodayRows = $true }
+$r = Invoke-Check 'no idle sides, a run with an idle record' @(New-Sitting 'unsided-with-record' 10 $pairs)
+Assert-That ($r.Verdict -eq 'gain shown' -and $r.Lower -eq 9 -and $r.Pairs -eq 10 -and $r.Replaced -eq 1) "gain shown, 9 of 10, 1 replaced (got $($r.Verdict), $($r.Lower) of $($r.Pairs), $($r.Replaced) replaced)"
+Assert-That (@($r.Lines | Where-Object { $_ -like '*dropped: pair 4 before: told no idle side, but its JSON has idlePreparation (side prepared)*' }).Count -eq 1) 'an unsided run with an idle record is dropped with its reason'
+
+# 28. Run mode refuses two equal idle sides before it runs or checks
+# anything else.
+$refused = $false
+try {
+    & $pairsScript -Mode headless -Before $WorkFolder -After $WorkFolder -Out (Join-Path $WorkFolder 'refused') -PrimaryRow $idlePrimary -BeforeIdle prepared -AfterIdle prepared | Out-Null
+} catch { $refused = $_.Exception.Message -like '*both name the side prepared*' }
+Assert-That ($refused -and -not (Test-Path -LiteralPath (Join-Path $WorkFolder 'refused'))) 'two equal idle sides are refused, and nothing is written'
+
+# 29. A sitting of the search scenario (search-pending against
+# search-refreshed): its two refresh rows read higher on search-refreshed in
+# every pair, by design: reported apart with the preparation rows, and
+# neither is flagged as a watch row; the searches are watch rows. 9 of 10
+# lower on the primary row.
+$search = New-Sitting 'idle-search' 10 (Set-IdleSides (New-Pairs 10 -higher 7) 'search-pending' 'search-refreshed') 'search-pending' 'search-refreshed'
+$r = Invoke-Check 'idle sides of the search scenario' @($search)
+Assert-That ($r.Verdict -eq 'gain shown' -and $r.Lower -eq 9 -and $r.Pairs -eq 10) "gain shown, 9 of 10 (got $($r.Verdict), $($r.Lower) of $($r.Pairs))"
+Assert-That (@($r.WatchHigher).Count -eq 0 -and @($r.WatchBlocking).Count -eq 0) "no watch row is flagged (got higher: $(@($r.WatchHigher) -join ', '))"
+foreach ($id in 'refresh-published-after-search', 'refresh-published-after-clear') {
+    Assert-That (@($r.Lines | Where-Object { $_ -like "  $id (idle preparation, before the switch): after higher in 10 of 10 pairs. Reported; it does not block." }).Count -eq 1) "$id is reported and does not block"
+}
+Assert-That (@($r.Lines | Where-Object { $_ -like 'Idle sides: before runs with --after-idle search-pending, after with --after-idle search-refreshed. Scenario: search.*' }).Count -eq 1) 'the summary names the sides and their scenario'
+
+# 29b. A sitting of none against mid-step: pair 2's after run stopped its
+# preparation with the slow step met inside the first switch's row, which
+# keeps that step and was timed: the run is kept, nothing is replaced, and
+# the summary lists it apart from the drops.
+$pairs = Set-IdleSides (New-Pairs 10 -higher 7) 'none' 'mid-step'
+$pairs[1]['AIdle'] = @{ Side = 'mid-step'; Skipped = 'slow slice'; InsideRow = $true }
+$r = Invoke-Check 'idle sides, a stop inside the met row' @(New-Sitting 'idle-stopped-inside' 10 $pairs 'none' 'mid-step')
+Assert-That ($r.Pairs -eq 10 -and $r.Replaced -eq 0) "10 pairs kept, none replaced (got $($r.Pairs), $($r.Replaced) replaced)"
+Assert-That (@($r.Lines | Where-Object { $_ -like '*dropped:*' }).Count -eq 0) 'no run is dropped for a stop inside the met row'
+Assert-That (@($r.Lines | Where-Object { $_ -like '  1 runs stopped their idle preparation with the slow step met inside the row a key or a click meets. They are kept*' }).Count -eq 1) 'the stop inside the met row is listed apart, kept'
+
+# 29c. A reversed sitting of the key scenario, as the method's command line
+# names it: key-step before, key-none after (the side expected lower, the
+# one without preparation), the keystroke that meets a step as the primary
+# row. key-none is lower on it in 9 of 10 pairs: the harm of the step is
+# shown, not a gain. The first switch after idle reads higher on key-none
+# in every pair, by design (its switch makes the first screen; key-step's
+# shelf was prepared): not flagged. The watch row reads higher on key-step,
+# the side with preparation, in every pair: flagged, though after is lower.
+$pairs = Set-IdleSides (New-Pairs 10 -higher 7) 'key-step' 'key-none'
+foreach ($p in $pairs) { $p['BWatch'] = 170; $p['AWatch'] = 150 }
+$r = Invoke-Check 'a reversed sitting of the key scenario' @(New-Sitting 'idle-key-reversed' 10 $pairs 'key-step' 'key-none' -primaryRow 'search-keystroke-step-due')
+Assert-That ($r.Verdict -eq 'harm shown' -and $r.Lower -eq 9) "harm shown, 9 of 10 (got $($r.Verdict), $($r.Lower))"
+Assert-That (@($r.Lines | Where-Object { $_ -like 'Reversed sitting: after (--after-idle key-none) is the side without preparation*' }).Count -eq 1) 'the summary says the sitting is reversed'
+Assert-That (@($r.Lines | Where-Object { $_ -eq 'Verdict: harm shown on search-keystroke-step-due. before, the side with preparation, is higher by the count.' }).Count -eq 1) 'the verdict line says harm shown'
+Assert-That (@($r.Lines | Where-Object { $_ -match '\bgain (shown|not shown|needs)\b' }).Count -eq 0) 'no line of a reversed sitting reads its count as a gain'
+Assert-That (@($r.WatchHigher) -notcontains $idlePrimary -and @($r.WatchHigher) -notcontains 'first-switch-published-after-idle-paint') "the first switch after idle, lower with preparation, is not flagged (got $(@($r.WatchHigher) -join ', '))"
+Assert-That (@($r.WatchHigher) -contains $watch) "$watch, higher with preparation, is flagged (got $(@($r.WatchHigher) -join ', '))"
+
+# 29d. Two sittings of the theme scenario, pooled: the theme change reads
+# higher on theme-prepared in every pair of both, by design (the idle
+# design's row 9, report-only): reported apart, never flagged or blocking.
+$theme1 = New-Sitting 'idle-theme-1' 10 (Set-IdleSides (New-Pairs 10 -higher 7) 'theme-none' 'theme-prepared') 'theme-none' 'theme-prepared'
+$theme2 = New-Sitting 'idle-theme-2' 10 (Set-IdleSides (New-Pairs 10 -higher 7) 'theme-none' 'theme-prepared') 'theme-none' 'theme-prepared'
+$r = Invoke-Check 'two sittings of the theme scenario' @($theme2, $theme1)
+Assert-That (@($r.WatchHigher) -notcontains 'theme-change' -and @($r.WatchBlocking) -notcontains 'theme-change') "theme-change is never flagged or blocking (got higher: $(@($r.WatchHigher) -join ', '); blocking: $(@($r.WatchBlocking) -join ', '))"
+Assert-That (@($r.Lines | Where-Object { $_ -eq "  theme-change (report-only, the idle design's row 9): after higher in 20 of 20 pairs. Reported; it does not block." }).Count -eq 1) 'theme-change is reported apart'
+
+# 30. Run mode refuses two sides of different scenarios, which write
+# different rows, before it runs or checks anything else.
+$refused = $false
+try {
+    & $pairsScript -Mode headless -Before $WorkFolder -After $WorkFolder -Out (Join-Path $WorkFolder 'refused-scenarios') -PrimaryRow $idlePrimary -BeforeIdle none -AfterIdle search-refreshed | Out-Null
+} catch { $refused = $_.Exception.Message -like '*only two sides of the same scenario*' }
+Assert-That ($refused -and -not (Test-Path -LiteralPath (Join-Path $WorkFolder 'refused-scenarios'))) 'two sides of different scenarios are refused, and nothing is written'
+
+# 31. Window mode refuses the scaling scenario, which only a headless run
+# can make; headless takes it.
+$refused = $false
+try {
+    & $pairsScript -Mode window -Before $WorkFolder -After $WorkFolder -Out (Join-Path $WorkFolder 'refused-scaling') -PrimaryRow $idlePrimary -BeforeIdle scaling-none -AfterIdle scaling-prepared | Out-Null
+} catch { $refused = $_.Exception.Message -like '*runs headless only*' }
+Assert-That ($refused -and -not (Test-Path -LiteralPath (Join-Path $WorkFolder 'refused-scaling'))) 'window mode refuses the scaling scenario, and nothing is written'
+$scalingInWindow = $false
+try {
+    & $pairsScript -Mode headless -Before $WorkFolder -After $WorkFolder -Out (Join-Path $WorkFolder 'refused-scaling-headless') -PrimaryRow $idlePrimary -BeforeIdle scaling-none -AfterIdle scaling-prepared | Out-Null
+} catch { $scalingInWindow = $_.Exception.Message -like '*runs headless only*' }
+Assert-That (-not $scalingInWindow) 'headless mode does not refuse the scaling scenario as headless only'
 
 if ($failures.Count) {
     Write-Host "Board pairs check: $($failures.Count) failed."

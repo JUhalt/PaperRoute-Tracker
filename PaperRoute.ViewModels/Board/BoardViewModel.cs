@@ -127,6 +127,7 @@ public sealed partial class BoardViewModel : ObservableObject, IPage
         ];
 
         // The shelf shown at start; the others are made when first shown.
+        SelectedShelf.IsShown = true;
         SelectedShelf.IsRealized = true;
 
         _session.LibraryChanged += OnLibraryChanged;
@@ -356,7 +357,17 @@ public sealed partial class BoardViewModel : ObservableObject, IPage
 
     // The shelf shown is made when first shown (d1 4.4), as today's shelves
     // are built when first shown (Form1.BoardFill.vb:195).
-    partial void OnSelectedShelfIndexChanged(int value) => SelectedShelf.IsRealized = true;
+    // A shelf shown again first brings its rows to its cards (ShelfViewModel.IsShown).
+    partial void OnSelectedShelfIndexChanged(int value)
+    {
+        ShelfViewModel shown = SelectedShelf;
+        foreach (ShelfViewModel shelf in Shelves)
+        {
+            shelf.IsShown = ReferenceEquals(shelf, shown);
+        }
+
+        shown.IsRealized = true;
+    }
 
     // The welcome's buttons and links (d1 1.2): "<subject> is not part of the
     // trial." The view names the subject: "Import & Export", "The Library".

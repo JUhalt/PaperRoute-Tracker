@@ -36,6 +36,23 @@ between builds and gets no budget verdict. Run UI failed the validation of
 November 27, 2026: it is printed as "Run UI (not validated)", report-only,
 and counts toward no verdict.
 
+-BeforeIdle and -AfterIdle tell each side of a with-and-without comparison
+of preparing Published while the Board is idle which side it is (none,
+width, half or prepared, or a side of another scenario of the method's
+section 13, such as key-none and key-step): "--after-idle <side>" in a
+window, the PAPERROUTE_TRIAL_AFTER_IDLE variable headless. Such a run times
+first-switch-published-after-idle in place of first-switch-published, after
+the same wait on every side, and before it the rows of its scenario. Give
+the same build as -Before and -After, so the pairs compare the sides and
+nothing else, and two different sides of the same scenario; the scaling
+sides run headless only. A run whose JSON names another idle side than its
+build was given (or one when none was) is dropped and its pair replaced. A
+run whose preparation stopped (a slow step) did not time that switch: it is
+dropped and its pair replaced, and the summary lists those drops apart,
+since whether a step is slow is a timing. The preparation rows and the idle
+refresh rows, which come before the switch, are reported and never block:
+they time the work moved out of the switch.
+
 -Analyze reads a sitting's folder again without running anything, so the
 rule can be checked on saved or canned files. -Pool adds earlier sittings of
 the same change and mode: their pairs are counted together with this one's.
@@ -48,6 +65,8 @@ so the sitting's folder stays on the PC that ran it. Only the summary
 (summary.md) is shared; it names no computer and no folder.
 .EXAMPLE
 pwsh -NoProfile -File ./ManualCertification/Measure-BoardPairs.ps1 -Mode headless -Before <tree> -After <tree> -Out <folder> -Pairs 10 -PrimaryRow stage-back-to-all
+.EXAMPLE
+pwsh -NoProfile -File ./ManualCertification/Measure-BoardPairs.ps1 -Mode headless -Before <tree> -After <same tree> -BeforeIdle none -AfterIdle prepared -BeforeName without -AfterName with -Out <folder> -Pairs 10 -PrimaryRow first-switch-published-after-idle
 .EXAMPLE
 pwsh -NoProfile -File ./ManualCertification/Measure-BoardPairs.ps1 -Analyze <folder of a sitting> -Pool <folder of an earlier sitting>
 #>
@@ -76,6 +95,10 @@ param(
     # R and S (or M) runs. It lasts what the mode needs: 60 s in a window,
     # 120 s headless.
     [Parameter(ParameterSetName = 'Run')] [ValidateSet('None', 'Spin', 'Memory')] [string] $Load = 'None',
+    # The idle side of each build's runs (given together, or neither): with
+    # the same build on both sides, the pairs compare the sides.
+    [Parameter(ParameterSetName = 'Run')] [ValidateSet('none', 'width', 'half', 'prepared', 'mid-step', 'key-none', 'key-step', 'timer-none', 'timer-on', 'search-pending', 'search-refreshed', 'maximise-none', 'maximise-prepared', 'scaling-none', 'scaling-prepared', 'theme-none', 'theme-prepared')] [string] $BeforeIdle,
+    [Parameter(ParameterSetName = 'Run')] [ValidateSet('none', 'width', 'half', 'prepared', 'mid-step', 'key-none', 'key-step', 'timer-none', 'timer-on', 'search-pending', 'search-refreshed', 'maximise-none', 'maximise-prepared', 'scaling-none', 'scaling-prepared', 'theme-none', 'theme-prepared')] [string] $AfterIdle,
     # A run still going after this many minutes is stopped and its pair
     # replaced. 0 takes the mode's default: 15 headless, 3 in a window.
     [Parameter(ParameterSetName = 'Run')] [ValidateRange(0, 120)] [int] $RunLimitMinutes = 0,
@@ -107,6 +130,41 @@ $SittingFile = 'sitting.json'
 $LoadSeconds = @{ window = 60; headless = 120 }
 $VerdictHeading = 'Verdict on the budgets (method, section 7, in force since November 27, 2026)'
 $TestName = 'PaperRoute.Desktop.Tests.BoardBudgetTests.EveryRowIsMeasuredOnTheExampleAndTheFiveHundredLibrary'
+# How a headless run is told its idle side (BoardBudgetTests.AfterIdleVariable).
+$AfterIdleVariable = 'PAPERROUTE_TRIAL_AFTER_IDLE'
+# The scenario of each idle side (IdleSides.ScenarioOf): every side of a
+# scenario writes the same rows, so only two sides of one scenario are
+# compared. The scaling scenario runs headless only: a real window cannot
+# change its own display scaling.
+$IdleScenarios = [ordered]@{
+    'none' = 'switch'; 'width' = 'switch'; 'half' = 'switch'; 'prepared' = 'switch'; 'mid-step' = 'switch'
+    'key-none' = 'key'; 'key-step' = 'key'
+    'timer-none' = 'timer'; 'timer-on' = 'timer'
+    'search-pending' = 'search'; 'search-refreshed' = 'search'
+    'maximise-none' = 'maximise'; 'maximise-prepared' = 'maximise'
+    'scaling-none' = 'scaling'; 'scaling-prepared' = 'scaling'
+    'theme-none' = 'theme'; 'theme-prepared' = 'theme'
+}
+$HeadlessOnlyScenarios = @('scaling')
+# In a sitting of idle sides, the rows that time work idle preparation moves
+# out of the switch, before it (BoardMeasurement's preparation rows and
+# RefreshRows): they read about 0 on a side that does not prepare or
+# refresh, by design, so they are reported and never block.
+$PreparationRows = @('prepare-published-idle', 'prepare-published-longest-step', 'refresh-published-timer', 'refresh-published-after-search', 'refresh-published-after-clear', 'refresh-published-after-theme')
+# In a sitting of idle sides, the rows the idle design reports and never
+# judges: its row 9, a theme change while Published is prepared (its rule
+# for shipping, design section 11, step 7, covers rows 6 to 8 and 10 to 12;
+# restyling the prepared hidden views may cost more by design). Reported
+# apart; never watch rows.
+$IdleReportOnlyRows = @('theme-change')
+# The side without preparation of each scenario, the first of its sides
+# (IdleSides.All). A sitting whose after side is one of these is reversed:
+# the side expected lower is the one without preparation, as for the rows
+# a step is expected to make dearer (the keystroke that meets a step, the
+# switch on mid-step). Its count on the primary row then shows the harm of
+# preparation, and a watch row is flagged when the side with preparation,
+# before, is higher.
+$IdleWithoutSides = @('none', 'key-none', 'timer-none', 'search-pending', 'maximise-none', 'scaling-none', 'theme-none')
 
 function Get-Field($object, [string] $name) {
     if ($null -eq $object) { return $null }
@@ -203,10 +261,26 @@ function Get-RowIds($rows) {
 
 # What makes a run unusable, decided from facts that are not timings: not
 # run, timed out, no JSON, an error, no rows of the library held, a row with
-# no UI figure, a load that ended before the run, or a disturbed PC. Null
+# no UI figure, an idle side other than its build's (or one where none was
+# given), its idle preparation stopped (but by the step met inside the row a
+# key or a click meets, which is kept), a load that ended before the run, or
+# a disturbed PC. Null
 # when the run is usable. A disturbed of null (load unknown) counts as not
-# disturbed. Only "outlasted its load" depends on how long the run took.
+# disturbed. Two depend on a timing: "outlasted its load" on how long the
+# run took, and a stopped preparation on whether a step was slow.
 $OutlastedReason = 'outlasted its load'
+$StoppedReason = 'idle preparation stopped'
+
+# In a run told an idle side, what preparation did before the first switch of
+# the library held (the JSON's idlePreparation); null in any other run.
+function Get-IdleRecord($json) {
+    $held = [string] (Get-Field $json 'heldLibrary')
+    foreach ($record in @(Get-Field $json 'idlePreparation')) {
+        if ($null -ne $record -and ($held -eq '' -or [string] (Get-Field $record 'library') -eq $held)) { return $record }
+    }
+    return $null
+}
+
 function Get-DropReason($run, [string] $mode) {
     if ($run.Skipped) { return 'not run: its pair was already to be replaced' }
     if ($run.TimedOut) { return 'timed out' }
@@ -218,6 +292,24 @@ function Get-DropReason($run, [string] $mode) {
     foreach ($id in Get-RowIds $run.Rows) {
         if (-not (Test-Number (Get-Field $run.Rows.$id 'uiMs'))) { return "row $id has no UI figure" }
     }
+    # A run carries the idle side its build was given, or none in a sitting
+    # of no idle sides: otherwise (an option that did not reach the test
+    # host, a mix-up of builds) it would be counted as the other side.
+    $idle = Get-IdleRecord $run.Json
+    if ($run.Sided) {
+        if ($null -eq $idle) { return "told the idle side $($run.Side), but its JSON has no idlePreparation" }
+        $got = [string] (Get-Field $idle 'side')
+        if ($got -ne $run.Side) { return "told the idle side $($run.Side), but its JSON says the side $got" }
+    } elseif ($null -ne $idle) {
+        return "told no idle side, but its JSON has idlePreparation (side $(Get-Field $idle 'side'))"
+    }
+    # Its first switch after idle was made untimed. A slow step stops
+    # preparation, so this drop, like the one below, depends on a timing.
+    # A stop by the step met inside the row a key or a click meets
+    # (stoppedInsideRow) is kept: that step ran inside the row, which holds
+    # it, and the first switch after idle was timed.
+    $stopped = Get-Field $idle 'skippedReason'
+    if ($null -ne $stopped -and (Get-Field $idle 'stoppedInsideRow') -ne $true) { return "$StoppedReason ($stopped), so its first switch after idle was not timed" }
     if ($run.LoadOutlasted) { return $OutlastedReason }
     if ((Get-Field (Get-Field $run.Json 'conditions') 'disturbed') -eq $true) { return 'disturbed' }
     return $null
@@ -245,8 +337,9 @@ function Get-LoadText($run) {
 }
 
 # One run of a sitting's record with its JSON file, and why it is dropped
-# (null when it is kept).
-function Read-Run($entry, [string] $folder, [string] $mode) {
+# (null when it is kept). side is the idle side its build was given, and
+# sided whether the sitting gave its builds idle sides at all.
+function Read-Run($entry, [string] $folder, [string] $mode, [string] $side, [bool] $sided) {
     $path = Join-Path $folder $entry.file
     $written = Test-Path -LiteralPath $path -PathType Leaf
     $json = $null
@@ -264,7 +357,7 @@ function Read-Run($entry, [string] $folder, [string] $mode) {
         Pair = [int] $entry.pair; Order = [int] $entry.order; Name = [string] $entry.name
         Exit = Get-Field $entry 'exit'; LoadOutlasted = [bool] (Get-Field $entry 'loadOutlasted'); Skipped = [bool] (Get-Field $entry 'skipped')
         TimedOut = [bool] (Get-Field $entry 'timedOut')
-        Written = $written; Json = $json; Rows = $rows; Drop = $null
+        Written = $written; Json = $json; Rows = $rows; Drop = $null; Side = $side; Sided = $sided
     }
     $run.Drop = Get-DropReason $run $mode
     return $run
@@ -276,7 +369,11 @@ function Read-Sitting([string] $folder) {
     $recordPath = Join-Path $folder $SittingFile
     if (-not (Test-Path -LiteralPath $recordPath -PathType Leaf)) { throw "A sitting's folder holds $SittingFile; one given does not." }
     try { $record = Get-Content -LiteralPath $recordPath -Raw | ConvertFrom-Json } catch { throw "A sitting's $SittingFile could not be read as JSON." }
-    $runs = @(foreach ($entry in @($record.runs)) { Read-Run $entry $folder $record.mode })
+    $bIdle = [string] (Get-Field $record 'beforeIdle'); $aIdle = [string] (Get-Field $record 'afterIdle')
+    $runs = @(foreach ($entry in @($record.runs)) {
+        $side = if ([string] $entry.name -eq [string] $record.beforeName) { $bIdle } else { $aIdle }
+        Read-Run $entry $folder $record.mode $side ([bool] ($bIdle -or $aIdle))
+    })
     $runs = @($runs | Sort-Object Order)
     $sitting = [pscustomobject]@{
         Folder = [IO.Path]::GetFullPath($folder).TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
@@ -315,7 +412,8 @@ function Read-Sitting([string] $folder) {
 # The verdict rule of the method's section 7, in force since November 27,
 # 2026, for one build of one sitting: the median UI of 5 runs that are not
 # disturbed, from at most 10 tries, against the budget. A report-only row is
-# compared only between builds: the primary row, when it is one, is printed
+# compared only between builds (in a sitting of idle sides, between the two
+# sides of the sitting): the primary row, when it is one, is printed
 # without a budget verdict, and the other report-only rows are left out. Run
 # UI (not validated) is printed beside, and never read for a verdict.
 function Get-VerdictLines($sitting, [string] $name, [string] $primary) {
@@ -329,6 +427,7 @@ function Get-VerdictLines($sitting, [string] $name, [string] $primary) {
         return $lines
     }
     $lines.Add("  ${name}: the first 5 runs not disturbed, of $($tries.Count) tried ($unknown with load unknown). Median UI against the budget:")
+    $between = if ([string] (Get-Field $sitting.Record 'beforeIdle') -or [string] (Get-Field $sitting.Record 'afterIdle')) { 'between the two sides of the sitting' } else { 'between builds' }
     $first = $usable[0]
     $multiplier = [double] (Get-Field $first.Json 'budgetMultiplier')
     if ($multiplier -le 0) { $multiplier = 1 }
@@ -339,7 +438,7 @@ function Get-VerdictLines($sitting, [string] $name, [string] $primary) {
         $ui = Get-Median (Get-Values $usable $id 'uiMs')
         $beside = "Beside it: Run UI (not validated) $(Format-MsUnit (Get-Median (Get-Values $usable $id 'runUiMs'))), fast-core share $(Format-Number (Get-Median (Get-Values $usable $id 'perfCoreShare')) '0.00'), GC $(Format-MsUnit (Get-Median (Get-Values $usable $id 'gcPauseMs'))), compilation $(Format-MsUnit (Get-Median (Get-Values $usable $id 'jitMs')))."
         if ($reportOnly) {
-            $lines.Add("    ${id}: UI $(Format-MsUnit $ui). Report-only: compared only between builds, never with a budget. $beside")
+            $lines.Add("    ${id}: UI $(Format-MsUnit $ui). Report-only: compared only $between, never with a budget. $beside")
             continue
         }
         $budget = [double] (Get-Field $row 'budgetMs') * $multiplier
@@ -351,7 +450,9 @@ function Get-VerdictLines($sitting, [string] $name, [string] $primary) {
 
 function Get-Facts($run) {
     $json = $run.Json
-    "build $(Get-Field $json 'build'), option $(Get-Field $json 'option'), dpi $(Get-Field $json 'dpi'), $(Get-Field $json 'processors') processors, day $(Get-Field $json 'day')"
+    $idle = Get-IdleRecord $json
+    $side = if ($null -ne $idle) { ", idle side $(Get-Field $idle 'side')" } else { '' }
+    "build $(Get-Field $json 'build'), option $(Get-Field $json 'option'), dpi $(Get-Field $json 'dpi'), $(Get-Field $json 'processors') processors, day $(Get-Field $json 'day')$side"
 }
 
 # The same folder twice, or a copy of one (the same sitting.json), would
@@ -375,7 +476,7 @@ function Get-Summary($sittings) {
     $primary = [string] $record.primaryRow
     $rise = @($record.expectedToRise | Where-Object { $_ })
     foreach ($earlier in $sittings | Select-Object -Skip 1) {
-        foreach ($field in 'mode', 'primaryRow', 'beforeName', 'afterName', 'load') {
+        foreach ($field in 'mode', 'primaryRow', 'beforeName', 'afterName', 'load', 'beforeIdle', 'afterIdle') {
             if ([string] (Get-Field $earlier.Record $field) -ne [string] (Get-Field $record $field)) { throw "A pooled sitting differs in $field; only sittings of the same change, mode and primary row are pooled." }
         }
     }
@@ -389,6 +490,18 @@ function Get-Summary($sittings) {
         $loadFor = Get-Field $record 'loadSeconds'
         $lines.Add("Load: $($record.load)$(if ($null -ne $loadFor) { " for $loadFor s" }) under every $aName run. The counts compare the PC with and without the added load, not two builds; others busy includes the added load.")
     }
+    $bIdle = [string] (Get-Field $record 'beforeIdle'); $aIdle = [string] (Get-Field $record 'afterIdle')
+    if ($bIdle -or $aIdle) {
+        $scenario = if ($IdleScenarios.Contains($aIdle)) { " Scenario: $($IdleScenarios[$aIdle])." } else { '' }
+        $lines.Add("Idle sides: $bName runs with --after-idle $bIdle, $aName with --after-idle $aIdle.$scenario Both wait alike before the first switch (preparation done, the scenario's rows, a fixed idle period, one frame; a maximise or a scaling change and its frame after it). With the same build on both sides, the counts compare the sides.")
+    }
+    # A reversed sitting (IdleWithoutSides): every count is read for the
+    # side with preparation, before.
+    $reversed = [bool] ($bIdle -and $aIdle -and $IdleWithoutSides -contains $aIdle -and $IdleWithoutSides -notcontains $bIdle)
+    $gainWord = if ($reversed) { 'harm' } else { 'gain' }
+    if ($reversed) {
+        $lines.Add("Reversed sitting: $aName (--after-idle $aIdle) is the side without preparation, named after as the side expected lower. The rule's count on the primary row shows the harm of $bName's preparation, not a gain, and a watch row is flagged when $bName, the side with preparation, is higher.")
+    }
     $lines.Add("Primary row (named before the runs): $primary, expected lower. Expected to rise: $(if ($rise.Count) { $rise -join ', ' } else { 'none' }).")
     $lines.Add('The deciding sitting is the one the pull request named before the runs; every sitting is listed in it.')
     $index = 0
@@ -400,6 +513,10 @@ function Get-Summary($sittings) {
         foreach ($drop in $sitting.Dropped) { $lines.Add("  dropped: $drop") }
         $outlasted = @($sitting.Runs | Where-Object { $_.Drop -eq $OutlastedReason }).Count
         if ($outlasted) { $lines.Add("  $outlasted runs outlasted their load. This drop depends on how long a run took, which is a timing: slower runs are dropped more often.") }
+        $stoppedRuns = @($sitting.Runs | Where-Object { $null -ne $_.Drop -and $_.Drop.StartsWith($StoppedReason) }).Count
+        if ($stoppedRuns) { $lines.Add("  $stoppedRuns runs stopped their idle preparation, so their first switch after idle was not timed. A slow step stops it, and whether a step is slow is a timing: slower runs are dropped more often.") }
+        $insideRuns = @($sitting.Runs | Where-Object { $null -eq $_.Drop -and (Get-Field (Get-IdleRecord $_.Json) 'stoppedInsideRow') -eq $true }).Count
+        if ($insideRuns) { $lines.Add("  $insideRuns runs stopped their idle preparation with the slow step met inside the row a key or a click meets. They are kept: that row holds the slow step, and their first switch after idle was timed.") }
     }
     if ($counted.Count -gt 1) {
         $lines.Add("$($counted.Count) sittings are pooled. Each pooled look is another chance of a false pass: with sittings of 10 pairs about 2.7% at two, 6.1% at three and 7.4% at four; with sittings of 20 pairs 5.1% at two. Three sittings of 10 pairs, or two of 20, go past the 5% of one sitting.")
@@ -449,7 +566,7 @@ function Get-Summary($sittings) {
     $result.MedianDifferenceMs = $difference; $result.FloorMs = $floor
     $lines.Add("  medians: $bName $(Format-MsUnit $beforeMedian), $aName $(Format-MsUnit $afterMedian).")
     $seenText = if ($count.Pairs -gt 0) { " (P of at least $($count.Count) = $(Format-Number (Get-UpperTail $count.Pairs $count.Count) '0.000'))" } else { '' }
-    $needText = if ($null -ne $count.Need) { "a gain needs $($count.Need) of $($count.Pairs) (P = $(Format-Number (Get-UpperTail $count.Pairs $count.Need) '0.000'))" } else { "a decision needs at least $MinimumPairs pairs" }
+    $needText = if ($null -ne $count.Need) { "a $gainWord needs $($count.Need) of $($count.Pairs) (P = $(Format-Number (Get-UpperTail $count.Pairs $count.Need) '0.000'))" } else { "a decision needs at least $MinimumPairs pairs" }
     $lines.Add("  $aName lower in $($count.Count) of $($count.Pairs) pairs$seenText; $needText.")
     $lines.Add("  median difference ($bName - $aName) $(Format-MsUnit $difference); size floor $(Format-MsUnit $floor) (the larger of 2 ms and 3% of $bName's median).")
     if ($ratios.Count -ge 4) {
@@ -477,26 +594,49 @@ function Get-Summary($sittings) {
         $lines.Add("Verdict: not decided. $($count.Pairs) pairs; a decision needs at least $MinimumPairs.")
     } elseif (-not $count.Reached) {
         $result.Verdict = 'not shown'
-        $lines.Add("Verdict: gain not shown. $aName lower in $($count.Count) of $($count.Pairs); $($count.Need) needed.")
+        $lines.Add("Verdict: $gainWord not shown. $aName lower in $($count.Count) of $($count.Pairs); $($count.Need) needed.")
     } elseif ($difference -lt $floor) {
         $result.Verdict = 'not shown'
-        $lines.Add("Verdict: gain not shown. The count is reached, but the median difference $(Format-Ms $difference) ms is under the floor of $(Format-Ms $floor) ms.")
+        $lines.Add("Verdict: $gainWord not shown. The count is reached, but the median difference $(Format-Ms $difference) ms is under the floor of $(Format-Ms $floor) ms.")
     } else {
-        $result.Verdict = 'gain shown'
-        $lines.Add("Verdict: gain shown on $primary.")
+        $result.Verdict = "$gainWord shown"
+        $lines.Add("Verdict: $gainWord shown on $primary.$(if ($reversed) { " $bName, the side with preparation, is higher by the count." })")
     }
 
     # Watch rows: each sitting on its own. Higher once: a new sitting for that
-    # row. Higher again in another sitting: it blocks the merge.
+    # row. Higher again in another sitting: it blocks the merge. In a sitting
+    # of idle sides the preparation rows and the idle refresh rows are not
+    # watch rows: they time the work idle preparation moves out of the
+    # switch, before it, so they read about 0 on a side that does not
+    # prepare or refresh and more on one that does, by design; they are
+    # reported and never block (the longest step is judged on its own, in a
+    # real window, against the UI thread budget). The theme change, the
+    # idle design's row 9, is reported apart the same way and never blocks.
+    # In a reversed sitting every row is read for the side with preparation,
+    # before: a row is higher when before is higher.
+    $preparationRows = if ($bIdle -or $aIdle) { $PreparationRows } else { @() }
+    $idleReportOnly = if ($bIdle -or $aIdle) { $IdleReportOnlyRows } else { @() }
+    $higherName = if ($reversed) { $bName } else { $aName }
+    $watchDirection = if ($reversed) { 'lower' } else { 'higher' }
     $lines.Add('')
-    $lines.Add('Watch rows (every row not named; UI higher after, ties count against):')
+    $lines.Add($(if ($reversed) { "Watch rows (every row not named; UI higher on $bName, the side with preparation, ties count against):" } else { 'Watch rows (every row not named; UI higher after, ties count against):' }))
     $flagged = 0
     foreach ($id in $ids) {
         if ($id -eq $primary) { continue }
-        $higherIn = @(foreach ($sitting in $counted) { $c = Get-Count $sitting.Kept $id 'uiMs' 'higher'; if ($c.Reached) { "$($c.Count) of $($c.Pairs)" } })
+        $higherIn = @(foreach ($sitting in $counted) { $c = Get-Count $sitting.Kept $id 'uiMs' $watchDirection; if ($c.Reached) { "$($c.Count) of $($c.Pairs)" } })
         if ($rise -contains $id) {
-            $c = Get-Count $pairs $id 'uiMs' 'higher'
-            $lines.Add("  ${id} (expected to rise): $aName higher in $($c.Count) of $($c.Pairs) pairs. Reported; it does not block.")
+            $c = Get-Count $pairs $id 'uiMs' $watchDirection
+            $lines.Add("  ${id} (expected to rise): $higherName higher in $($c.Count) of $($c.Pairs) pairs. Reported; it does not block.")
+            continue
+        }
+        if ($preparationRows -contains $id) {
+            $c = Get-Count $pairs $id 'uiMs' $watchDirection
+            $lines.Add("  ${id} (idle preparation, before the switch): $higherName higher in $($c.Count) of $($c.Pairs) pairs. Reported; it does not block.")
+            continue
+        }
+        if ($idleReportOnly -contains $id) {
+            $c = Get-Count $pairs $id 'uiMs' $watchDirection
+            $lines.Add("  ${id} (report-only, the idle design's row 9): $higherName higher in $($c.Count) of $($c.Pairs) pairs. Reported; it does not block.")
             continue
         }
         if ($higherIn.Count -eq 0) { continue }
@@ -535,11 +675,13 @@ function Save-Record([string] $folder, $record) {
 
 # One measured run, its own process. Returns the exit code, whether the
 # load (if any) ended before the run did, and whether the run was stopped at
-# the run limit (a fixed limit far above any budget, so not a timing).
-function Invoke-Run([string] $exeOrTree, [string] $file, [bool] $withLoad, [string] $folder, [int] $limitMinutes) {
+# the run limit (a fixed limit far above any budget, so not a timing). idle
+# is the run's idle side, or empty for a run told no side.
+function Invoke-Run([string] $exeOrTree, [string] $file, [bool] $withLoad, [string] $folder, [int] $limitMinutes, [string] $idle) {
     if ($Mode -eq 'window') {
         $start = [Diagnostics.ProcessStartInfo]::new($exeOrTree)
         foreach ($argument in '--snapshot-from', $Library, '--measure', $file) { $start.ArgumentList.Add($argument) }
+        if ($idle) { foreach ($argument in '--after-idle', $idle) { $start.ArgumentList.Add($argument) } }
     } else {
         $results = Join-Path $folder ([IO.Path]::GetFileNameWithoutExtension($file))
         New-Item -ItemType Directory -Force -Path $results | Out-Null
@@ -549,6 +691,8 @@ function Invoke-Run([string] $exeOrTree, [string] $file, [bool] $withLoad, [stri
             '--filter', "FullyQualifiedName=$TestName", '--results-directory', $results) { $start.ArgumentList.Add($argument) }
         # The test writes budget-headless.json into the folder this names.
         $start.Environment['PAPERROUTE_TRIAL_PICTURES'] = $results
+        # A run told no side must not inherit a side from this shell.
+        if ($idle) { $start.Environment[$AfterIdleVariable] = $idle } else { [void] $start.Environment.Remove($AfterIdleVariable) }
     }
     $start.UseShellExecute = $false
     $start.RedirectStandardOutput = $true
@@ -602,6 +746,14 @@ if ($PSCmdlet.ParameterSetName -eq 'LoadSeconds') {
 
 if ($PSCmdlet.ParameterSetName -eq 'Run') {
     if ($BeforeName -eq $AfterName) { throw '-BeforeName and -AfterName must differ.' }
+    if ([bool] $BeforeIdle -ne [bool] $AfterIdle) { throw '-BeforeIdle and -AfterIdle are given together: each side of an idle comparison times the first switch after idle.' }
+    if ($BeforeIdle -and $BeforeIdle -eq $AfterIdle) { throw "-BeforeIdle and -AfterIdle both name the side $BeforeIdle, so the pairs would compare a side with itself; give two different sides." }
+    if ($BeforeIdle) {
+        # ValidateSet ignores case; the measurement does not.
+        foreach ($side in $BeforeIdle, $AfterIdle) { if (-not $IdleScenarios.Contains($side) -or @($IdleScenarios.Keys) -cnotcontains $side) { throw "No idle side is called $side; the sides are written in lower case." } }
+        if ($IdleScenarios[$BeforeIdle] -ne $IdleScenarios[$AfterIdle]) { throw "-BeforeIdle $BeforeIdle belongs to the scenario $($IdleScenarios[$BeforeIdle]) and -AfterIdle $AfterIdle to $($IdleScenarios[$AfterIdle]); only two sides of the same scenario write the same rows and are compared." }
+        if ($Mode -eq 'window' -and $HeadlessOnlyScenarios -contains $IdleScenarios[$BeforeIdle]) { throw "The scenario $($IdleScenarios[$BeforeIdle]) runs headless only: a real window cannot change its own display scaling." }
+    }
     foreach ($pathName in 'Before', 'After') {
         if (-not (Test-Path -LiteralPath (Get-Variable $pathName -ValueOnly))) { throw "Nothing at the -$pathName path." }
         Set-Variable $pathName ([IO.Path]::GetFullPath((Get-Variable $pathName -ValueOnly), (Get-Location).ProviderPath))
@@ -632,20 +784,23 @@ if ($PSCmdlet.ParameterSetName -eq 'Run') {
     $poolSittings = @($Pool | ForEach-Object { Read-Sitting $_ })
     Assert-DistinctSittings $poolSittings
     foreach ($earlier in $poolSittings) {
-        if ($earlier.Record.mode -ne $Mode -or $earlier.Record.primaryRow -ne $PrimaryRow -or $earlier.Record.beforeName -ne $BeforeName -or $earlier.Record.afterName -ne $AfterName -or $earlier.Record.load -ne $Load) {
-            throw 'A pooled sitting differs in mode, primary row, names or load; only sittings of the same change, mode and primary row are pooled.'
+        if ($earlier.Record.mode -ne $Mode -or $earlier.Record.primaryRow -ne $PrimaryRow -or $earlier.Record.beforeName -ne $BeforeName -or $earlier.Record.afterName -ne $AfterName -or $earlier.Record.load -ne $Load -or
+            [string] (Get-Field $earlier.Record 'beforeIdle') -ne $BeforeIdle -or [string] (Get-Field $earlier.Record 'afterIdle') -ne $AfterIdle) {
+            throw 'A pooled sitting differs in mode, primary row, names, load or idle sides; only sittings of the same change, mode and primary row are pooled.'
         }
     }
 
     $record = [ordered]@{
         mode = $Mode; beforeName = $BeforeName; afterName = $AfterName; pairs = $Pairs; primaryRow = $PrimaryRow
-        expectedToRise = @($ExpectedToRise); load = $Load; loadSeconds = $(if ($Load -ne 'None') { $LoadSeconds[$Mode] } else { $null }); startedAt = [DateTime]::Now.ToString('yyyy-MM-dd HH:mm'); runs = @()
+        expectedToRise = @($ExpectedToRise); load = $Load; loadSeconds = $(if ($Load -ne 'None') { $LoadSeconds[$Mode] } else { $null })
+        beforeIdle = [string] $BeforeIdle; afterIdle = [string] $AfterIdle
+        startedAt = [DateTime]::Now.ToString('yyyy-MM-dd HH:mm'); runs = @()
     }
     Save-Record $Out $record
     $kept = 0; $replaced = 0; $pair = 0; $order = 0
     while ($kept -lt $Pairs -and $replaced -le $MostReplacements) {
         $pair++
-        $sides = if ($pair % 2 -eq 1) { @(@($BeforeName, $Before), @($AfterName, $After)) } else { @(@($AfterName, $After), @($BeforeName, $Before)) }
+        $sides = if ($pair % 2 -eq 1) { @(@($BeforeName, $Before, $BeforeIdle), @($AfterName, $After, $AfterIdle)) } else { @(@($AfterName, $After, $AfterIdle), @($BeforeName, $Before, $BeforeIdle)) }
         $usable = $true
         $ranOfPair = @()
         foreach ($side in $sides) {
@@ -659,14 +814,14 @@ if ($PSCmdlet.ParameterSetName -eq 'Run') {
                 continue
             }
             $watch = [Diagnostics.Stopwatch]::StartNew()
-            $ran = Invoke-Run $side[1] $file ($Load -ne 'None' -and $side[0] -eq $AfterName) $Out $RunLimitMinutes
+            $ran = Invoke-Run $side[1] $file ($Load -ne 'None' -and $side[0] -eq $AfterName) $Out $RunLimitMinutes $side[2]
             $watch.Stop()
             $entry = [ordered]@{ pair = $pair; order = $order; name = $side[0]; file = [IO.Path]::GetFileName($file); exit = $ran.Exit; seconds = [Math]::Round($watch.Elapsed.TotalSeconds, 1); loadOutlasted = $ran.LoadOutlasted; timedOut = $ran.TimedOut }
             $record.runs += [pscustomobject] $entry
             Save-Record $Out $record
             # Only the facts that are not timings decide whether the pair is
             # kept (Get-DropReason), the same as when the sitting is read again.
-            $run = Read-Run ([pscustomobject] $entry) $Out $Mode
+            $run = Read-Run ([pscustomobject] $entry) $Out $Mode $side[2] ([bool] ($BeforeIdle -or $AfterIdle))
             $ranOfPair += $run
             if ($null -ne $run.Drop) { $usable = $false }
             Write-Host "pair $pair $($side[0]): exit $($ran.Exit), $($entry.seconds) s, $(if ($null -ne $run.Json) { Get-LoadText $run } else { 'no figures' })$(if ($null -ne $run.Drop) { "; $($run.Drop), pair to be replaced" })"

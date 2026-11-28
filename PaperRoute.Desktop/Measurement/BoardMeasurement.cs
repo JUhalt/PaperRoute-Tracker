@@ -90,6 +90,137 @@ public sealed class BoardMeasurement
     public const string SearchKeystrokePublishedHidden = "search-keystroke-published-hidden";
     public const string SwitchToPublishedAfterHiddenChange = "switch-published-after-hidden-change";
 
+    // Report-only, measured only in a run told an idle side (IdleSides;
+    // idle-preparation design, section 8, rows 1, 3, 4 and 5; busy-PC design,
+    // section 9), in place of the first switch and its paint, so every row
+    // after them keeps its work and order: the preparation from its start to
+    // done, each step followed by a frame; its longest step, the row judged
+    // in a real window against the UI thread budget; then, after the same
+    // fixed idle period and one frame on every side, the first switch and its
+    // paint. Compared only between the two sides of a sitting. A run told no
+    // side measures today's first-switch-published instead: a first switch
+    // happens once per window.
+    public const string PreparePublishedIdle = "prepare-published-idle";
+    public const string PreparePublishedLongestStep = "prepare-published-longest-step";
+    public const string FirstSwitchToPublishedAfterIdle = "first-switch-published-after-idle";
+    public const string FirstSwitchToPublishedAfterIdlePaint = "first-switch-published-after-idle-paint";
+
+    // The idle rows in the order they are measured, on a side of the switch
+    // scenario (IdleSides.ScenarioOf).
+    public static IReadOnlyList<string> IdleRows { get; } =
+    [
+        PreparePublishedIdle,
+        PreparePublishedLongestStep,
+        FirstSwitchToPublishedAfterIdle,
+        FirstSwitchToPublishedAfterIdlePaint,
+    ];
+
+    // Report-only rows of the other scenarios (IdleSides; idle-preparation
+    // design, section 8, rows 6, 8, 9, 10 and 12, and row 5's refresh), each
+    // written on every side of its scenario, between the two preparation rows
+    // and the first switch after idle, so the rows after the switch keep
+    // their work and order. Compared only between the two sides of a sitting.
+    // key: the search keystroke started when the last step is due (row 6).
+    public const string SearchKeystrokeStepDue = "search-keystroke-step-due";
+
+    // timer: a search keystroke after a 0.5 s pause in a search, with the
+    // idle timer on (row 6), then the timer's own refresh after it.
+    public const string SearchKeystrokeAfterPause = "search-keystroke-after-pause";
+    public const string RefreshPublishedTimer = "refresh-published-timer";
+
+    // search: the search typed while Published is prepared and hidden, the
+    // idle refresh after it (on search-refreshed only), the search cleared,
+    // and the refresh after that (rows 8 and 10).
+    public const string SearchKeystrokePublishedPrepared = "search-keystroke-published-prepared";
+    public const string RefreshPublishedAfterSearch = "refresh-published-after-search";
+    public const string SearchClearedPublishedPrepared = "search-cleared-published-prepared";
+    public const string RefreshPublishedAfterClear = "refresh-published-after-clear";
+
+    // maximise and scaling: the change just before the first switch (row 12).
+    public const string MaximiseWindow = "maximise-window";
+    public const string ScalingChange = "scaling-change";
+
+    // theme: a theme change while Published is prepared, and the refresh
+    // after it (row 9).
+    public const string ThemeChange = "theme-change";
+    public const string RefreshPublishedAfterTheme = "refresh-published-after-theme";
+
+    // The refresh rows: like the preparation rows, they time work the idle
+    // refresh moves out of the switch, so they read about 0 on a side that
+    // does not refresh, by design.
+    public static IReadOnlyList<string> RefreshRows { get; } =
+    [
+        RefreshPublishedTimer,
+        RefreshPublishedAfterSearch,
+        RefreshPublishedAfterClear,
+        RefreshPublishedAfterTheme,
+    ];
+
+    // The rows a scenario adds before its first switch, in order.
+    public static IReadOnlyList<string> ScenarioRows(string scenario) => scenario switch
+    {
+        IdleSides.SwitchScenario => [],
+        IdleSides.KeyScenario => [SearchKeystrokeStepDue],
+        IdleSides.TimerScenario => [SearchKeystrokeAfterPause, RefreshPublishedTimer],
+        IdleSides.SearchScenario => [SearchKeystrokePublishedPrepared, RefreshPublishedAfterSearch, SearchClearedPublishedPrepared, RefreshPublishedAfterClear],
+        IdleSides.MaximiseScenario => [MaximiseWindow],
+        IdleSides.ScalingScenario => [ScalingChange],
+        IdleSides.ThemeScenario => [ThemeChange, RefreshPublishedAfterTheme],
+        _ => throw new ArgumentException($"No idle scenario is called {scenario}.", nameof(scenario)),
+    };
+
+    // The idle rows a run told side writes, in order: the two preparation
+    // rows, its scenario's rows, then the first switch after idle and its
+    // paint, which are left out when preparation stopped.
+    public static IReadOnlyList<string> IdleRowsFor(string side, bool switchTaken = true) =>
+    [
+        PreparePublishedIdle,
+        PreparePublishedLongestStep,
+        .. ScenarioRows(IdleSides.ScenarioOf(side)),
+        .. switchTaken ? new[] { FirstSwitchToPublishedAfterIdle, FirstSwitchToPublishedAfterIdlePaint } : [],
+    ];
+
+    // Every row a run told some side may write.
+    public static IReadOnlyList<string> AllIdleRows { get; } =
+        IdleSides.All.SelectMany(side => IdleRowsFor(side)).Distinct().ToList();
+
+    // The frames drawn from the start of the idle period to the first
+    // switch: one, and one more after a maximise or a scaling change, which
+    // come after the idle period so that the switch follows them within 0.4 s.
+    public static int FramesBeforeSwitchFor(string side) =>
+        IdleSides.ScenarioOf(side) is IdleSides.MaximiseScenario or IdleSides.ScalingScenario ? 2 : 1;
+
+    // The note every idle row carries.
+    public const string BetweenSides = "not a row of d1 6.3; compared only between the two sides of a sitting";
+
+    // The fixed idle period every side waits, after preparation is done (at
+    // once on the side none) and before the frame drawn ahead of the switch,
+    // so the pairs separate the preparation from warm-up during the wait.
+    public static readonly TimeSpan IdlePeriod = TimeSpan.FromSeconds(1);
+
+    // The pause before the key of the timer scenario (row 6: "a key typed
+    // after a 0.5 s pause in a search").
+    public static readonly TimeSpan PausePeriod = TimeSpan.FromMilliseconds(500);
+
+    // How long the timer scenario waits for the idle timer to prepare or
+    // refresh Published, and a maximise or its restore for the window to
+    // take its new size, before the run stops with an error.
+    public static readonly TimeSpan TimerLimit = TimeSpan.FromSeconds(30);
+    public static readonly TimeSpan ResizeLimit = TimeSpan.FromSeconds(5);
+
+    // How far, in device-independent pixels per side, the shelf host's size
+    // after a restore may differ from its size before the maximise: a real
+    // window at a scaling other than 100% may come back a fraction of a pixel
+    // off, which is not a failed restore.
+    public const double RestoreTolerance = 0.5;
+
+    // The scaling the scaling scenario changes to.
+    public const double ChangedScaling = 1.25;
+
+    // While the timer scenario waits headless, a frame is drawn this often:
+    // the idle timer paces its steps by drawn frames.
+    private static readonly TimeSpan s_drawInterval = TimeSpan.FromMilliseconds(16);
+
     // Under rows of N (design step 13), the rows the 500 library still does
     // not meet; every other row is held. Medians of five headless Release
     // runs on the trial's development PC, 2026-11-20, each in its own process,
@@ -119,9 +250,15 @@ public sealed class BoardMeasurement
     private static readonly TimeSpan s_loadLimit = TimeSpan.FromMinutes(2);
 
     private readonly Action<Window> _frame;
+
+    // The frames _frame has drawn, for the idle record's frames before the
+    // switch.
+    private int _framesDrawn;
     private readonly ThreadClock _clock;
     private readonly ProcessorClasses? _cores = ProcessorClasses.Current;
     private readonly List<MeasuredRow> _rows = [];
+    private readonly List<IdlePreparationRecord> _idle = [];
+    private readonly string? _afterIdle;
 
     // frame draws one frame of the window and returns once it is drawn. Made
     // on the interface thread before the first row: the thread clock opens
@@ -136,7 +273,11 @@ public sealed class BoardMeasurement
     {
         ArgumentNullException.ThrowIfNull(frame);
         ArgumentNullException.ThrowIfNull(clock);
-        _frame = frame;
+        _frame = window =>
+        {
+            frame(window);
+            _framesDrawn++;
+        };
         _clock = clock;
     }
 
@@ -147,6 +288,42 @@ public sealed class BoardMeasurement
     // The frame action waits for the screen (a real window), so the scroll
     // row, which draws a frame in each step, waits by design.
     public bool FrameWaits { get; init; }
+
+    // The run's side of a with-and-without comparison of idle preparation
+    // (IdleSides), or null for today's run.
+    public string? AfterIdle
+    {
+        get => _afterIdle;
+        init
+        {
+            if (value is not null && !IdleSides.IsKnown(value))
+            {
+                throw new ArgumentException($"No idle side is called {value}; the sides are {string.Join(", ", IdleSides.All)}.", nameof(value));
+            }
+
+            _afterIdle = value;
+        }
+    }
+
+    // What idle preparation did before each library's first switch, in a run
+    // told a side; empty otherwise.
+    public IReadOnlyList<IdlePreparationRecord> IdlePreparation => _idle;
+
+    // The maximise scenario's change and its undoing. A real window is
+    // maximised and restored; the headless platform has no screen to
+    // maximise to, so its tests give a resize to a larger size instead.
+    public Action<Window> Maximise { get; init; } = static window => window.WindowState = WindowState.Maximized;
+
+    public Action<Window> Restore { get; init; } = static window => window.WindowState = WindowState.Normal;
+
+    // The scaling scenario's change: only the headless platform can set a
+    // window's scaling, so a real window has none and refuses that scenario.
+    public Action<Window, double>? SetScaling { get; init; }
+
+    // Draws a frame while the timer scenario waits; null in a real window,
+    // whose frames are drawn by themselves. The headless tests force the
+    // render timer here.
+    public Action? DrawWhileWaiting { get; init; }
 
     // After the last row, on the interface thread: the clock's second rate
     // check. If it fails, every thread-clock figure of the run is dropped.
@@ -255,14 +432,31 @@ public sealed class BoardMeasurement
         RequireShelf(view, "PipelineShelf", pipeline, "at the start");
         Require(Views(view, "PublishedShelf") == 0, "The Published shelf made no card before it was first shown.");
 
-        // The first switch to Published makes its cards at the switch.
-        Time(library, FirstSwitchToPublished, $"First switch to Published (the shelf's cards made at the switch, option ({Option}))", PageSwitchBudget, "page switch", () =>
+        // In every run, told a side or not: the Board's idle timer is off and
+        // no preparation step has run, so no step can land inside today's
+        // first-switch-published (a width step makes no card view, so the
+        // check above would not see one) or before the measurement drives it.
+        Require(!view.Preparer.Enabled, "The Board's idle timer is off in a measured run: the measurement drives any preparation itself.");
+        Require(view.Preparer.StepsRun == 0, $"No idle preparation step ran before the first switch ({view.Preparer.StepsRun}).");
+
+        if (AfterIdle is { } side)
         {
-            board.SelectedShelfIndex = 1;
-            Settle(window);
-        });
-        RequireShelf(view, "PublishedShelf", published, "after the first switch");
-        Paint(library, FirstSwitchToPublishedPaint, "Published: its frame after the first switch", window);
+            // A run told an idle side: the preparation, the side's scenario,
+            // the wait and the first switch after it, in place of the two
+            // rows below.
+            FirstSwitchAfterIdle(library, side, window, view, board, published, requireChanges);
+        }
+        else
+        {
+            // The first switch to Published makes its cards at the switch.
+            Time(library, FirstSwitchToPublished, $"First switch to Published (the shelf's cards made at the switch, option ({Option}))", PageSwitchBudget, "page switch", () =>
+            {
+                board.SelectedShelfIndex = 1;
+                Settle(window);
+            });
+            RequireShelf(view, "PublishedShelf", published, "after the first switch");
+            Paint(library, FirstSwitchToPublishedPaint, "Published: its frame after the first switch", window);
+        }
 
         Time(library, SwitchBackToPipeline, "Switch back to Pipeline (its cards made before)", PageSwitchBudget, "page switch", () =>
         {
@@ -426,6 +620,580 @@ public sealed class BoardMeasurement
         RequireShelf(view, "PipelineShelf", pipeline, "at the end");
     }
 
+    // The idle rows of a run told side (IdleRowsFor). The Board's idle timer
+    // stays off, but on the side timer-on: the measurement drives the
+    // preparation with RunStep, so no step can run inside another row, and
+    // the warm-startup row's note says how many ran inside it (none). Each
+    // step is timed on its own and followed by a frame, as the timer paces
+    // them; the steps run are the side's (IdleSides.StepsFor), or every step
+    // due until the Board says Published is prepared. On timer-on the Board's
+    // own idle timer prepares Published instead, timed from the moment it is
+    // turned on, just after the first frame, to prepared (row 5's time to
+    // prepared), and is turned off again before the first switch. Then the
+    // side's scenario (IdleSides): its rows, before the idle period, or after
+    // it for a maximise or a scaling change, which the switch must follow
+    // within 0.4 s. Then, on every side alike, the fixed idle period and one
+    // frame; then the first switch. When preparation stopped (the preparer's
+    // SkippedReason: a slow step or an accessibility client), the switch is
+    // not the one the row is about: it is made untimed, so every row after it
+    // does the same work, and the record says why (idle-preparation design,
+    // section 8, row 1). But a stop by the step met inside the row a key or
+    // a click meets (mid-step, key-step), which ran there and made its views:
+    // that row keeps its slow step, the switch is timed, and the record says
+    // the stop came inside the row (StoppedInsideRow), so the harm rows keep
+    // their worst cases. The scenario's own rows are written either way.
+    // Nothing here throws on a stop; the checks throw only when preparation
+    // did not do what it says. After the switch the scenario's change is
+    // undone (the search cleared, the window restored, the scaling and the
+    // theme put back), untimed, so the rows after it run on the Board every
+    // other run has.
+    private void FirstSwitchAfterIdle(string library, string side, MainWindow window, BoardView view, BoardViewModel board, int published, bool requireChanges)
+    {
+        HiddenShelfPreparer preparer = view.Preparer;
+        string scenario = IdleSides.ScenarioOf(side);
+        bool byTimer = IdleSides.ByTimer(side);
+
+        // MeasureBoard has required that none ran; the note says so in the
+        // report, beside warm startup.
+        int startup = _rows.FindLastIndex(row => row.Library == library && row.Id == WarmStartup);
+        if (startup >= 0)
+        {
+            _rows[startup] = _rows[startup] with { Note = Join(_rows[startup].Note, FormattableString.Invariant($"{preparer.StepsRun} idle preparation steps inside")) };
+        }
+
+        // Row 9: the managed heap after a full collection, before and after
+        // preparation, on the theme scenario only (a full collection changes
+        // what the rows after it meet, so no other scenario takes one).
+        long? memoryBefore = scenario == IdleSides.ThemeScenario ? GC.GetTotalMemory(forceFullCollection: true) : null;
+
+        int? limit = IdleSides.StepsFor(side);
+        var steps = new List<DrivenStep>();
+        var driven = new List<DrivenStep>();
+        int madeBefore = CardView.MadeCount;
+        if (byTimer)
+        {
+            Time(library, PreparePublishedIdle, $"Idle preparation of Published, side {side}: by the Board's own idle timer, from the moment it is turned on, just after the first frame, to Published prepared (its 0.4 s of quiet, its ticks and the frame after each step included)", FilterKeystrokeBudget, "filter keystroke", () =>
+            {
+                preparer.Enabled = true;
+                if (!WaitWhileDrawing(() => preparer.IsPrepared || preparer.SkippedReason is not null, TimerLimit))
+                {
+                    throw new TimeoutException($"The idle timer neither prepared Published nor stopped within {TimerLimit.TotalSeconds:0} s ({preparer.StepsRun} steps).");
+                }
+            }, informational: true, waits: true);
+        }
+        else
+        {
+            Time(library, PreparePublishedIdle, $"Idle preparation of Published, side {side}: from its start to done, each step followed by a frame", FilterKeystrokeBudget, "filter keystroke", () =>
+                DriveSteps(preparer, window, limit, steps), informational: true, waits: true);
+            driven.AddRange(steps);
+        }
+
+        int stepCount = byTimer ? preparer.StepsRun : steps.Count;
+        int viewsMade = CardView.MadeCount - madeBefore;
+        string? skipped = preparer.SkippedReason;
+        _rows[^1] = _rows[^1] with
+        {
+            Note = FormattableString.Invariant($"{BetweenSides}; {(byTimer ? "by the idle timer: " : string.Empty)}{stepCount} steps, {viewsMade} card views made; preparation {Stopped(skipped)}; UI is the longest wait a key would meet, read against the filter keystroke budget for scale"),
+        };
+
+        if (byTimer)
+        {
+            // The timer's steps are timed by the preparer's own clock; each is
+            // one interface-thread job, so no key is served inside it and its
+            // UI is its Wall. The busy-PC figures are not read per step.
+            HiddenShelfPreparer.Step? longest = preparer.Steps.Count == 0 ? null : preparer.Steps.MaxBy(step => step.Time);
+            double ms = longest?.Time.TotalMilliseconds ?? 0;
+            string timerList = preparer.Steps.Count == 0 ? "none" : string.Join("; ", preparer.Steps.Select(DescribeTimerStep));
+            Add(new MeasuredRow(library, PreparePublishedLongestStep, $"Idle preparation of Published, side {side}: its longest step (W the width, R the rows, L a layout) by the preparer's own clock, one interface-thread job, judged in a real window against the UI thread budget",
+                ms, ms, UiThreadBudget, "UI thread", Informational: true,
+                Note: FormattableString.Invariant($"{BetweenSides}; {stepCount} steps: {timerList}; preparation {Stopped(skipped)}")));
+        }
+        else
+        {
+            // The longest step: Wall the longest step's, UI the longest-UI
+            // step's, and every busy-PC figure from that step, as the scroll row.
+            Step? slowest = null;
+            double longestWall = 0;
+            foreach (DrivenStep step in steps)
+            {
+                longestWall = Math.Max(longestWall, step.Timed.WallMs);
+                if (slowest is null || step.Timed.UiMs > slowest.UiMs)
+                {
+                    slowest = step.Timed;
+                }
+            }
+
+            string stepList = steps.Count == 0 ? "none" : string.Join("; ", steps.Select(DescribeStep));
+            string slowestNote = slowest is null ? string.Empty : FormattableString.Invariant($"; the longest-UI step's Wall {slowest.WallMs:0} ms");
+            Add(new MeasuredRow(library, PreparePublishedLongestStep, $"Idle preparation of Published, side {side}: its longest step (W the width, R the rows, L a layout), judged in a real window against the UI thread budget",
+                longestWall, slowest?.UiMs ?? 0, UiThreadBudget, "UI thread", Informational: true,
+                Note: FormattableString.Invariant($"{BetweenSides}; {steps.Count} steps: {stepList}; preparation {Stopped(skipped)}{slowestNote}"),
+                RunMs: slowest?.RunMs, NotRunMs: slowest?.NotRunMs, RunUiMs: slowest?.RunUiMs, PerfCoreShare: slowest?.PerfCoreShare,
+                GcPauseMs: slowest?.GcPauseMs, JitMs: slowest?.JitMs));
+        }
+
+        if (skipped is null)
+        {
+            Require(limit is null ? preparer.IsPrepared : steps.Count == limit,
+                limit is null ? "Preparation ran to its end and Published is prepared." : $"The side {side} ran its {limit} steps ({steps.Count}).");
+        }
+
+        long? memoryAfter = scenario == IdleSides.ThemeScenario ? GC.GetTotalMemory(forceFullCollection: true) : null;
+
+        // The scenario's rows before the idle period.
+        int? stepsMet = side == IdleSides.MidStep ? 0 : null;
+        int? stepsMetViews = side == IdleSides.MidStep ? 0 : null;
+        int? viewsMadeInRow = null;
+        bool stoppedInsideRow = false;
+        int? refreshSteps = null;
+        bool searchInEffect = false;
+        ThemeVariant? themeBefore = window.RequestedThemeVariant;
+        bool themeChanged = false;
+        switch (scenario)
+        {
+            case IdleSides.KeyScenario:
+            {
+                // Row 6: the key arrives as the last step is due, so the step
+                // runs first and the key waits for it (a step cannot stop
+                // early). On key-none no step is due. The steps met and the
+                // card views are counted inside the row's own stopwatch.
+                MetInRow met = TimeMeeting(preparer, library, SearchKeystrokeStepDue, $"Search keystroke started when an idle step is due (side {side}): the step, if one is due, then \"{SearchText}\" typed into an empty search, the render its wait ends in, and layout", FilterKeystrokeBudget, "filter keystroke", () =>
+                {
+                    if (IdleSides.Prepares(side))
+                    {
+                        preparer.RunStep();
+                    }
+
+                    board.SearchText = SearchText;
+                    board.Render();
+                    Settle(window);
+                });
+                stepsMet = met.Steps;
+                stepsMetViews = met.StepViews;
+                viewsMadeInRow = met.ViewsMade;
+
+                // A slow step met here stops preparation, but it ran inside
+                // this row: the row keeps it, and the switch after it is
+                // timed as on any run (its work is the same: no refresh is
+                // driven in this scenario).
+                stoppedInsideRow = skipped is null && met.Steps == 1 && preparer.SkippedReason is not null;
+                string stopNote = stoppedInsideRow ? FormattableString.Invariant($"; preparation stopped by it ({preparer.SkippedReason}), the row kept") : string.Empty;
+                _rows[^1] = _rows[^1] with { Note = FormattableString.Invariant($"{BetweenSides}; {met.Steps} idle steps met inside the row ({StepKinds(preparer, met.First, met.Steps)}), {met.StepViews} card views made by them; {met.ViewsMade} card views made in the row{stopNote}") };
+                NoteChanges(board);
+                _frame(window);
+                board.SearchText = string.Empty;
+                board.Render();
+                Settle(window);
+                _frame(window);
+                break;
+            }
+
+            case IdleSides.TimerScenario:
+            {
+                // Row 6: a key after a 0.5 s pause in a search, with the timer
+                // on and Published prepared and hidden; a refresh waits for 2 s
+                // after a render, so no step is expected in the pause or the
+                // key. Then the timer's own refresh after the search.
+                string partial = SearchText[..^1];
+                board.SearchText = partial;
+                board.Render();
+                Settle(window);
+                _frame(window);
+                int stepsBefore = preparer.StepsRun;
+                WaitWhileDrawing(static () => false, PausePeriod);
+                Time(library, SearchKeystrokeAfterPause, FormattableString.Invariant($"Search keystroke after a pause of {PausePeriod.TotalSeconds:0.0} s in a search (side {side}: \"{partial}\" typed, the pause, then \"{SearchText}\"), Published {(byTimer ? "prepared and hidden with the idle timer on" : "never shown")}: the render its wait ends in, and layout"), FilterKeystrokeBudget, "filter keystroke", () =>
+                {
+                    board.SearchText = SearchText;
+                    board.Render();
+                    Settle(window);
+                }, informational: true);
+                stepsMet = preparer.StepsRun - stepsBefore;
+                stepsMetViews = 0;
+                _rows[^1] = _rows[^1] with { Note = FormattableString.Invariant($"{BetweenSides}; {stepsMet} idle steps ran in the pause and the key ({StepKinds(preparer, stepsBefore)}); none expected: a refresh waits for 2 s after a render") };
+                NoteChanges(board);
+                _frame(window);
+
+                int refreshBefore = preparer.StepsRun;
+                int refreshMade = CardView.MadeCount;
+                Time(library, RefreshPublishedTimer, $"The idle timer's refresh of Published after the search (side {side}): from the key's frame to Published prepared again (the timer's 2 s of quiet after the render, its ticks and the frame after each step included)", UiThreadBudget, "UI thread", () =>
+                {
+                    if (byTimer && preparer.SkippedReason is null && !WaitWhileDrawing(() => preparer.IsPrepared || preparer.SkippedReason is not null, TimerLimit))
+                    {
+                        throw new TimeoutException($"The idle timer neither refreshed Published nor stopped within {TimerLimit.TotalSeconds:0} s.");
+                    }
+                }, informational: true, waits: true);
+                refreshSteps = preparer.StepsRun - refreshBefore;
+                _rows[^1] = _rows[^1] with { Note = FormattableString.Invariant($"{BetweenSides}; {refreshSteps} refresh steps ({StepKinds(preparer, refreshBefore)}), {CardView.MadeCount - refreshMade} card views made; preparation {Stopped(preparer.SkippedReason)}; UI is the longest wait a key would meet") };
+                preparer.Enabled = false;
+                searchInEffect = true;
+                break;
+            }
+
+            case IdleSides.SearchScenario:
+            {
+                // Rows 8 and 10: the search typed while Published is prepared
+                // and hidden (on the 500 library it leaves about a fifth of
+                // Published), the refresh, the search cleared (Published's
+                // cards back), the refresh; then the search typed again, and
+                // its refresh, untimed, so the first switch comes after a
+                // search typed while Published was prepared and hidden, with
+                // the idle refresh done (search-refreshed) or before it.
+                bool refresh = side == IdleSides.SearchRefreshed;
+                refreshSteps = 0;
+                SearchWhileHidden(library, SearchKeystrokePublishedPrepared, $"Search keystroke while Published is prepared and hidden (side {side}): \"{SearchText}\" typed into an empty search, the render its wait ends in, and layout", SearchText, window, board, requireChanges);
+                refreshSteps += RefreshRow(library, RefreshPublishedAfterSearch, $"The idle refresh of Published after the search (side {side}; none on search-pending): its steps, each followed by a frame", refresh, preparer, window, driven);
+                SearchWhileHidden(library, SearchClearedPublishedPrepared, $"The search cleared while Published is hidden (side {side}): the render, putting most of Published's cards back, and layout", string.Empty, window, board, requireChanges);
+                refreshSteps += RefreshRow(library, RefreshPublishedAfterClear, $"The idle refresh of Published after the search was cleared (side {side}; none on search-pending): its steps, each followed by a frame", refresh, preparer, window, driven);
+                board.SearchText = SearchText;
+                board.Render();
+                Settle(window);
+                _frame(window);
+                if (refresh)
+                {
+                    var again = new List<DrivenStep>();
+                    DriveSteps(preparer, window, null, again);
+                    driven.AddRange(again);
+                    refreshSteps += again.Count;
+                }
+
+                searchInEffect = true;
+                break;
+            }
+
+            case IdleSides.ThemeScenario:
+            {
+                // Row 9: a theme change while Published is prepared, then the
+                // refresh it makes due (one full-size layout).
+                ThemeVariant target = window.ActualThemeVariant == ThemeVariant.Dark ? ThemeVariant.Light : ThemeVariant.Dark;
+                Time(library, ThemeChange, $"Theme change to {target} (side {side}) while Published is {(IdleSides.Prepares(side) ? "prepared and hidden" : "never shown")}: restyling and layout", UiThreadBudget, "UI thread", () =>
+                {
+                    window.RequestedThemeVariant = target;
+                    Settle(window);
+                }, informational: true, note: BetweenSides);
+                themeChanged = true;
+                _frame(window);
+                refreshSteps = RefreshRow(library, RefreshPublishedAfterTheme, $"The idle refresh of Published after the theme change (side {side}; none on theme-none): its steps, each followed by a frame", IdleSides.Prepares(side), preparer, window, driven);
+                break;
+            }
+        }
+
+        // Every side alike: the fixed idle period, then one frame. What the
+        // wait did is recorded, the idle period it waited and the frames
+        // drawn from its start to the switch, so a test can hold that every
+        // side of a scenario waits alike.
+        int framesBefore = _framesDrawn;
+        var waited = Stopwatch.StartNew();
+        PumpUntil(static () => false, IdlePeriod);
+        waited.Stop();
+        _frame(window);
+
+        // The scenario's change after the idle period (row 12): a maximise
+        // or a scaling change, its frame, then the switch at once, as within
+        // 0.4 s of the change and before any refresh.
+        Stopwatch? sinceChange = null;
+        Action? undo = null;
+        Panel host = view.FindControl<Panel>("ShelfHost") ?? throw new InvalidOperationException("The Board has no shelf host.");
+        if (scenario == IdleSides.MaximiseScenario)
+        {
+            Size before = host.Bounds.Size;
+            sinceChange = Stopwatch.StartNew();
+            Time(library, MaximiseWindow, $"Maximise the window (side {side}) while Published is {(IdleSides.Prepares(side) ? "prepared and hidden" : "never shown")}: the window's new size and layout", UiThreadBudget, "UI thread", () =>
+            {
+                Maximise(window);
+                Settle(window);
+                PumpUntil(() => host.Bounds.Size != before, ResizeLimit);
+                Settle(window);
+            }, informational: true, note: BetweenSides, waits: true);
+            Require(host.Bounds.Size != before, $"The maximise changed the shelf host's size ({before.Width:0} x {before.Height:0}); a window maximised already cannot run this scenario.");
+            _frame(window);
+            undo = () =>
+            {
+                Restore(window);
+                Settle(window);
+                PumpUntil(() => Restored(host.Bounds.Size, before), ResizeLimit);
+                Settle(window);
+                Require(Restored(host.Bounds.Size, before), $"The window was restored to its size before the maximise ({host.Bounds.Width:0} x {host.Bounds.Height:0}, not {before.Width:0} x {before.Height:0}).");
+            };
+        }
+        else if (scenario == IdleSides.ScalingScenario)
+        {
+            Action<Window, double> setScaling = SetScaling ?? throw new InvalidOperationException($"The side {side} changes the display scaling, which only a headless run can do.");
+            double scalingBefore = window.RenderScaling;
+            sinceChange = Stopwatch.StartNew();
+            Time(library, ScalingChange, FormattableString.Invariant($"Display scaling changed to {ChangedScaling:0.00} (side {side}) while Published is {(IdleSides.Prepares(side) ? "prepared and hidden" : "never shown")}: layout"), UiThreadBudget, "UI thread", () =>
+            {
+                setScaling(window, ChangedScaling);
+                Settle(window);
+            }, informational: true, note: BetweenSides);
+            Require(Math.Abs(window.RenderScaling - ChangedScaling) < 0.001, FormattableString.Invariant($"The window's scaling changed to {ChangedScaling} ({window.RenderScaling})."));
+            _frame(window);
+            undo = () =>
+            {
+                setScaling(window, scalingBefore);
+                Settle(window);
+            };
+        }
+
+        skipped = preparer.SkippedReason;
+        bool prepared = preparer.IsPrepared;
+        bool rowsStale = board.Shelves[1].RowsAreStale;
+        int cardsNow = board.Shelves[1].Cards.Count;
+        Require(skipped is not null || side != IdleSides.Prepared || prepared, "Published was still prepared after the idle period.");
+        int viewsBefore = Views(view, "PublishedShelf");
+        Require(!prepared || cardsNow == 0 || viewsBefore > 0, $"The prepared Published shelf holds card views before its switch ({viewsBefore}).");
+        int expectedCards = searchInEffect ? -1 : published;
+
+        // A stop by the step met inside the keystroke row (key-step) leaves
+        // the switch's work as on any run, so the switch is timed.
+        bool taken = skipped is null || stoppedInsideRow;
+        int? madeAtSwitch = null;
+        int framesBeforeSwitch = _framesDrawn - framesBefore;
+        double? changeToSwitch = sinceChange?.Elapsed.TotalMilliseconds;
+        if (taken)
+        {
+            string action = side == IdleSides.MidStep
+                ? FormattableString.Invariant($"First switch to Published asked for as the last idle step starts (side {side}: the steps but the last, the wait ({IdlePeriod.TotalSeconds:0} s idle; one frame), then the last step, which the switch waits for, and the switch)")
+                : FormattableString.Invariant($"First switch to Published after the side's steps (none on the side none, every step due on prepared) and the wait ({IdlePeriod.TotalSeconds:0} s idle; one frame)");
+
+            // The steps met and the card views are counted inside the row's
+            // own stopwatch; the switch's own card views are the row's less
+            // those of the step it waited for (mid-step).
+            MetInRow met = TimeMeeting(preparer, library, FirstSwitchToPublishedAfterIdle, action, PageSwitchBudget, "page switch", () =>
+            {
+                if (side == IdleSides.MidStep)
+                {
+                    preparer.RunStep();
+                }
+
+                board.SelectedShelfIndex = 1;
+                Settle(window);
+            });
+            Require(side == IdleSides.MidStep || met.Steps == 0, $"No idle step ran inside the first switch after idle on the side {side} ({met.Steps}).");
+            madeAtSwitch = met.ViewsMade - met.StepViews;
+            if (side == IdleSides.MidStep)
+            {
+                stepsMet = met.Steps;
+                stepsMetViews = met.StepViews;
+                viewsMadeInRow = met.ViewsMade;
+
+                // A slow step met here stops preparation, but it ran inside
+                // this row and made its views: the row keeps it.
+                stoppedInsideRow = skipped is null && met.Steps == 1 && preparer.SkippedReason is not null;
+            }
+
+            if (preparer.SkippedReason is not null && !stoppedInsideRow)
+            {
+                // Preparation stopped inside the row with no step run (the
+                // last step was predicted slow, so it did not run): no step
+                // was met, so the row is not the one it is about, as when
+                // preparation stops before it.
+                _rows.RemoveAt(_rows.Count - 1);
+                taken = false;
+                madeAtSwitch = null;
+                RequireShelf(view, "PublishedShelf", expectedCards, "after the first switch after idle (preparation stopped inside it, so not timed)");
+                _frame(window);
+            }
+            else
+            {
+                string stopNote = stoppedInsideRow && side == IdleSides.MidStep ? FormattableString.Invariant($"; preparation stopped by it ({preparer.SkippedReason}), the row kept") : string.Empty;
+                string metNote = side == IdleSides.MidStep ? FormattableString.Invariant($"; {met.Steps} idle step run inside the row first ({StepKinds(preparer, met.First, met.Steps)}, {met.StepViews} card views), as the switch waited for it, {met.ViewsMade} card views made in the row in all{stopNote}") : string.Empty;
+                string scenarioNote = scenario == IdleSides.SwitchScenario ? string.Empty : FormattableString.Invariant($", Published's rows {(rowsStale ? "stale" : "current")}");
+                _rows[^1] = _rows[^1] with
+                {
+                    Note = FormattableString.Invariant($"{BetweenSides}; side {side}: {stepCount} preparation steps before it, {viewsBefore} card views ready in the hidden shelf, Published {(prepared ? "prepared" : "not prepared")}{scenarioNote}{metNote}; {madeAtSwitch} card views made at the switch"),
+                };
+                RequireShelf(view, "PublishedShelf", expectedCards, "after the first switch after idle");
+                Paint(library, FirstSwitchToPublishedAfterIdlePaint, "Published: its frame after the first switch after idle", window, informational: true, note: BetweenSides);
+            }
+        }
+        else
+        {
+            board.SelectedShelfIndex = 1;
+            Settle(window);
+            RequireShelf(view, "PublishedShelf", expectedCards, "after the first switch after idle (preparation stopped, so not timed)");
+            _frame(window);
+        }
+
+        // The scenario's change undone, untimed.
+        if (searchInEffect)
+        {
+            board.SearchText = string.Empty;
+            board.Render();
+            Settle(window);
+            RequireShelf(view, "PublishedShelf", published, "with the search cleared after the first switch after idle");
+            _frame(window);
+        }
+
+        if (undo is not null)
+        {
+            undo();
+            _frame(window);
+        }
+
+        if (themeChanged)
+        {
+            window.RequestedThemeVariant = themeBefore;
+            Settle(window);
+            _frame(window);
+        }
+
+        _idle.Add(new IdlePreparationRecord(library, side, stepCount, viewsMade, prepared, preparer.SkippedReason, taken, madeAtSwitch, waited.Elapsed.TotalMilliseconds, framesBeforeSwitch)
+        {
+            SessionSteps = preparer.StepsRun,
+            StepsMet = stepsMet,
+            StepsMetViews = stepsMetViews,
+            ViewsMadeInRow = viewsMadeInRow,
+            StoppedInsideRow = stoppedInsideRow,
+            RefreshSteps = refreshSteps,
+            RowsStaleAtSwitch = rowsStale,
+            ManagedBytesBefore = memoryBefore,
+            ManagedBytesAfter = memoryAfter,
+            StepFrameMs = driven.Select(step => step.FrameMs).ToList(),
+            ChangeToSwitchMs = changeToSwitch,
+        });
+    }
+
+    // Runs the preparer's steps, each timed as a row is timed and followed by
+    // a frame, which is timed too (row 13), until limit steps ran (every step
+    // due when limit is null) or none is due; adds each to into.
+    private void DriveSteps(HiddenShelfPreparer preparer, Window window, int? limit, List<DrivenStep> into)
+    {
+        int ran = 0;
+        while (limit is null || ran < limit)
+        {
+            bool stepped = false;
+            Step timed = TimeStep(() => stepped = preparer.RunStep());
+            if (!stepped)
+            {
+                break;
+            }
+
+            var frame = Stopwatch.StartNew();
+            _frame(window);
+            frame.Stop();
+            into.Add(new DrivenStep(preparer.Steps[^1], timed, frame.Elapsed.TotalMilliseconds));
+            ran++;
+        }
+    }
+
+    // A row of idle refresh steps (the search and theme scenarios): every
+    // step due, each followed by a frame, when run is set; nothing on a side
+    // that does not refresh, so the row reads about 0 there, by design.
+    // Returns the steps run.
+    private int RefreshRow(string library, string id, string action, bool run, HiddenShelfPreparer preparer, Window window, List<DrivenStep> driven)
+    {
+        var steps = new List<DrivenStep>();
+        int madeBefore = CardView.MadeCount;
+        Time(library, id, action, UiThreadBudget, "UI thread", () =>
+        {
+            if (run)
+            {
+                DriveSteps(preparer, window, null, steps);
+            }
+        }, informational: true, waits: true);
+        driven.AddRange(steps);
+        string list = steps.Count == 0 ? string.Empty : ": " + string.Join("; ", steps.Select(DescribeStep));
+        _rows[^1] = _rows[^1] with
+        {
+            Note = FormattableString.Invariant($"{BetweenSides}; {steps.Count} refresh steps{list}; {CardView.MadeCount - madeBefore} card views made; preparation {Stopped(preparer.SkippedReason)}; UI is the longest wait a key would meet"),
+        };
+        return steps.Count;
+    }
+
+    // A search typed or cleared while Published is hidden, timed as the
+    // search keystroke row is, then its frame; on the 500 library it must
+    // change the hidden Published shelf's cards.
+    private void SearchWhileHidden(string library, string id, string action, string text, Window window, BoardViewModel board, bool requireChanges)
+    {
+        Time(library, id, action, FilterKeystrokeBudget, "filter keystroke", () =>
+        {
+            board.SearchText = text;
+            board.Render();
+            Settle(window);
+        }, informational: true, note: BetweenSides);
+        NoteChanges(board);
+        Require(!requireChanges || board.LastSyncChanges[1] != 0, "The search changed the hidden Published shelf's cards.");
+        _frame(window);
+    }
+
+    // Lets the dispatcher run until done holds or the limit passes, drawing a
+    // frame every s_drawInterval when DrawWhileWaiting is set; returns done.
+    private bool WaitWhileDrawing(Func<bool> done, TimeSpan limit)
+    {
+        var sinceDraw = Stopwatch.StartNew();
+        return PumpUntil(() =>
+        {
+            if (DrawWhileWaiting is { } draw && sinceDraw.Elapsed >= s_drawInterval)
+            {
+                draw();
+                sinceDraw.Restart();
+            }
+
+            return done();
+        }, limit);
+    }
+
+    // Whether the shelf host's size is back to before, within RestoreTolerance.
+    public static bool Restored(Size now, Size before) =>
+        Math.Abs(now.Width - before.Width) <= RestoreTolerance && Math.Abs(now.Height - before.Height) <= RestoreTolerance;
+
+    private static string Stopped(string? skipped) => skipped is null ? "not stopped" : "stopped: " + skipped;
+
+    // The kinds of the steps run since the first (count of them, or every one
+    // since), "none" for none.
+    private static string StepKinds(HiddenShelfPreparer preparer, int first, int? count = null)
+    {
+        IEnumerable<HiddenShelfPreparer.Step> steps = preparer.Steps.Skip(first).Take(count ?? int.MaxValue);
+        return steps.Any() ? string.Join(", ", steps.Select(step => step.Kind + (step.Cap is null ? string.Empty : " capped"))) : "none";
+    }
+
+    // What a row that a key or a click meets counted inside its own
+    // stopwatch: the index of the first step it met, the preparer's steps
+    // run and the card views they made, read as the timed work starts and as
+    // it ends, and every card view made in the row. A step run before the
+    // row's stopwatch starts is not counted as met.
+    private sealed record MetInRow(int First, int Steps, int StepViews, int ViewsMade);
+
+    // Times work as Time does (informational), counting MetInRow inside the
+    // timed work itself.
+    private MetInRow TimeMeeting(HiddenShelfPreparer preparer, string library, string id, string action, double budget, string budgetName, Action work)
+    {
+        int stepsAtStart = 0, stepsAtEnd = 0, viewsAtStart = 0, viewsAtEnd = 0;
+        Time(library, id, action, budget, budgetName, () =>
+        {
+            stepsAtStart = preparer.StepsRun;
+            viewsAtStart = CardView.MadeCount;
+            work();
+            stepsAtEnd = preparer.StepsRun;
+            viewsAtEnd = CardView.MadeCount;
+        }, informational: true);
+        int steps = stepsAtEnd - stepsAtStart;
+        int stepViews = preparer.Steps.Skip(stepsAtStart).Take(steps).Sum(step => step.ViewsMade);
+        return new MetInRow(stepsAtStart, steps, stepViews, viewsAtEnd - viewsAtStart);
+    }
+
+    // One step the measurement drove: what the preparer did, its timing, and
+    // the frame drawn after it, in ms.
+    private sealed record DrivenStep(HiddenShelfPreparer.Step Made, Step Timed, double FrameMs);
+
+    // One step of the idle preparation, for the longest step's note: what it
+    // was, an L's height cap on the ladder, its Wall and UI, the views made,
+    // and the frame drawn after it.
+    private static string DescribeStep(DrivenStep step)
+    {
+        string cap = step.Made.Cap is { } height ? FormattableString.Invariant($" (cap {height:0} px)") : string.Empty;
+        return FormattableString.Invariant($"{step.Made.Kind}{cap} {step.Timed.WallMs:0.0} ms, UI {step.Timed.UiMs:0.0} ms, {step.Made.ViewsMade} views, frame {step.FrameMs:0.0} ms");
+    }
+
+    // One step the idle timer ran, by the preparer's own clock.
+    private static string DescribeTimerStep(HiddenShelfPreparer.Step step)
+    {
+        string cap = step.Cap is { } height ? FormattableString.Invariant($" (cap {height:0} px)") : string.Empty;
+        return FormattableString.Invariant($"{step.Kind}{cap} {step.Time.TotalMilliseconds:0.0} ms, {step.ViewsMade} views");
+    }
+
+    private static string Join(string note, string text) => string.IsNullOrEmpty(note) ? text : $"{note}; {text}";
+
     // waits marks a row that waits by design (a frame, a load off the
     // interface thread), so its time not running is not all load.
     public MeasuredRow Time(string library, string id, string action, double budget, string budgetName, Action work, bool informational = false, string note = "", bool waits = false)
@@ -515,8 +1283,8 @@ public sealed class BoardMeasurement
         return done();
     }
 
-    private void Paint(string library, string id, string action, Window window) =>
-        Time(library, id, action, UiThreadBudget, "UI thread", () => _frame(window), waits: true);
+    private void Paint(string library, string id, string action, Window window, bool informational = false, string note = "") =>
+        Time(library, id, action, UiThreadBudget, "UI thread", () => _frame(window), informational, note, waits: true);
 
     // The card views a shelf has made.
     private static int Views(BoardView view, string shelf) =>
