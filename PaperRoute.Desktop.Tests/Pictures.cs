@@ -44,12 +44,16 @@ internal static class Pictures
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
 
         Dispatcher.UIThread.RunJobs();
-        // The ticks draw frames. They do not finish a transition: the animation
-        // clock is the real one in a headless window too, and 30 ticks take a
-        // few milliseconds. So nothing in a picture may still be easing: a state
-        // set before the window is shown applies with no transition, and a
-        // specimen pressed afterwards has its transition taken away
-        // (StyleGallery.Pressed; GalleryStateTests reads every specimen at once).
+        // The ticks draw frames. They cannot be relied on to finish a
+        // transition: it measures real time and moves only when a frame is
+        // rendered at the right moment, and the 30 ticks here come within a
+        // few milliseconds. (What does finish one is a wait in a running
+        // dispatcher loop: BoardWindow.WaitFor.) A value that is easing when
+        // the picture is taken can stay at a shade in between, or at its
+        // first value. So nothing in a picture may be easing: a state set
+        // before the window is shown applies with no transition, and the
+        // gallery's pressed specimens have theirs taken away
+        // (StyleGallery.Pressed; GalleryStateTests.NoStateSpecimenEasesIntoItsState).
         AvaloniaHeadlessPlatform.ForceRenderTimerTick(30);
         Dispatcher.UIThread.RunJobs();
 

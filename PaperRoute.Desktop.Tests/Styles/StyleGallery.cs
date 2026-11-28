@@ -22,10 +22,11 @@ namespace PaperRoute.Desktop.Tests.Styles;
 // States a pointer would make (hovered, pressed) are set as pseudo-classes:
 // nothing moves the pointer in a headless window, so they stay, except that
 // a button sets :pressed from its IsPressed when its template is applied,
-// which clears it in a headless window, so a pressed specimen sets it again
-// after every layout pass (Pressed). Focus is real, from the keyboard, and
-// only one control can hold it: the button named "Focused". The text box and
-// drop-down shown "focused" carry the pseudo-classes their focus styles
+// which clears it while nothing holds the button down, so a pressed specimen
+// sets it again each time its template has been applied, and takes its
+// face's transition away first (Pressed). Focus is real, from the keyboard,
+// and only one control can hold it: the button named "Focused". The text box
+// and drop-down shown "focused" carry the pseudo-classes their focus styles
 // select on.
 //
 // Every specimen has a name of its own, and so do the labels and captions
@@ -479,12 +480,13 @@ internal sealed class StyleGallery : UserControl
     // applied.
     //
     // The face's transitions are taken away first. A face that goes from
-    // hovered to pressed eases its background for 100 ms (Button.axaml), and
-    // that runs on the real clock in a headless window too: a picture or a
-    // sweep taken sooner reads a shade in between. Without the transition the
-    // face holds its pressed brush from the moment it is shown
+    // hovered to pressed after it is shown eases its background
+    // (Button.axaml), and in a headless window nothing a picture does can be
+    // relied on to finish that: a picture or a sweep then reads a shade in
+    // between, or the hovered shade itself. Without the transition the face
+    // holds its pressed brush from the moment its template is applied
     // (GalleryStateTests.EveryPressedSpecimenDrawsItsPressedBrush and
-    // NoStateSpecimenIsStillEasingWhenItIsShown).
+    // NoStateSpecimenEasesIntoItsState).
     private static Button Pressed(Button button)
     {
         With(button, ":pointerover", ":pressed");

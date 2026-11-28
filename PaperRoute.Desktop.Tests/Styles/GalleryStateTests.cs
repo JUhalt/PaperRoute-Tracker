@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Documents;
 using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Primitives;
+using Avalonia.Data;
 using Avalonia.Headless;
 using Avalonia.Media;
 using Avalonia.Threading;
@@ -20,10 +21,12 @@ namespace PaperRoute.Desktop.Tests.Styles;
 // in all six theme cases. The gallery is shown as the sweeps show it
 // (Sweep.Subjects) and read at the moment its picture is taken (after
 // Pictures.Save's settling), so a state cleared after it was set fails here.
-// It is also read at once, before any frame is drawn: a specimen that is
-// still easing towards its state holds a brush of its own, and a transition
-// runs on the real clock in a headless window too, so read only after the
-// settling it would fail on a quick machine and pass on a busy one.
+//
+// A specimen that eases into its state is caught another way, because no
+// read can be trusted to catch it: by the time a brush is read the easing
+// may have ended, or may have stopped moving for good, depending on how
+// quick the machine is. So a watch records every value a transition writes
+// to a specimen while the gallery is shown (NoStateSpecimenEasesIntoItsState).
 //
 // Where a role's pressed brush is its hovered one (secondary, quiet, danger:
 // Button.axaml), only the pseudo-class tells press from hover; the
@@ -92,14 +95,37 @@ public sealed partial class GalleryStateTests
     [TestMethod]
     public void EveryHoveredFocusedAndOffSpecimenDrawsItsStatesBrush() => AssertStates(s_others);
 
-    // No specimen is on its way to its state when the gallery is shown: read
-    // at once, with no frame drawn and no time passed, each already holds its
-    // state's brush. The first fix of #463 pressed its specimens after the
-    // first layout and left the face's transition on, so the pressed brush
-    // eased in over 100 ms of real time: its pictures and its own guard were
-    // right on a busy PC and wrong on a quick one.
+    // No state specimen eases into its state: while the gallery is shown and
+    // settled, no transition writes a value to a state specimen or to a part
+    // of one. The first fix of #463 pressed its specimens after the first
+    // layout and left the face's transition on, so the pressed brush eased
+    // in. Its pictures and its own guard were then right or wrong by the
+    // machine's speed: right on a busy PC, wrong on a quiet one.
     [TestMethod]
-    public void NoStateSpecimenIsStillEasingWhenItIsShown() => AssertStates([.. s_pressed, .. s_others], settle: false);
+    public void NoStateSpecimenEasesIntoItsState()
+    {
+        string[] names = [.. s_pressed.Concat(s_others).Select(specimen => specimen.Name)];
+        var eased = new List<string>();
+        foreach (ThemeCase themeCase in ThemeCase.All)
+        {
+            eased.AddRange(Headless.Run(() =>
+            {
+                using var watch = new EasingWatch(names);
+                Window window = ShowGallery(themeCase);
+                try
+                {
+                    return watch.Eased.Select(line => $"{themeCase.Name}: {line}").ToList();
+                }
+                finally
+                {
+                    window.Close();
+                }
+            }));
+        }
+
+        Assert.IsEmpty(eased, "State specimens a transition wrote to while the gallery was shown:" + Environment.NewLine + string.Join(Environment.NewLine, eased));
+        TestContext.WriteLine($"No transition wrote to any of {names.Length} state specimens in {ThemeCase.All.Count} theme cases.");
+    }
 
     // Every state specimen of the gallery (a control named for its state,
     // the column heads aside) is in one of the two lists, so a specimen added
@@ -173,26 +199,30 @@ public sealed partial class GalleryStateTests
             "The check names the lost pseudo-class and the hovered brush:" + Environment.NewLine + string.Join(Environment.NewLine, faults));
     }
 
-    // The teeth of the read at once: a primary button pressed after it is
-    // shown, with its transition left on, as the first fix of #463 pressed
-    // its specimens. Its face holds the easing's own brush, still in the
-    // hovered colour, and the check names it.
+    // The watch's teeth, and why it watches for the cause and reads no
+    // moment: a primary button hovered after it is shown eases its face
+    // (Button.axaml gives every button face a transition, and no rule takes
+    // it away on a hover). Once the easing has ended the face holds its
+    // hovered token's brush, so a read of the brush finds nothing. The watch
+    // still names the easing, because it saw the easing's first value the
+    // moment the state changed.
     [TestMethod]
-    public void TheStateCheckFailsAPressThatIsStillEasing()
+    public void TheEasingWatchNamesAnEasingThatHasEnded()
     {
-        List<string> faults = Headless.Run(() =>
+        (List<string> eased, List<string> faults, bool ended) = Headless.Run(() =>
         {
             ThemeCase.Light.Apply(Application.Current!);
-            var button = new Button { Name = "PrimaryPressed", Content = "+ Add Manuscript", Classes = { "primary" } };
-            var pseudo = (IPseudoClasses)button.Classes;
-            pseudo.Set(":pointerover", true);
+            var button = new Button { Name = "PrimaryHovered", Content = "+ Add Manuscript", Classes = { "primary" } };
             var window = new Window { Width = 300, Height = 120, Content = button };
             window.Show();
             try
             {
                 Dispatcher.UIThread.RunJobs();
-                pseudo.Set(":pressed", true);
-                return Faults(window, ThemeCase.Light.Name, s_pressed.Where(specimen => specimen.Name == "PrimaryPressed"));
+                StateSpecimen[] hovered = [.. s_others.Where(specimen => specimen.Name == "PrimaryHovered")];
+                using var watch = new EasingWatch(["PrimaryHovered"]);
+                ((IPseudoClasses)button.Classes).Set(":pointerover", true);
+                bool done = BoardWindow.WaitFor(() => Faults(window, ThemeCase.Light.Name, hovered).Count == 0, TimeSpan.FromSeconds(10));
+                return (watch.Eased.ToList(), Faults(window, ThemeCase.Light.Name, hovered), done);
             }
             finally
             {
@@ -200,23 +230,22 @@ public sealed partial class GalleryStateTests
             }
         });
 
+        Assert.IsTrue(ended, "The hover's easing did not end within ten seconds:" + Environment.NewLine + string.Join(Environment.NewLine, faults));
+        Assert.IsEmpty(faults, "Once the easing has ended, a read of the brush finds nothing.");
         CollectionAssert.AreEqual(
-            new[]
-            {
-                "Light: PrimaryPressed's PART_ContentPresenter holds a brush of no token (#FF0E6A63) in Background, not AccentPressedBrush (#FF0C5E58).",
-            },
-            faults,
-            "The check names the easing brush:" + Environment.NewLine + string.Join(Environment.NewLine, faults));
+            new[] { "PrimaryHovered's ContentPresenter.Background" },
+            eased,
+            "The watch names the easing that has ended:" + Environment.NewLine + string.Join(Environment.NewLine, eased));
     }
 
-    private void AssertStates(IReadOnlyList<StateSpecimen> specimens, bool settle = true)
+    private void AssertStates(IReadOnlyList<StateSpecimen> specimens)
     {
         var faults = new List<string>();
         foreach (ThemeCase themeCase in ThemeCase.All)
         {
             faults.AddRange(Headless.Run(() =>
             {
-                Window window = ShowGallery(themeCase, settle);
+                Window window = ShowGallery(themeCase);
                 try
                 {
                     return Faults(window, themeCase.Name, specimens);
@@ -229,15 +258,13 @@ public sealed partial class GalleryStateTests
         }
 
         Assert.IsEmpty(faults, "State specimens that do not show their state:" + Environment.NewLine + string.Join(Environment.NewLine, faults));
-        TestContext.WriteLine($"{specimens.Count} specimens show their states in {ThemeCase.All.Count} theme cases{(settle ? "" : ", read at once")}.");
+        TestContext.WriteLine($"{specimens.Count} specimens show their states in {ThemeCase.All.Count} theme cases.");
     }
 
     // Shows the gallery as the sweeps do (Sweep.Read), in the theme case, and
-    // lets it settle as Pictures.Save does before the picture is taken; or,
-    // with settle off, runs only the jobs that showing it left (the focus
-    // ring is made by one): no frame is drawn and no time is waited for.
+    // lets it settle as Pictures.Save does before the picture is taken.
     // Call inside Headless.Run.
-    private static Window ShowGallery(ThemeCase themeCase, bool settle = true)
+    private static Window ShowGallery(ThemeCase themeCase)
     {
         SweepSubject subject = Sweep.Subjects.Single(candidate => candidate.Name == "Styles/Gallery");
         themeCase.Apply(Application.Current!);
@@ -247,21 +274,13 @@ public sealed partial class GalleryStateTests
         window.Show();
         Dispatcher.UIThread.RunJobs();
         subject.Shown?.Invoke(view);
-        if (settle)
-        {
-            Settle(window);
-        }
-        else
-        {
-            Dispatcher.UIThread.RunJobs();
-        }
-
+        Settle(window);
         return window;
     }
 
     // As Pictures.Save settles a window before its picture: jobs run and
-    // frames are drawn. The ticks do not finish a transition (it runs on the
-    // real clock), which is why the specimens are also read at once.
+    // frames are drawn. That cannot be relied on to finish a transition,
+    // which is why no specimen may ease at all.
     private static void Settle(Window window)
     {
         Dispatcher.UIThread.RunJobs();
@@ -343,4 +362,65 @@ public sealed partial class GalleryStateTests
     // that shows the state (a template part's name, Itself or FocusRing), and
     // the property of that part that must hold the token's brush.
     private sealed record StateSpecimen(string Name, string State, string Part, AvaloniaProperty Property, string Token);
+
+    // Records, from its making until it is disposed, every value a transition
+    // writes to a brush of a control named in the set or of one of its
+    // template parts: a change at animation priority. An easing writes its
+    // first value the moment the state changes, so what the watch has seen
+    // does not depend on how long anything takes afterwards, nor on whether
+    // the easing is still running when someone looks.
+    private sealed class EasingWatch : IObserver<AvaloniaPropertyChangedEventArgs>, IDisposable
+    {
+        // The brushes the rows read, and with them every brush the styles
+        // ease (a background or a border).
+        private static readonly AvaloniaProperty[] s_brushes =
+        [
+            .. s_pressed.Concat(s_others).Select(specimen => specimen.Property)
+                .Concat([ContentPresenter.BackgroundProperty, Border.BackgroundProperty, Border.BorderBrushProperty])
+                .Distinct(),
+        ];
+
+        private readonly HashSet<string> _names;
+        private readonly List<IDisposable> _subscriptions;
+        private readonly List<string> _eased = [];
+
+        public EasingWatch(IEnumerable<string> names)
+        {
+            _names = [.. names];
+            _subscriptions = [.. s_brushes.Select(property => property.Changed.Subscribe(this))];
+        }
+
+        // What eased, one line per specimen part and property.
+        public IReadOnlyList<string> Eased => [.. _eased.Distinct()];
+
+        public void OnNext(AvaloniaPropertyChangedEventArgs value)
+        {
+            if (value.Priority == BindingPriority.Animation && value.Sender is Control control && Specimen(control) is { } specimen)
+            {
+                _eased.Add($"{specimen}'s {control.GetType().Name}.{value.Property.Name}");
+            }
+        }
+
+        public void OnCompleted()
+        {
+        }
+
+        public void OnError(Exception error)
+        {
+        }
+
+        public void Dispose()
+        {
+            foreach (IDisposable subscription in _subscriptions)
+            {
+                subscription.Dispose();
+            }
+        }
+
+        // The specimen a control is, or is a template part of.
+        private string? Specimen(Control control) =>
+            control.Name is { } own && _names.Contains(own) ? own
+            : control.TemplatedParent is Control { Name: { } parent } && _names.Contains(parent) ? parent
+            : null;
+    }
 }
