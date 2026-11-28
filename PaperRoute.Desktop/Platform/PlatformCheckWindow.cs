@@ -3,6 +3,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Platform;
 using PaperRoute.Desktop.Measurement;
+using PaperRoute.Desktop.Styles;
 using PaperRoute.ViewModels;
 using PaperRoute.ViewModels.Platform;
 using PaperRoute.ViewModels.Session;
@@ -152,11 +153,11 @@ public sealed class PlatformCheckWindow
     }
 
     // The window's render scaling and what Avalonia reports of the system's
-    // theme (PlatformSettings.GetColorValues).
+    // theme, as AppTheme, the one reader of it, hands it on.
     public static PlatformFacts FactsFor(Window window, Func<string, string?> environment)
     {
         ArgumentNullException.ThrowIfNull(window);
-        PlatformColorValues? colors = Application.Current?.PlatformSettings?.GetColorValues();
+        PlatformColorValues? colors = AppTheme.SystemColorValues(Application.Current);
         return Stamped(PlatformFacts.Read(
             environment,
             window.RenderScaling,
