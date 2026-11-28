@@ -5,7 +5,10 @@
 # declared Friend, Protected Friend or Private Protected.
 #
 # One line per item, sorted (ordinal), "<documentation ID>;<declaration>;<fate> (#<issue>)":
-#   declaration   PaperRoute.Core/<path>.vb:<line>, the line that declares the item Friend.
+#   declaration   PaperRoute.Core/<path>.vb:<line>, the line that declares the item. For an item declared Friend, Protected Friend
+#                 or Private Protected, that line holds the word and the item's name (an accessor's may be its own Friend Get or
+#                 Friend Set line). For a member that is Friend only because its type is not public, it holds the member's name
+#                 (for a constructor the compiler adds, the line that declares its type).
 #   fate          make Public: the issue makes it Public in the core.
 #                 behind the session: the issue moves the call behind a Public member, and the item stays Friend.
 #                 trial-only: goes with --<mode>: the call belongs to a trial mode, and goes when the issue removes that mode.

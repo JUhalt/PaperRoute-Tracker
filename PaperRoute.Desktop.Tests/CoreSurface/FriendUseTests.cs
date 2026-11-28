@@ -81,28 +81,9 @@ public sealed partial class FriendUseTests
                     "\"trial-only: goes with --<mode>\", followed by \" (#<issue>)\".");
             }
 
-            Match declaration = Declaration().Match(line.Fields[1]);
-            if (!declaration.Success)
+            if (DeclarationProblem(root, line.Id, line.Fields[1]) is { } problem)
             {
-                problems.Add($"{where}: the declaration \"{line.Fields[1]}\" is not \"PaperRoute.Core/<path>.vb:<line>\".");
-                continue;
-            }
-
-            string file = Path.Combine(root, declaration.Groups[1].Value.Replace('/', Path.DirectorySeparatorChar));
-            if (!File.Exists(file))
-            {
-                problems.Add($"{where}: {declaration.Groups[1].Value} does not exist.");
-                continue;
-            }
-
-            string[] source = File.ReadAllLines(file);
-            int number = int.Parse(declaration.Groups[2].Value, System.Globalization.CultureInfo.InvariantCulture);
-            string declared = number <= source.Length ? source[number - 1] : string.Empty;
-            string name = DeclaredName(line.Id);
-            if (!FriendWord().IsMatch(declared) ||
-                !declared.Contains(name, StringComparison.Ordinal))
-            {
-                problems.Add($"{where}: {line.Fields[1]} does not declare a Friend \"{name}\"; it reads \"{declared.Trim()}\".");
+                problems.Add($"{where}: {problem}");
             }
         }
 
@@ -130,6 +111,131 @@ public sealed partial class FriendUseTests
         Assert.AreEqual(FourParameterRepository, constructors[0]);
     }
 
+    // The declaration rule follows the reader's two kinds of Friend item: one
+    // declared Friend (or Protected Friend, or Private Protected), whose line
+    // holds that word, and a member that is Friend only because its type is,
+    // whose line holds no such word. Each row points at a real line of the
+    // core, found by its text so the rows do not hold line numbers.
+    [TestMethod]
+    // A Public property of a Friend class, at its own line.
+    [DataRow("M:ManuscriptPipeline.Services.AssistantTestResult.get_Message",
+        "PaperRoute.Core/Services/AssistantProviders.vb", "Public Property Message As String", true)]
+    // The constructor the compiler adds to a Friend class, at the class's line.
+    [DataRow("M:ManuscriptPipeline.Services.AssistantTrial.#ctor",
+        "PaperRoute.Core/Services/OnlineAccess.vb", "Friend NotInheritable Class AssistantTrial", true)]
+    // A Friend accessor of a Public property, at its own Friend Set line.
+    [DataRow("M:ManuscriptPipeline.Services.PacketExportRow.set_SizeBytes(System.Nullable{System.Int64})",
+        "PaperRoute.Core/Services/PacketExportService.vb", "Friend Set(value As Long?)", true)]
+    // A Friend constructor, at a line that declares it Friend.
+    [DataRow(FourParameterRepository,
+        "PaperRoute.Core/Services/ManuscriptRepository.vb", "Friend Sub New(", true)]
+    // A Friend constructor, at the Public constructor's line.
+    [DataRow(FourParameterRepository,
+        "PaperRoute.Core/Services/ManuscriptRepository.vb", "Public Sub New()", false)]
+    // A Public property of a Friend class, at another property's line.
+    [DataRow("M:ManuscriptPipeline.Services.AssistantTestResult.get_Message",
+        "PaperRoute.Core/Services/AssistantProviders.vb", "Public Property Succeeded As Boolean", false)]
+    public void TheDeclarationRuleFollowsTheReadersTwoKindsOfFriendItem(string id, string file, string text, bool passes)
+    {
+        string root = RepositoryRoot();
+        string[] source = File.ReadAllLines(Path.Combine(root, file.Replace('/', Path.DirectorySeparatorChar)));
+        int index = Array.FindIndex(source, line => line.Trim().StartsWith(text, StringComparison.Ordinal));
+        Assert.IsGreaterThanOrEqualTo(0, index, $"{file} has no line starting \"{text}\".");
+
+        string? problem = DeclarationProblem(root, id, $"{file}:{index + 1}");
+        if (passes)
+        {
+            Assert.IsNull(problem, $"{id} at \"{text}\" should pass; it gave: {problem}");
+        }
+        else
+        {
+            Assert.IsNotNull(problem, $"{id} at \"{text}\" should fail; it passed.");
+        }
+    }
+
+    // What is wrong with a line's declaration field, or null if nothing is.
+    // An item declared Friend: its line holds Friend (or Private Protected)
+    // and its name, or for an accessor its Get, Set, AddHandler or
+    // RemoveHandler keyword ("Friend Set(value As String)"). A member that is
+    // Friend only through its type: its line holds its name; a constructor's
+    // may be the line that declares its type, as the compiler adds one to a
+    // class without Sub New.
+    private static string? DeclarationProblem(string root, string id, string field)
+    {
+        FriendKind? kind = FriendUseReader.Classify(id);
+        if (kind is null or FriendKind.Public)
+        {
+            return $"{id} is not a Friend item of the loaded core.";
+        }
+
+        Match declaration = Declaration().Match(field);
+        if (!declaration.Success)
+        {
+            return $"the declaration \"{field}\" is not \"PaperRoute.Core/<path>.vb:<line>\".";
+        }
+
+        string file = Path.Combine(root, declaration.Groups[1].Value.Replace('/', Path.DirectorySeparatorChar));
+        if (!File.Exists(file))
+        {
+            return $"{declaration.Groups[1].Value} does not exist.";
+        }
+
+        string[] source = File.ReadAllLines(file);
+        int number = int.Parse(declaration.Groups[2].Value, System.Globalization.CultureInfo.InvariantCulture);
+        string declared = number <= source.Length ? source[number - 1] : string.Empty;
+        string name = DeclaredName(id);
+        bool named = declared.Contains(name, StringComparison.Ordinal);
+        if (kind == FriendKind.Declared)
+        {
+            named = named || (AccessorKeyword(id) is { } keyword &&
+                Regex.IsMatch(declared, $@"\b{keyword}\b", RegexOptions.None, TimeSpan.FromSeconds(1)));
+            return FriendWord().IsMatch(declared) && named
+                ? null
+                : $"{field} does not declare \"{name}\" Friend (the line must hold Friend or Private Protected and the name); " +
+                  $"it reads \"{declared.Trim()}\".";
+        }
+
+        if (!named && name == "Sub New")
+        {
+            named = Regex.IsMatch(declared, $@"\b(Class|Structure)\s+{Regex.Escape(TypeOf(id))}\b", RegexOptions.None, TimeSpan.FromSeconds(1));
+        }
+
+        return named
+            ? null
+            : $"{field} does not declare \"{name}\", which is Friend because its type is not Public " +
+              $"(the line must hold the name; a constructor the compiler adds, its type's declaration); it reads \"{declared.Trim()}\".";
+    }
+
+    // An accessor's keyword in VB ("Set" for set_Name), or null for other members.
+    private static string? AccessorKeyword(string id)
+    {
+        string name = MemberName(id);
+        return name.StartsWith("get_", StringComparison.Ordinal) ? "Get"
+            : name.StartsWith("set_", StringComparison.Ordinal) ? "Set"
+            : name.StartsWith("add_", StringComparison.Ordinal) ? "AddHandler"
+            : name.StartsWith("remove_", StringComparison.Ordinal) ? "RemoveHandler"
+            : null;
+    }
+
+    // The simple name of the type that declares a member, generic arity dropped.
+    private static string TypeOf(string id)
+    {
+        int open = id.IndexOf('(', StringComparison.Ordinal);
+        string head = open < 0 ? id : id[..open];
+        head = head[..head.LastIndexOf('.')];
+        string type = head[(head.LastIndexOf('.') + 1)..];
+        int tick = type.IndexOf('`', StringComparison.Ordinal);
+        return tick < 0 ? type : type[..tick];
+    }
+
+    // The last segment of an ID before its parameters ("set_Name", "#ctor").
+    private static string MemberName(string id)
+    {
+        int open = id.IndexOf('(', StringComparison.Ordinal);
+        string head = open < 0 ? id : id[..open];
+        return head[(head.LastIndexOf('.') + 1)..];
+    }
+
     // The interface's two assemblies as built, found from their own loaded types.
     private static string[] InterfaceAssemblies() =>
     [
@@ -141,9 +247,7 @@ public sealed partial class FriendUseTests
     // property's name for an accessor, else the type's or member's own name.
     private static string DeclaredName(string id)
     {
-        int open = id.IndexOf('(', StringComparison.Ordinal);
-        string head = open < 0 ? id : id[..open];
-        string name = head[(head.LastIndexOf('.') + 1)..];
+        string name = MemberName(id);
         if (name == "#ctor")
         {
             return "Sub New";
@@ -205,7 +309,7 @@ public sealed partial class FriendUseTests
     [GeneratedRegex(@"^(make Public|behind the session|trial-only: goes with --[a-z][a-z-]*) \(#[1-9][0-9]*\)$")]
     private static partial Regex Fate();
 
-    [GeneratedRegex(@"\bFriend\b")]
+    [GeneratedRegex(@"\bFriend\b|\bPrivate\s+Protected\b")]
     private static partial Regex FriendWord();
 
     private sealed record ListedUse(int Number, string Id, string[] Fields);
@@ -214,6 +318,17 @@ public sealed partial class FriendUseTests
 // What FriendUseReader found: each Friend use with the assemblies that make
 // it, and the references the loaded core could not resolve.
 internal sealed record FriendUses(SortedDictionary<string, SortedSet<string>> Uses, IReadOnlyList<string> Unresolved);
+
+// Public: needs no grant. Declared: the item's own access is Friend,
+// Protected Friend or Private Protected. ThroughItsType: the item is itself
+// Public (or Protected) but sits in a type that is not public, so its
+// declaration holds no such word.
+internal enum FriendKind
+{
+    Public,
+    Declared,
+    ThroughItsType,
+}
 
 // Reads assemblies' references into the core with CoreReferenceReader (from
 // metadata, as compiled), resolves each in the loaded core by reflection and
@@ -240,12 +355,12 @@ internal static class FriendUseReader
             string assembly = Path.GetFileNameWithoutExtension(path);
             foreach (CoreReference reference in CoreReferenceReader.Read(path, coreName))
             {
-                bool? friend = IsFriend(reference.Id);
-                if (friend is null)
+                FriendKind? kind = Classify(reference.Id);
+                if (kind is null)
                 {
                     unresolved.Add(reference.Id);
                 }
-                else if (friend.Value)
+                else if (kind != FriendKind.Public)
                 {
                     if (!uses.TryGetValue(reference.Id, out SortedSet<string>? users))
                     {
@@ -261,14 +376,26 @@ internal static class FriendUseReader
         return new FriendUses(uses, [.. unresolved]);
     }
 
-    // True for a Friend item, false for a public one, null when the loaded
+    // Which kind of item the ID names in the loaded core, or null when the
     // core has no such type or member.
-    private static bool? IsFriend(string id)
+    public static FriendKind? Classify(string id)
     {
         if (id.StartsWith("T:", StringComparison.Ordinal))
         {
             Type? type = ResolveType(id[2..]);
-            return type is null ? null : !type.IsVisible;
+            if (type is null)
+            {
+                return null;
+            }
+
+            if (type.IsVisible)
+            {
+                return FriendKind.Public;
+            }
+
+            return type.IsNotPublic || type.IsNestedAssembly || type.IsNestedFamORAssem || type.IsNestedFamANDAssem
+                ? FriendKind.Declared
+                : FriendKind.ThroughItsType;
         }
 
         int open = id.IndexOf('(', StringComparison.Ordinal);
@@ -294,12 +421,18 @@ internal static class FriendUseReader
             return null;
         }
 
-        return !parent.IsVisible || !member.DeclaringType!.IsVisible || member switch
+        bool declared = member switch
         {
             FieldInfo field => field.IsAssembly || field.IsFamilyOrAssembly || field.IsFamilyAndAssembly,
             MethodBase method => method.IsAssembly || method.IsFamilyOrAssembly || method.IsFamilyAndAssembly,
             _ => false,
         };
+        if (declared)
+        {
+            return FriendKind.Declared;
+        }
+
+        return !parent.IsVisible || !member.DeclaringType!.IsVisible ? FriendKind.ThroughItsType : FriendKind.Public;
     }
 
     // A documentation name ("Ns.Outer.Inner", generic arity included) to the
