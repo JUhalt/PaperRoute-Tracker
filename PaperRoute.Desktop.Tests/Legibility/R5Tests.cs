@@ -88,13 +88,14 @@ public sealed class R5Tests : StorageCheckedTests
             "The entry that covers nothing, and only it, is reported.");
     }
 
-    // What R5 reports today on every subject, listed failures included
+    // What R5 reports today on every subject the sweep shows, or on the
+    // subjects given, listed failures included
     // (KnownFailuresTests.KnownFailuresAreCurrent), with no measurement file
     // written (the sweep's pictures are saved again).
-    internal static IReadOnlyList<Finding> CurrentFindings(TestContext context)
+    internal static IReadOnlyList<Finding> CurrentFindings(TestContext context, IReadOnlyList<SweepSubject>? subjects = null)
     {
         var parts = new List<PaintedPart>();
-        foreach (SweepSubject subject in Sweep.Subjects)
+        foreach (SweepSubject subject in subjects ?? Sweep.Subjects)
         {
             parts.AddRange(Sweep.Read(subject, ThemeCase.Dark, context).Parts);
         }

@@ -30,7 +30,7 @@ public sealed partial class KnownFailuresTests : StorageCheckedTests
         ["R1"] = new(_ => R1Tests.Variants.SelectMany(variant => Rules.R1(variant, TokenFile.Colors(variant), TokenPairs.All)).ToList(), _ => true),
         ["R2"] = new(_ => R2Tests.CurrentFindings(R2Tests.Inputs.Real), entry => R2Tests.Judges(R2Tests.RealThemeFolder, entry)),
         ["R3"] = new(_ => R3Tests.CurrentFindings(RouteKinds.All), _ => true),
-        ["R5"] = new(R5Tests.CurrentFindings, _ => true),
+        ["R5"] = new(context => R5Tests.CurrentFindings(context), _ => true),
     };
 
     public TestContext TestContext { get; set; } = null!;
@@ -143,14 +143,18 @@ public sealed partial class KnownFailuresTests : StorageCheckedTests
 
         // R5 is judged by re-running its sweep over the real surfaces (so this
         // test opens the example library): an entry for a part the sweep does
-        // not report is stale. This shows that R5 has a check here and that
-        // its re-run runs; unlike R2 and R3 above, R5 has no spoiled input
-        // here yet that would show the re-run reporting an entry.
+        // not report is stale. Its re-run over the teeth gallery's light panel
+        // (R5_FindsALightPanelInDark's input) must report that panel, so an
+        // entry for it is current there: the re-run reports what it finds.
         KnownFailure r5Stale = Entry("R5\tPage/Board: no such part\tDark\t#1\ta light part that is not there");
         Assert.AreEqual(
             "Line 10: R5, Page/Board: no such part, Dark is stale: R5 no longer reports it.",
             string.Join(Environment.NewLine, Problems([r5Stale], 1, CurrentFindings([r5Stale], TestContext))),
             "An R5 entry for a part the sweep does not report.");
+        IReadOnlyList<Finding> r5Findings = R5Tests.CurrentFindings(TestContext, [TeethGallery.LightPanel]);
+        KnownFailure r5Current = Entry("R5\tTeeth/LightPanel: Border#LightPanel\tDark\t#1\ta light panel in Dark");
+        List<string> r5Problems = Problems([r5Current], 1, r5Findings);
+        Assert.IsEmpty(r5Problems, "R5 reports its entry on the light panel:" + Environment.NewLine + string.Join(Environment.NewLine, r5Problems));
 
         KnownFailure noCheck = Entry("R8\tthe card\tDark\t#1\ta faint disabled caption");
         Assert.AreEqual(
