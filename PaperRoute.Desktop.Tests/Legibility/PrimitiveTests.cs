@@ -22,27 +22,36 @@ public sealed class PrimitiveTests
     private static readonly PixelRect s_swatch = new(0, 0, Side, Side);
 
     // The strongest pixel against the background is the darkest one inside
-    // the rectangle on white; fails if a pixel outside the rectangle counts
-    // (three black ones lie just outside), or if any other pixel is taken.
+    // the rectangle on white. The darkest sits on a corner, once the last
+    // and once the first, so a reading that drops an edge row or column
+    // fails; so does one that counts a pixel outside the rectangle (black
+    // ones lie just outside both corners and three sides), or takes any
+    // other pixel.
     [TestMethod]
-    public void StrongestContrastFindsTheDarkestPixel()
+    [DataRow(7, 5)]
+    [DataRow(2, 2)]
+    public void StrongestContrastFindsTheDarkestPixel(int darkestX, int darkestY)
     {
         Color darkest = Color.FromRgb(0x33, 0x33, 0x33);
         var area = new PixelRect(2, 2, 6, 4);
         FramePixels frame = new CodeBitmap(12, 8, s_white)
             .Set(3, 3, Color.FromRgb(0x99, 0x99, 0x99))
-            .Set(5, 3, darkest)
+            .Set(darkestX, darkestY, darkest)
             .Set(4, 5, Color.FromRgb(0x66, 0x66, 0x66))
             .Set(1, 3, s_black)
             .Set(8, 3, s_black)
             .Set(4, 1, s_black)
+            .Set(8, 5, s_black)
+            .Set(7, 6, s_black)
+            .Set(1, 2, s_black)
+            .Set(2, 1, s_black)
             .Frame();
 
         Assert.AreEqual(Contrast.ContrastRatio(darkest, s_white), frame.StrongestContrast(area, s_white),
             "On white, the #333333 pixel is the strongest inside the rectangle; the black pixels lie outside it.");
         Assert.AreEqual(Contrast.ContrastRatio(s_white, s_black), frame.StrongestContrast(area, s_black),
             "On black, the white pixels are the strongest: contrast against the background, not darkness.");
-        Assert.AreEqual(1.0, frame.StrongestContrast(new PixelRect(8, 4, 4, 4), s_white),
+        Assert.AreEqual(1.0, frame.StrongestContrast(new PixelRect(9, 4, 3, 4), s_white),
             "A rectangle of background only has no contrast.");
     }
 
