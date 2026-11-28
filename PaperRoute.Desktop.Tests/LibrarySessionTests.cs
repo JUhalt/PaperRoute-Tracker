@@ -393,6 +393,52 @@ public sealed class LibrarySessionTests
         Assert.IsFalse(held.Session.WaitForWork(), "Nothing runs after the load.");
     }
 
+    // The held save is written on the interface thread (critic S3), not on
+    // the load's worker. Under an interface thread the test drives, the worker
+    // ends and nothing is written until the test runs what was posted to that
+    // thread; the write is done by the time those callbacks return.
+    [TestMethod]
+    public async Task AHeldSettingsSaveIsWrittenOnTheCallersContext()
+    {
+        string settingsFile = Path.Combine(_root, "settings.json");
+        var ui = new QueuedContext();
+        using var held = new HeldLoad(_root);
+        (Task<bool> load, Task<bool> save) = ui.Enter(() => (held.StartLoad(), held.Session.SaveSettingsAsync()));
+
+        held.Release();
+        held.Session.WaitForWork();
+        Assert.IsFalse(File.Exists(settingsFile), "The held save was written before the interface thread ran: it ran on another thread.");
+        Assert.IsFalse(save.IsCompleted, "The held save finished before the interface thread ran.");
+
+        Assert.IsGreaterThan(0, ui.RunPosted(TimeSpan.FromSeconds(30)), "The load posted nothing to the interface thread.");
+        Assert.IsTrue(save.IsCompleted, "The held save was not done when the interface thread's callbacks returned: it ran on another thread.");
+        Assert.IsTrue(File.Exists(settingsFile), "The held save wrote no settings.json on the interface thread.");
+        Assert.IsTrue(await save);
+        Assert.IsTrue(await load);
+    }
+
+    // The shutdown wait on the interface thread (shell design 2.5, B5's
+    // close path): it waits on the worker, never on the publish posted to the
+    // interface thread, so it returns while that thread runs nothing.
+    [TestMethod]
+    public async Task WaitForWorkReturnsWhileTheInterfaceThreadIsBlocked()
+    {
+        var ui = new QueuedContext();
+        using var held = new HeldLoad(_root);
+        Task<bool> load = ui.Enter(held.StartLoad);
+        Task<bool> waiting = Task.Run(held.Session.WaitForWork);
+        Assert.IsFalse(waiting.Wait(TimeSpan.FromMilliseconds(300)), "WaitForWork returned while the worker was still held.");
+
+        held.Release();
+        Assert.IsTrue(waiting.Wait(TimeSpan.FromSeconds(30)),
+            "WaitForWork did not return while the interface thread ran nothing: it waits for the publish, and would deadlock the shutdown path.");
+        Assert.IsTrue(waiting.Result, "WaitForWork waited for a running worker.");
+        Assert.IsFalse(load.IsCompleted, "The load publishes on the interface thread only.");
+
+        Assert.IsGreaterThan(0, ui.RunPosted(TimeSpan.FromSeconds(30)), "The load posted nothing to the interface thread.");
+        Assert.IsTrue(await load);
+    }
+
     // The window binds its notice to the shell (compiled binding, x:DataType).
     [TestMethod]
     public void TheWindowShowsTheShellsNotice()
@@ -490,6 +536,79 @@ public sealed class LibrarySessionTests
         {
             _gate.Set();
             Session.Dispose();
+        }
+    }
+
+    // An interface thread the test drives: what is posted to it waits in a
+    // queue until the test runs it on its own thread, so a test can tell work
+    // done on the caller's context from work done on a worker.
+    private sealed class QueuedContext : SynchronizationContext
+    {
+        private readonly Queue<(SendOrPostCallback Callback, object? State)> _posted = new();
+
+        private int Pending
+        {
+            get
+            {
+                lock (_posted)
+                {
+                    return _posted.Count;
+                }
+            }
+        }
+
+        public override void Post(SendOrPostCallback d, object? state)
+        {
+            lock (_posted)
+            {
+                _posted.Enqueue((d, state));
+            }
+        }
+
+        public override SynchronizationContext CreateCopy() => this;
+
+        // Runs start with this as the current context, as on the interface
+        // thread, so the awaits it begins come back here.
+        public T Enter<T>(Func<T> start)
+        {
+            SynchronizationContext? previous = Current;
+            SetSynchronizationContext(this);
+            try
+            {
+                return start();
+            }
+            finally
+            {
+                SetSynchronizationContext(previous);
+            }
+        }
+
+        // Waits for a first post, then runs on this thread the callbacks
+        // queued at that moment (not those they post) and returns how many.
+        public int RunPosted(TimeSpan wait)
+        {
+            if (!SpinWait.SpinUntil(() => Pending > 0, wait))
+            {
+                return 0;
+            }
+
+            int count = Pending;
+            for (int i = 0; i < count; i++)
+            {
+                (SendOrPostCallback callback, object? state) next;
+                lock (_posted)
+                {
+                    next = _posted.Dequeue();
+                }
+
+                Enter(() =>
+                {
+                    next.callback(next.state);
+                    return 0;
+                });
+            }
+
+            return count;
         }
     }
 }
