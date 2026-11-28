@@ -19,8 +19,8 @@ namespace PaperRoute.ViewModels.Recovery;
 // read; 1.0.x sees only the main slot.
 //
 // The rules (each tested by RecoveryDraftsTests):
-// 1. Nothing is offered until a page can open a draft (OpenWith), and
-//    nothing is deleted that this session does not own.
+// 1. Nothing is offered, and nothing can be discarded, until a page can open
+//    a draft (OpenWith); nothing is deleted that this session does not own.
 // 2. A write goes to this session's opened or written draft of that
 //    manuscript, else to the main slot when it is empty or holds this
 //    session's opened or written draft, else to the manuscript's first free
@@ -197,12 +197,13 @@ public sealed class RecoveryDrafts : IRecoveryDrafts
 
     // Discard on an offer: the manuscript's newest waiting draft is no longer
     // offered, and its file stays until PaperRoute closes (rule 8). False
-    // when nothing was waiting.
+    // when nothing was waiting, or before a page can open a draft, when
+    // nothing is offered (rule 1: a close would otherwise delete it).
     public bool Discard(Guid manuscriptId)
     {
         lock (_gate)
         {
-            if (NewestPending(manuscriptId) is not { } kept)
+            if (_open is null || NewestPending(manuscriptId) is not { } kept)
             {
                 return false;
             }

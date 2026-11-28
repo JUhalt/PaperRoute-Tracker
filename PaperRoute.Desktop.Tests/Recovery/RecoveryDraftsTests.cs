@@ -68,7 +68,8 @@ public sealed partial class RecoveryDraftsTests
     }
 
     // Rule 1: until a page can open a draft, a 1.0.x draft is not offered,
-    // and neither a normal close nor a shutdown with nothing unsaved touches it.
+    // cannot be discarded, and neither a normal close nor a shutdown with
+    // nothing unsaved touches it.
     [TestMethod]
     public void NoPageNoOfferAndNoDelete()
     {
@@ -77,6 +78,7 @@ public sealed partial class RecoveryDraftsTests
         drafts.ReadAtStart([s_v100]);
 
         Assert.IsEmpty(drafts.Offers, "A draft was offered before any page could open it.");
+        Assert.IsFalse(drafts.Discard(s_v100), "A draft was discarded before any page could open it, so the close would delete it.");
         Assert.IsFalse(drafts.WriteFrom(new TestDraftPage(s_v100, "Unchanged", s_second) { NothingUnsaved = true }, RecoveryReasons.Shutdown),
             "A shutdown with nothing unsaved wrote a draft.");
         drafts.DeleteThisSessionsDraft();
