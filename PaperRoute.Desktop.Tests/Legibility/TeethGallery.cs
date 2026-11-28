@@ -12,11 +12,16 @@ namespace PaperRoute.Desktop.Tests.Legibility;
 // Limits of headless: HeadlessLimits.md
 internal static class TeethGallery
 {
-    // R5's bad input: on the page's own background, a panel filled with
-    // #E0E0E0 (relative luminance 0.745), with no children, so both its
-    // brush and its own pixels are light.
-    public static SweepSubject LightPanel { get; } = new("Teeth/LightPanel", null, 400, 200, _ =>
+    // R5's bad input: on the page's own background, two panels with no
+    // children, both drawn in #E0E0E0 (relative luminance 0.745). The first
+    // is filled with that solid colour, so both its brush and its own pixels
+    // are light. The second is filled with a gradient whose two stops are
+    // that colour: not one solid colour, so its brush names nothing, and only
+    // the reading of its own pixels can find it (as it must find a template
+    // part or an opacity).
+    public static SweepSubject LightPanel { get; } = new("Teeth/LightPanel", null, 400, 260, _ =>
     {
+        Color light = Color.FromRgb(0xE0, 0xE0, 0xE0);
         var page = new StackPanel { Margin = new Thickness(20), Spacing = 12 };
         page.Children.Add(Text("A light panel in Dark", "PrimaryTextBrush"));
         page.Children.Add(new Border
@@ -25,7 +30,15 @@ internal static class TeethGallery
             Width = 160,
             Height = 60,
             HorizontalAlignment = HorizontalAlignment.Left,
-            Background = new SolidColorBrush(Color.FromRgb(0xE0, 0xE0, 0xE0)),
+            Background = new SolidColorBrush(light),
+        });
+        page.Children.Add(new Border
+        {
+            Name = "LightGradient",
+            Width = 160,
+            Height = 60,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Background = new LinearGradientBrush { GradientStops = { new GradientStop(light, 0), new GradientStop(light, 1) } },
         });
         return page;
     });

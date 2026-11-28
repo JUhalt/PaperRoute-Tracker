@@ -40,9 +40,11 @@ public sealed class R5Tests : StorageCheckedTests
         Assert.IsEmpty(findings, "R5, light parts in Dark:" + Environment.NewLine + string.Join(Environment.NewLine, findings));
     }
 
-    // The rule's teeth: a panel filled with #E0E0E0 (luminance 0.745) on the
-    // Dark page must be named by both readings, its brush and its own
-    // pixels, and nothing else on the page may be named.
+    // The rule's teeth: on the Dark page, a panel filled with #E0E0E0
+    // (luminance 0.745) must be named by both readings, its brush and its own
+    // pixels; a panel drawn in the same colour by a gradient, which no brush
+    // reading can name, must be named by its own pixels alone; and nothing
+    // else on the page may be named.
     [TestMethod]
     public void R5_FindsALightPanelInDark()
     {
@@ -53,28 +55,32 @@ public sealed class R5Tests : StorageCheckedTests
             TestContext.WriteLine(finding.Line);
         }
 
-        Assert.HasCount(2, findings, "Both readings of the light panel, and nothing else:" + Environment.NewLine + string.Join(Environment.NewLine, findings));
-        Assert.IsTrue(findings.All(finding => finding.Subject == "Teeth/LightPanel: Border#LightPanel"), "Only the light panel is named.");
+        Assert.HasCount(3, findings, "Both readings of the solid panel, the own pixels of the gradient panel, and nothing else:" + Environment.NewLine + string.Join(Environment.NewLine, findings));
+        CollectionAssert.IsSubsetOf(
+            findings.Select(finding => finding.Subject).Distinct().ToList(),
+            new[] { "Teeth/LightPanel: Border#LightPanel", "Teeth/LightPanel: Border#LightGradient" },
+            "Only the two light panels are named.");
         CollectionAssert.AreEquivalent(
             new[]
             {
                 "Dark: Teeth/LightPanel: Border#LightPanel paints by its brush #E0E0E0, luminance 0.745, above 0.6",
                 "Dark: Teeth/LightPanel: Border#LightPanel shows in its own pixels #E0E0E0, luminance 0.745, above 0.6",
+                "Dark: Teeth/LightPanel: Border#LightGradient shows in its own pixels #E0E0E0, luminance 0.745, above 0.6",
             },
             findings.Select(finding => finding.Line).ToArray());
     }
 
     // The allow-list's teeth: an entry that covers no part fails as stale,
-    // while an entry that covers the light panel takes it out of the run
+    // while an entry that covers the light panels takes them out of the run
     // and is not stale.
     [TestMethod]
     public void R5_AStaleAllowListEntryFails()
     {
         SweepFrame read = Sweep.Read(TeethGallery.LightPanel, ThemeCase.Dark, TestContext);
-        var covering = new R5Allowance("the teeth's light panel", "a test of the allow-list", "(none)", part => part.Part == "Border#LightPanel");
+        var covering = new R5Allowance("the teeth's light panels", "a test of the allow-list", "(none)", part => part.Part is "Border#LightPanel" or "Border#LightGradient");
         var stale = new R5Allowance("a panel no surface has", "a test of the allow-list", "(none)", part => part.Part == "Border#NoSuchPanel");
 
-        Assert.IsEmpty(Rules.R5(ThemeCase.Dark.Name, read.Parts, [covering]), "An entry that covers the light panel takes it out of the run.");
+        Assert.IsEmpty(Rules.R5(ThemeCase.Dark.Name, read.Parts, [covering]), "An entry that covers the light panels takes them out of the run.");
         IReadOnlyList<Finding> findings = Rules.R5(ThemeCase.Dark.Name, read.Parts, [covering, stale]);
         Assert.AreEqual(
             "Dark: the R5 allow-list entry \"a panel no surface has\" covers no part: it is stale.",
