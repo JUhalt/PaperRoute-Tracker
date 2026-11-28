@@ -34,9 +34,16 @@ public partial class MainWindow : Window
 
     private bool _closed;
 
+    // The frame's start size and minimum as MainWindow.axaml requests them,
+    // before any cap.
+    private readonly Size _requestedStart;
+    private readonly Size _requestedMinimum;
+
     public MainWindow()
     {
         InitializeComponent();
+        _requestedStart = new Size(Width, Height);
+        _requestedMinimum = new Size(MinWidth, MinHeight);
         FitToScreen();
         DataContextChanged += (_, _) => BindKeys(DataContext as ShellViewModel);
     }
@@ -46,14 +53,21 @@ public partial class MainWindow : Window
     // the minimum lowered to the area when even it would not fit; the start
     // size capped to the area less the dialogs' margin, never below the
     // minimum. Both in the window's own units.
-    public static (Size Start, Size Minimum) StartSizes(PixelSize workingArea, double scaling, Size start, Size minimum)
+    //
+    // Today's rule caps the whole window, title bar and borders included
+    // (a form's Size), so that it is never taller than the working area
+    // (#93). Avalonia's sizes are the client area's, so the decoration
+    // around it (in the window's units) is taken from the area first.
+    public static (Size Start, Size Minimum) StartSizes(PixelSize workingArea, double scaling, Size decoration, Size start, Size minimum)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(scaling);
-        double minimumWidth = Math.Max(1, Math.Min(minimum.Width * scaling, workingArea.Width));
-        double minimumHeight = Math.Max(1, Math.Min(minimum.Height * scaling, workingArea.Height));
+        double areaWidth = Math.Max(1, workingArea.Width - (decoration.Width * scaling));
+        double areaHeight = Math.Max(1, workingArea.Height - (decoration.Height * scaling));
+        double minimumWidth = Math.Max(1, Math.Min(minimum.Width * scaling, areaWidth));
+        double minimumHeight = Math.Max(1, Math.Min(minimum.Height * scaling, areaHeight));
 
-        double availableWidth = Math.Max(1, workingArea.Width - EdgeMargin);
-        double availableHeight = Math.Max(1, workingArea.Height - EdgeMargin);
+        double availableWidth = Math.Max(1, areaWidth - EdgeMargin);
+        double availableHeight = Math.Max(1, areaHeight - EdgeMargin);
         double width = Math.Min(start.Width * scaling, availableWidth);
         double height = Math.Min(start.Height * scaling, availableHeight);
         if (availableWidth >= minimumWidth)
@@ -145,11 +159,22 @@ public partial class MainWindow : Window
         }
     }
 
-    // Capped to the working area of the screen the window opens on: the one
-    // Avalonia centres it on (with no owner, the screen at its position, else
-    // the primary). Today's window takes the screen under the pointer, which
-    // Avalonia cannot find before the window exists. The requested sizes are
-    // MainWindow.axaml's.
+    // The title bar and borders around the client area, in the window's
+    // units, from the frame the platform reports (Avalonia's WindowBase takes
+    // it from the platform when it is made). Before the window is shown,
+    // Windows and macOS report it; X11 reports none until a window manager
+    // has mapped the window, so there the cap counts no decoration and the
+    // window manager keeps the frame on the screen.
+    public static Size DecorationOf(Size? frame, Size client) =>
+        frame is { } outer
+            ? new Size(Math.Max(0, outer.Width - client.Width), Math.Max(0, outer.Height - client.Height))
+            : default;
+
+    // Capped, before the window is shown, to the working area of the screen
+    // it opens on: the one Avalonia centres it on (with no owner, the screen
+    // at its position, else the primary), which then centres the whole
+    // frame. Today's window takes the screen under the pointer, which
+    // Avalonia cannot find before the window exists.
     private void FitToScreen()
     {
         Screens? screens = Screens;
@@ -159,7 +184,17 @@ public partial class MainWindow : Window
             return;
         }
 
-        (Size start, Size minimum) = StartSizes(screen.WorkingArea.Size, screen.Scaling, new Size(Width, Height), new Size(MinWidth, MinHeight));
+        FitTo(screen.WorkingArea.Size, screen.Scaling, DecorationOf(FrameSize, ClientSize));
+    }
+
+    // Today's rule applied to this window for a working area, in its screen's
+    // pixels at its scaling, with the decoration around the client area: the
+    // minimum first, so that the start size is never held under the old one.
+    // The requested sizes are MainWindow.axaml's, so a second fit replaces
+    // the first.
+    public void FitTo(PixelSize workingArea, double scaling, Size decoration)
+    {
+        (Size start, Size minimum) = StartSizes(workingArea, scaling, decoration, _requestedStart, _requestedMinimum);
         MinWidth = minimum.Width;
         MinHeight = minimum.Height;
         Width = start.Width;

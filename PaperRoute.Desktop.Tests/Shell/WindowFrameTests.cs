@@ -53,27 +53,42 @@ public sealed class WindowFrameTests : StorageCheckedTests
     // Today's 1280x840 start and 960x680 minimum (Form1.vb:249-280), centred,
     // as the window requests them: the headless screen (1920x1280) caps
     // nothing, and Xvfb in CI has no window manager to enforce them. Then
-    // today's cap for smaller working areas, from Form1.StartSizes's rule:
-    // the minimum lowered to the area, the start size kept 72 pixels inside
-    // it and never below the minimum.
+    // the cap applied to a real window for a 1366x768 laptop's working area,
+    // with no decoration (as on X11 before the window is mapped) and with
+    // one, and today's cap for smaller working areas, from Form1.StartSizes's
+    // rule: the minimum lowered to the area, the start size kept 72 pixels
+    // inside it and never below the minimum, the whole window (title bar
+    // and borders included) inside the area.
     [TestMethod]
     public void TheWindowStartsAtTodaysSizeAndMinimum()
     {
-        (Size requested, Size minimum, WindowStartupLocation place, Size shown) = Headless.Run(() =>
+        var frame = new Size(16, 40);
+        (Size requested, Size minimum, WindowStartupLocation place, Size shown, Size fitted, Size fittedMinimum, Size fittedShown, Size framed, Size framedMinimum) = Headless.Run(() =>
         {
             var window = new MainWindow();
             var asked = new Size(window.Width, window.Height);
             var least = new Size(window.MinWidth, window.MinHeight);
             WindowStartupLocation where = window.WindowStartupLocation;
             window.Show();
+
+            var laptop = new MainWindow();
+            laptop.FitTo(new PixelSize(1366, 728), 1, default);
+            var laptopAsked = new Size(laptop.Width, laptop.Height);
+            var laptopLeast = new Size(laptop.MinWidth, laptop.MinHeight);
+            laptop.Show();
+
+            var decorated = new MainWindow();
+            decorated.FitTo(new PixelSize(1366, 728), 1, frame);
             try
             {
                 Dispatcher.UIThread.RunJobs();
-                return (asked, least, where, window.ClientSize);
+                return (asked, least, where, window.ClientSize, laptopAsked, laptopLeast, laptop.ClientSize,
+                    new Size(decorated.Width, decorated.Height), new Size(decorated.MinWidth, decorated.MinHeight));
             }
             finally
             {
                 window.Close();
+                laptop.Close();
             }
         });
 
@@ -81,13 +96,22 @@ public sealed class WindowFrameTests : StorageCheckedTests
         Assert.AreEqual(new Size(960, 680), minimum, "Today's minimum.");
         Assert.AreEqual(WindowStartupLocation.CenterScreen, place, "Centred, as today.");
         Assert.AreEqual(new Size(1280, 840), shown, "The window opens at its start size.");
+        Assert.AreEqual(new Size(1280, 680), fitted, "The start size a window fitted to a 1366x768 laptop requests.");
+        Assert.AreEqual(new Size(960, 680), fittedMinimum, "The minimum a window fitted to a 1366x768 laptop requests.");
+        Assert.AreEqual(new Size(1280, 680), fittedShown, "The fitted window opens at its capped start size.");
+        Assert.AreEqual(new Size(1278, 680), framed, "The start size a decorated window fitted to a 1366x768 laptop requests.");
+        Assert.AreEqual(new Size(960, 680), framedMinimum, "The minimum a decorated window fitted to a 1366x768 laptop requests.");
+
+        Assert.AreEqual(new Size(16, 40), MainWindow.DecorationOf(new Size(1296, 880), new Size(1280, 840)), "The decoration is the frame less the client area.");
+        Assert.AreEqual(default, MainWindow.DecorationOf(null, new Size(1280, 840)), "No decoration while the platform reports no frame.");
 
         var start = new Size(1280, 840);
         var least = new Size(960, 680);
-        AssertSizes(MainWindow.StartSizes(new PixelSize(1920, 1040), 1, start, least), new Size(1280, 840), new Size(960, 680), "a 1920x1080 screen");
-        AssertSizes(MainWindow.StartSizes(new PixelSize(1366, 728), 1, start, least), new Size(1280, 680), new Size(960, 680), "a 1366x768 laptop");
-        AssertSizes(MainWindow.StartSizes(new PixelSize(1920, 1008), 1.5, start, least), new Size(1232, 672), new Size(960, 672), "1920x1080 at 150%");
-        AssertSizes(MainWindow.StartSizes(new PixelSize(1024, 600), 1, start, least), new Size(960, 600), new Size(960, 600), "a 1024x600 screen");
+        AssertSizes(new PixelSize(1920, 1040), 1, frame, start, least, new Size(1280, 840), new Size(960, 680), "a 1920x1080 screen");
+        AssertSizes(new PixelSize(1366, 728), 1, default, start, least, new Size(1280, 680), new Size(960, 680), "a 1366x768 laptop, no decoration");
+        AssertSizes(new PixelSize(1366, 728), 1, frame, start, least, new Size(1278, 680), new Size(960, 680), "a 1366x768 laptop");
+        AssertSizes(new PixelSize(1920, 1008), 1.5, frame, start, least, new Size(1216, 632), new Size(960, 632), "1920x1080 at 150%");
+        AssertSizes(new PixelSize(1024, 600), 1, frame, start, least, new Size(960, 560), new Size(960, 560), "a 1024x600 screen");
     }
 
     // Today's title for the example (Form1.vb:294-303), and the app's name
@@ -311,10 +335,18 @@ public sealed class WindowFrameTests : StorageCheckedTests
         }
     }
 
-    private static void AssertSizes((Size Start, Size Minimum) actual, Size start, Size minimum, string screen)
+    // The sizes for a working area, and, as today's rule holds (#93), the
+    // whole window at either size inside it.
+    private static void AssertSizes(PixelSize workingArea, double scaling, Size decoration, Size requestedStart, Size requestedMinimum, Size start, Size minimum, string screen)
     {
+        (Size Start, Size Minimum) actual = MainWindow.StartSizes(workingArea, scaling, decoration, requestedStart, requestedMinimum);
         Assert.AreEqual(start, actual.Start, $"The start size on {screen}.");
         Assert.AreEqual(minimum, actual.Minimum, $"The minimum on {screen}.");
+        foreach (Size size in new[] { actual.Start, actual.Minimum })
+        {
+            Assert.IsTrue((size.Width + decoration.Width) * scaling <= workingArea.Width, $"The window at {size} is wider than the working area on {screen}.");
+            Assert.IsTrue((size.Height + decoration.Height) * scaling <= workingArea.Height, $"The window at {size} is taller than the working area on {screen}.");
+        }
     }
 
     private DiskLibrarySession OpenSession() => new(
