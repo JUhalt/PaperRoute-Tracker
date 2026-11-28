@@ -90,10 +90,13 @@ public sealed partial class LiftedBanTests
             }
         }
 
+        // A member line is named by its own lifted ban, or by the lifted ban on
+        // its whole type (StartupRecoveryService's members, start-up design 2.8).
         string[] lifts = [.. lifted.Select(ban => ban.Id)];
         foreach ((string id, string reason) in ReadAllowed())
         {
-            if (reason.StartsWith(PersonsStorage, StringComparison.Ordinal) && !lifts.Contains(id, StringComparer.Ordinal))
+            if (reason.StartsWith(PersonsStorage, StringComparison.Ordinal) &&
+                !lifts.Contains(id, StringComparer.Ordinal) && !lifts.Contains(TypeOf(id), StringComparer.Ordinal))
             {
                 problems.Add($"allowed-core-references.txt: {id} writes the person's storage, but {ListName} names no owner for it.");
             }
@@ -134,6 +137,18 @@ public sealed partial class LiftedBanTests
     {
         string[] what = [.. BuildFileLinesTurningTheBanOff(name, text)];
         Assert.AreEqual(found, what.Length > 0, $"The scan read {name} wrongly: {string.Join("; ", what)}");
+    }
+
+    // The check's own check: a member line of the allowed list is named by the
+    // lifted ban on its type, whatever its parameters; a type is its own.
+    [TestMethod]
+    [DataRow("M:ManuscriptPipeline.Services.StartupRecoveryService.UsePreviousSave", "T:ManuscriptPipeline.Services.StartupRecoveryService")]
+    [DataRow("M:ManuscriptPipeline.Services.StartupRecoveryService.RestoreFromBackup(System.String)", "T:ManuscriptPipeline.Services.StartupRecoveryService")]
+    [DataRow("F:ManuscriptPipeline.Services.StorageEnvironment.DefaultRootUses", "T:ManuscriptPipeline.Services.StorageEnvironment")]
+    [DataRow("T:ManuscriptPipeline.Services.StartupRecoveryService", "T:ManuscriptPipeline.Services.StartupRecoveryService")]
+    public void AMemberLineIsNamedByTheBanOnItsType(string id, string type)
+    {
+        Assert.AreEqual(type, TypeOf(id), $"The check read {id} wrongly.");
     }
 
     // Every line of the two projects' sources that names the rule outside a
@@ -261,6 +276,21 @@ public sealed partial class LiftedBanTests
 
         Assert.IsNotEmpty(banned, "BannedSymbols.txt names nothing: the reader is broken.");
         return banned;
+    }
+
+    // "M:Ns.Type.Member(args)" to "T:Ns.Type"; a type's own ID is returned as it is.
+    private static string TypeOf(string id)
+    {
+        if (!id.StartsWith("M:", StringComparison.Ordinal) && !id.StartsWith("F:", StringComparison.Ordinal))
+        {
+            return id;
+        }
+
+        string head = id[2..];
+        int open = head.IndexOf('(', StringComparison.Ordinal);
+        head = open < 0 ? head : head[..open];
+        int dot = head.LastIndexOf('.');
+        return dot < 0 ? id : "T:" + head[..dot];
     }
 
     private static string CalledName(string id)
