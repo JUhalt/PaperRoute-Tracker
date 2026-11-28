@@ -286,7 +286,10 @@ public sealed class DiskLibrarySession : ILibrarySession
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
-            // Today's save catches every exception (Form1.vb:1643).
+            // Today's save catches every exception (Form1.vb:1643). This one
+            // lets out-of-memory through, as the load does (IsReadFailure),
+            // so the process does not carry on as if the save had merely
+            // failed.
             outcome = SaveOutcome.Failed(ex.Message);
         }
         finally
