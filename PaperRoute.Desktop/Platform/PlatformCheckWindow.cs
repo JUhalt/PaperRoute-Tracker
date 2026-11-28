@@ -166,12 +166,14 @@ public sealed class PlatformCheckWindow
     public const string BodyLineText = "Submitted to the journal, under review";
 
     // The window's render scaling, what Avalonia reports of the system's
-    // theme (PlatformSettings.GetColorValues), what the system says of its
-    // text size (systemText; the real reader is SystemTextSettings.Read, and
-    // without one nothing is read), and the heights in the window's device
-    // pixels of one 13 px body line in the window's font and one fixed box
-    // 100 layout units high: each laid-out height times the render scaling,
-    // so the box grows when everything grows and stays when only text does.
+    // theme (PlatformSettings.GetColorValues, for the record only: a named
+    // exception in ThemeOwnership, since nothing here decides a variant), what
+    // the system says of its text size (systemText; the real reader is
+    // SystemTextSettings.Read, and without one nothing is read), and the
+    // heights in the window's device pixels of one 13 px body line in the
+    // window's font and one fixed box 100 layout units high: each laid-out
+    // height times the render scaling, so the box grows when everything grows
+    // and stays when only text does.
     public static PlatformFacts FactsFor(Window window, Func<string, string?> environment, Func<SystemTextSetting>? systemText = null)
     {
         ArgumentNullException.ThrowIfNull(window);
