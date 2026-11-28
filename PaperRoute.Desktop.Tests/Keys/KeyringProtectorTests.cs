@@ -512,6 +512,32 @@ public sealed class KeyringProtectorTests
         Assert.AreEqual(0, failedRaised, "MasterKeyReady came although no master key was fetched.");
     }
 
+    // #435's Settings will listen for MasterKeyReady: a listener that throws
+    // must not turn a key read into an exception, nor keep the next listener
+    // from hearing.
+    [TestMethod]
+    public void AThrowingReadyHandlerDoesNotEscapeARead()
+    {
+        byte[] master = RandomNumberGenerator.GetBytes(KeyFileCipher.KeySize);
+        string folder = NewFolder();
+        Directory.CreateDirectory(folder);
+        string key = NewKey();
+        File.WriteAllBytes(Path.Combine(folder, Name + ".key"), KeyFileCipher.Encrypt(master, Encoding.UTF8.GetBytes(key)));
+        var keyring = new FakeKeyring();
+        keyring.Hold(Account, master);
+        KeyringSecretProtector protector = Protector(keyring);
+        bool told = false;
+        protector.MasterKeyReady += (_, _) => throw new InvalidOperationException("A listener failed.");
+        protector.MasterKeyReady += (_, _) => told = true;
+
+        string? read = null;
+        Exception? escaped = Catch(() => read = new ProtectedKeyStore(folder, protector).Load(Name));
+
+        Assert.IsNull(escaped, $"A MasterKeyReady handler's exception escaped a key read: {escaped?.GetType().Name}.");
+        Assert.IsTrue(read == key, "The key 'openalex' did not read while a MasterKeyReady handler threw.");
+        Assert.IsTrue(told, "A listener after one that threw was not told the master key is ready.");
+    }
+
     // Design 2.7: a failed fetch is asked again at the next use after a minute,
     // not at every use.
     [TestMethod]

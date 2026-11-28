@@ -232,10 +232,34 @@ public sealed class KeyringSecretProtector : ISecretProtector, IExplainsAvailabi
 
         if (ready && Interlocked.Exchange(ref _readyRaised, 1) == 0)
         {
-            MasterKeyReady?.Invoke(this, EventArgs.Empty);
+            RaiseMasterKeyReady();
         }
 
         return outcome;
+    }
+
+    // Each handler is told on its own: one that throws neither keeps the others
+    // from hearing nor fails the fetch every caller is waiting on, so a key
+    // read still reads as a key or as no key. Its exception is dropped; the
+    // key is in memory either way.
+    private void RaiseMasterKeyReady()
+    {
+        if (MasterKeyReady is not { } handlers)
+        {
+            return;
+        }
+
+        foreach (EventHandler handler in handlers.GetInvocationList().Cast<EventHandler>())
+        {
+            try
+            {
+                handler(this, EventArgs.Empty);
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException)
+            {
+                // Dropped, as above.
+            }
+        }
     }
 
     private Outcome Ask(bool create)
