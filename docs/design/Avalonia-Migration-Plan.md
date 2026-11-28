@@ -479,7 +479,7 @@ One week, on a throwaway branch, not merged: the Board with its cards on the exa
 | AppImage needs FUSE that a stock system or the CI runner lacks; file dialogs need a D-Bus portal a minimal guest lacks; Avalonia renders badly in a VirtualBox guest (none checked). | Trial question 5. |
 | XWayland behaviour on GNOME Wayland (fractional scaling, input methods, "come forward") differs from an X11 session; Avalonia's own Wayland backend is a private preview. | The Linux gate in a GNOME Wayland session at 125% or 150%. |
 | Screen-reader parity falls short: Avalonia's Linux accessibility backend is new in 12.0. | An Orca pass over the trial's Board. |
-| Following the system text size may not be available or may differ per OS (how Avalonia exposes it was not checked). | Issue 4 (style system). |
+| Following the system text size may not be available or may differ per OS (Avalonia 12.1.6 offers no text-size setting, `AvaloniaOffersNoTextSizeSetting`; whether the system's setting reaches a window is still to be shown by issue 4's guest runs, section 9). | Issue 4 (style system). |
 | Owner-drawn lists lose keyboard maps or accessibility trees quietly (`DeadlineList.vb:64-75, 988-1060`; `JournalShortlistList.vb:50-60`). | Keyboard tests written before the page in issues 16 and 17. |
 | Pixel-based legibility rules differ between headless Skia and the screen. | Trial question 3: compare one R5 result with a screenshot. |
 | ClosedXML column widths on Linux without default fonts (not checked). | A core test exporting a spreadsheet on `ubuntu-latest` in stage 2. |
