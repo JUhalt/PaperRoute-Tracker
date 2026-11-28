@@ -16,8 +16,11 @@ public enum Appearance
 }
 
 // The one owner of the application's theme variant (harness design 3.4):
-// nothing else sets RequestedThemeVariant or reads the system's contrast
-// state, and AppThemeTests fails on any code that does.
+// nothing else decides the variant; the system's contrast state is read only
+// by AppTheme, through ContrastPreference and SystemContrastColors. The
+// measurement's pinned window and the platform check's record are the two
+// named exceptions, and AppThemeTests fails on any other code that sets a
+// variant or reads that state in a form its scan (ThemeOwnership) knows.
 //
 // The rule, in order: a contrast theme on gives the contrast variant of its
 // window colour (ContrastTheme.VariantFor); otherwise Light or Dark as chosen;

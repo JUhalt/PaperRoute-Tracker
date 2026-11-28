@@ -13,7 +13,8 @@ namespace PaperRoute.Desktop.Tests.Styles;
 // request S3): the appearance gives its variant, a contrast theme wins over it
 // and gives it back, a change needs no restart, and no other code sets a
 // variant or reads the system's contrast state. TheWholeWindowFollowsEvery-
-// ThemeChange (WholeWindowThemeTests) judges every control of the window.
+// ThemeChange (WholeWindowThemeTests) judges every control in the windows'
+// visual trees.
 //
 // Every test drives a ContrastPreference of its own: no test reads the
 // contrast setting of this PC.
@@ -188,9 +189,9 @@ public sealed class AppThemeTests
 
     // The owner check's teeth: a view that sets its window's variant (plainly
     // and with ??=), an XAML attribute, a style's Setter, XAML's
-    // property-element form, and a view model of the shell that asks Avalonia
-    // for the contrast preference are each named; the same words in a
-    // comment, a comparison, and AppTheme's own, are not.
+    // property-element form, and a part of the shell that asks Avalonia for
+    // the contrast preference are each named; the same words in a comment, a
+    // comparison, and AppTheme's own, are not.
     [TestMethod]
     public void TheOwnerCheckFindsASecondWriterAndASecondReader()
     {

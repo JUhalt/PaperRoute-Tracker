@@ -7,7 +7,8 @@ namespace PaperRoute.Desktop.Styles;
 // (UiTheme.vb:43-45) and has a test seam beside it (HighContrastOverride);
 // here the app and the tests share one object:
 //
-//   - FromPlatform, which only AppTheme calls (AppThemeTests checks it),
+//   - FromPlatform, which in the app only AppTheme calls (AppThemeTests
+//     checks it),
 //     reads Avalonia's PlatformColorValues.ContrastPreference
 //     (r2 4.1) and Windows' system colours, and reads both again when Avalonia
 //     raises ColorValuesChanged or the app calls Refresh (the window's
