@@ -20,7 +20,7 @@
   <Style Selector="TextBox">
     <Setter Property="CornerRadius" Value="{DynamicResource ControlRadius}" />
     <Setter Property="FontSize" Value="{DynamicResource BodyFontSize}" />
-    <Setter Property="MinHeight" Value="32" />
+    <Setter Property="MinHeight" Value="{DynamicResource ControlMinHeight}" />
     <Setter Property="Padding" Value="10,6" />
     <Setter Property="VerticalContentAlignment" Value="Center" />
     <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}" />
@@ -63,7 +63,7 @@
   <Style Selector="ComboBox">
     <Setter Property="CornerRadius" Value="{DynamicResource ControlRadius}" />
     <Setter Property="FontSize" Value="{DynamicResource BodyFontSize}" />
-    <Setter Property="MinHeight" Value="32" />
+    <Setter Property="MinHeight" Value="{DynamicResource ControlMinHeight}" />
     <Setter Property="Padding" Value="10,5,8,5" />
     <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />

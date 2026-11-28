@@ -1,8 +1,12 @@
+using System.Globalization;
 using Avalonia;
+using Avalonia.Animation;
 using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Primitives;
 using Avalonia.Media;
 using Avalonia.Styling;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using PaperRoute.Desktop.Styles;
 
@@ -129,6 +133,59 @@ public sealed class StyleFamilyTests
 
         Assert.IsEmpty(failures, string.Join(Environment.NewLine, failures));
     }
+
+    // A TimeSpan resource feeds a BrushTransition's Duration (harness design
+    // 3.1, an assumption settled here: a transition is not a styled element,
+    // so a DynamicResource on it might not resolve). The four hover
+    // transitions of the styles (a button, a chip, a rail item, an interactive
+    // card) take HoverDuration, 100 ms, and take the token's new value when
+    // the token changes, so each is driven by the token, not by a literal that
+    // happens to agree with it.
+    [TestMethod]
+    public void ATimeSpanTokenDrivesATransition()
+    {
+        (object? token, string atStart, string afterChange) = Headless.Run(() =>
+        {
+            var button = new Button { Content = "Save" };
+            var chip = new ToggleButton { Content = "Draft", Classes = { "chip" } };
+            var rail = new RadioButton { Content = "Board", Classes = { "rail" } };
+            var card = new Border { Width = 120, Height = 40, Classes = { "card", "interactive" } };
+            var window = new Window { Width = 400, Height = 300, Content = new StackPanel { Children = { button, chip, rail, card } } };
+            window.Show();
+            try
+            {
+                string Durations() => string.Join(", ",
+                    $"button {HoverOf(FaceOf(button), ContentPresenter.BackgroundProperty)}",
+                    $"chip {HoverOf(FaceOf(chip), ContentPresenter.BackgroundProperty)}",
+                    $"rail {HoverOf(FaceOf(rail), ContentPresenter.BackgroundProperty)}",
+                    $"card {HoverOf(card, Border.BorderBrushProperty)}");
+
+                window.TryFindResource("HoverDuration", window.ActualThemeVariant, out object? value);
+                string start = Durations();
+                Application.Current!.Resources["HoverDuration"] = TimeSpan.FromMilliseconds(250);
+                Dispatcher.UIThread.RunJobs();
+                return (value, start, Durations());
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
+
+        Assert.AreEqual(TimeSpan.FromMilliseconds(100), token, "HoverDuration is a TimeSpan of 100 ms (Tokens.axaml).");
+        Assert.AreEqual("button 100 ms, chip 100 ms, rail 100 ms, card 100 ms", atStart, "Each hover transition takes the token's value.");
+        Assert.AreEqual("button 250 ms, chip 250 ms, rail 250 ms, card 250 ms", afterChange, "Each hover transition follows the token when it changes.");
+    }
+
+    // The template's PART_ContentPresenter of a button, a chip or a rail item.
+    private static ContentPresenter FaceOf(TemplatedControl control) =>
+        control.GetVisualDescendants().OfType<ContentPresenter>().Single(face => face.Name == "PART_ContentPresenter" && face.TemplatedParent == control);
+
+    // The duration of the brush transition on one property, or "none".
+    private static string HoverOf(Animatable element, AvaloniaProperty property) =>
+        element.Transitions?.OfType<BrushTransition>().SingleOrDefault(transition => transition.Property == property) is { } hover
+            ? $"{hover.Duration.TotalMilliseconds.ToString(CultureInfo.InvariantCulture)} ms"
+            : "none";
 
     private static Border PipeOf(TabStripItem item) =>
         item.GetVisualDescendants().OfType<Border>().Single(border => border.Name == "PART_SelectedPipe");

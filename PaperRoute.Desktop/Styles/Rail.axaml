@@ -33,16 +33,16 @@
   </Style>
 
   <Style Selector="TextBlock.rail-brand">
-    <Setter Property="FontSize" Value="17" />
+    <Setter Property="FontSize" Value="{DynamicResource BrandFontSize}" />
     <Setter Property="FontWeight" Value="Bold" />
     <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
   </Style>
   <Style Selector="TextBlock.rail-tagline">
-    <Setter Property="FontSize" Value="11" />
+    <Setter Property="FontSize" Value="{DynamicResource RailSmallFontSize}" />
     <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}" />
   </Style>
   <Style Selector="TextBlock.rail-summary">
-    <Setter Property="FontSize" Value="11" />
+    <Setter Property="FontSize" Value="{DynamicResource RailSmallFontSize}" />
     <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}" />
     <Setter Property="TextWrapping" Value="Wrap" />
   </Style>
@@ -66,13 +66,13 @@
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderBrush" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
-    <Setter Property="CornerRadius" Value="7" />
+    <Setter Property="CornerRadius" Value="{DynamicResource RailItemRadius}" />
     <Setter Property="FontSize" Value="{DynamicResource BodyFontSize}" />
     <Setter Property="Cursor" Value="Hand" />
     <Setter Property="ToolTip.ShowOnDisabled" Value="True" />
     <Setter Property="FocusAdorner">
       <FocusAdornerTemplate>
-        <Border Margin="1.5" BorderThickness="2" CornerRadius="6"
+        <Border Margin="1.5" BorderThickness="2" CornerRadius="{DynamicResource FocusRingRadius}"
                 BorderBrush="{DynamicResource AccentSecondaryBrush}" />
       </FocusAdornerTemplate>
     </Setter>
@@ -95,7 +95,7 @@
   <Style Selector="RadioButton.rail /template/ ContentPresenter#PART_ContentPresenter, Button.rail /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Transitions">
       <Transitions>
-        <BrushTransition Property="Background" Duration="0:0:0.1" />
+        <BrushTransition Property="Background" Duration="{DynamicResource HoverDuration}" />
       </Transitions>
     </Setter>
   </Style>

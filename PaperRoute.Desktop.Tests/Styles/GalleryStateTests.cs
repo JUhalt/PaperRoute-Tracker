@@ -76,6 +76,7 @@ public sealed partial class GalleryStateTests
         new("ChipOff", ":disabled", Presenter, ContentPresenter.BackgroundProperty, "CardBackgroundBrush"),
         new("TextBoxOff", ":disabled", "PART_BorderElement", Border.BackgroundProperty, "BoardBackgroundBrush"),
         new("ComboOff", ":disabled", "Background", Border.BackgroundProperty, "BoardBackgroundBrush"),
+        new("TabOff", ":disabled", "PART_LayoutRoot", TextElement.ForegroundProperty, "MutedTextBrush"),
     ];
 
     // The token brushes a part may hold, to name the one it holds instead.

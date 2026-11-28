@@ -1,11 +1,13 @@
 using ManuscriptPipeline.Models;
+using ManuscriptPipeline.Services;
 using PaperRoute.ViewModels.ManuscriptPage;
 
 namespace PaperRoute.Desktop.Tests.ManuscriptPage;
 
-// The delta's own rules (build 9's design, tests L-1 on). L-1 comes forward
+// The delta's own rules (build 9's design, tests L-1 on). L-1 came forward
 // from W2 into W1, because W1's working copy already puts the delta into the
-// library it shows (LibraryChanges.ApplyTo). Every record is built in memory.
+// library it shows (LibraryChanges.ApplyTo); L-2 and MarkWritten are W2's.
+// Every record is built in memory.
 [TestClass]
 public sealed class LibraryChangesTests : Board.StorageCheckedTests
 {
@@ -55,5 +57,52 @@ public sealed class LibraryChangesTests : Board.StorageCheckedTests
         Assert.HasCount(2, library.Authors, "Putting the delta in again added a person twice.");
         Assert.HasCount(2, library.Affiliations, "Putting the delta in again added an affiliation twice.");
         Assert.HasCount(2, library.Journals, "Putting the delta in again added a journal twice.");
+    }
+
+    // L-2: a tag colour goes in as WorkTypeService.SetColor puts it: the tag
+    // normalised, and the colour replacing the library's own for that tag in
+    // any capitalization, so the library never holds two colours for one tag.
+    // (W-7's tag-colour row puts a colour into a library with none for that
+    // tag, which a plain Add passes too.)
+    [TestMethod]
+    public void TagColoursAreSetThroughWorkTypeService()
+    {
+        var library = new AuthorLibraryData
+        {
+            TagColors = [new TagColor { Tag = "Methods", Color = TagPalette.Teal }, new TagColor { Tag = "theory", Color = TagPalette.Teal }],
+        };
+        var delta = new LibraryChanges();
+        delta.TagColors.Add(new TagColor { Tag = "  #methods ", Color = TagPalette.Violet });
+        delta.TagColors.Add(new TagColor { Tag = "   ", Color = TagPalette.Violet });
+
+        delta.ApplyTo(library);
+
+        TagColor[] methods = [.. library.TagColors.Where(entry => string.Equals(entry.Tag.Trim().TrimStart('#').Trim(), "methods", StringComparison.OrdinalIgnoreCase))];
+        Assert.HasCount(1, methods, "The library holds two colours for one tag.");
+        Assert.AreEqual("methods", methods[0].Tag, "The tag was not normalised.");
+        Assert.AreEqual(TagPalette.Violet, methods[0].Color, "The page's colour did not replace the library's.");
+        Assert.AreEqual(TagPalette.Violet, WorkTypeService.ColorOf("Methods", library));
+        Assert.HasCount(2, library.TagColors, "A blank tag got a colour, or another tag's colour was lost.");
+        Assert.AreEqual(TagPalette.Teal, WorkTypeService.ColorOf("theory", library));
+    }
+
+    // MarkWritten (2.5 step 9): after the author file was written and the
+    // manuscripts were not, the delta has nothing left to add.
+    [TestMethod]
+    public void MarkWrittenLeavesNothingToAdd()
+    {
+        var delta = new LibraryChanges();
+        delta.Authors.Add(new AuthorRecord { Id = Ada, GivenName = "Ada", FamilyName = "Lovelace" });
+        delta.Affiliations.Add(new AffiliationRecord { Id = University, Institution = "Example University" });
+        delta.Journals.Add(new JournalRecord { Id = Tests, Name = "Journal of Tests" });
+        delta.TagColors.Add(new TagColor { Tag = "methods", Color = TagPalette.Violet });
+
+        delta.MarkWritten();
+
+        Assert.IsTrue(delta.IsEmpty, "Records already on disk are still in the delta.");
+        var library = new AuthorLibraryData();
+        delta.ApplyTo(library);
+        Assert.IsEmpty(library.Authors);
+        Assert.IsEmpty(library.TagColors);
     }
 }

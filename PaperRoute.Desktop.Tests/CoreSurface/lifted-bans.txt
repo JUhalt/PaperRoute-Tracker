@@ -1,0 +1,15 @@
+# Every banned core member (PaperRoute.ViewModels\BannedSymbols.txt, RS0030, shared by PaperRoute.Desktop) that the interface may call, and the one file that may.
+# Checked by PaperRoute.Desktop.Tests\CoreSurface\LiftedBanTests.cs (EachLiftedBanHasOneOwner), from the sources as text: a pragma that lifts RS0030 in a
+# file that owns no ban fails, so does a banned name under a pragma whose file does not own that ban, a line whose owner no longer calls it, and a ban
+# listed twice. A pragma is the only way to lift a ban: RS0030 named anywhere else in the two projects' sources (a SuppressMessage attribute, a
+# GlobalSuppressions file) or in their build files (NoWarn, WarningsNotAsErrors, an analyzer config's severity) fails too, comments in build files
+# apart. Start-up design 2.8 (build 6, #421).
+#
+# One line per lifted ban, sorted (ordinal), "<documentation ID>;<owner file>;<reason> (#<issue>)":
+#   documentation ID   the symbol exactly as BannedSymbols.txt names it.
+#   owner file         the one file, by its path in the repository, that calls it under "#pragma warning disable RS0030", with the reason in a
+#                      comment on the line above the pragma.
+#   reason             what the call writes and what confines the write, then the issue that answers for it.
+# A line of allowed-core-references.txt whose reason starts "WRITES THE PERSON'S STORAGE: " must name a lifted ban here.
+M:ManuscriptPipeline.Services.AppSettingsService.Save(ManuscriptPipeline.Models.AppSettings);PaperRoute.ViewModels/Session/DiskLibrarySession.cs;saves the settings through the service that loaded them, into the session's own settings folder, which DiskLibrarySession admits only inside the temporary folder (#420)
+M:ManuscriptPipeline.Services.ExampleLibraryService.Seed(System.DateTime,ManuscriptPipeline.Models.OnlineServicesSettings);PaperRoute.ViewModels/Session/TrialStartup.cs;saves the example's four files into the example's own session folder, which StartExample set up and End deletes (#421)

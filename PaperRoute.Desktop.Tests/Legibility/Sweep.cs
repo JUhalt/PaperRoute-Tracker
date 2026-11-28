@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Documents;
 using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Primitives;
+using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -21,15 +22,31 @@ internal sealed record SweepSubject(string Name, string? Library, double Width, 
 // What a sweep reads from one subject in one theme case: every part that
 // paints a background (R5's input), every text drawn in full (R7's), and how
 // many texts were left out because a scroller or the window's edge hides
-// part of them.
-internal sealed record SweepFrame(string Subject, string ThemeCase, IReadOnlyList<PaintedPart> Parts, IReadOnlyList<DrawnText> Texts, int HiddenTexts);
+// part of them; every disabled text drawn in full (R8's) and every border
+// drawn in full (R9's edges), with how many of each were left out the same
+// way; and, when the sweep is asked to walk the focus, what taking focus
+// changes around each focusable control (R9's focus).
+internal sealed record SweepFrame(string Subject, string ThemeCase, IReadOnlyList<PaintedPart> Parts, IReadOnlyList<DrawnText> Texts, int HiddenTexts)
+{
+    public IReadOnlyList<DrawnText> DisabledTexts { get; init; } = [];
+
+    public int HiddenDisabledTexts { get; init; }
+
+    public IReadOnlyList<DrawnEdge> Edges { get; init; } = [];
+
+    public int HiddenEdges { get; init; }
+
+    public IReadOnlyList<FocusChange> Focus { get; init; } = [];
+}
 
 // The sweeps (the harness design, part 2.1): one rule run over every surface
 // the harness can build, in its theme cases. Sweep shows a subject in a
-// window, in a theme case, lets its transitions finish, saves its picture
-// (sweep-<subject>-<case>.png), reads the frame and walks the window's visual
-// tree, handing each rule its inputs. The rules (Rules.R5, Rules.R7) judge;
-// the sweep only reads.
+// window, in a theme case, saves its picture (sweep-<subject>-<case>.png),
+// reads the frame and walks the window's visual tree, handing each rule its
+// inputs. Saving the picture draws frames, which cannot be relied on to
+// finish a transition (Pictures.Save), so nothing a sweep shows may be
+// easing. The rules (Rules.R5, Rules.R7, Rules.R8, Rules.R9) judge; the sweep
+// only reads.
 //
 // The subjects are every built target surface (TargetSurfaceCatalog, today
 // the Board on the example library) and the style gallery (part 2.4).
@@ -53,10 +70,17 @@ internal static class Sweep
         new SweepSubject("Styles/Gallery", null, 1280, 900, _ => new StyleGallery(), view => ((StyleGallery)view).FocusTheFocusedButton()),
     ];
 
+    // How far around a focusable control R9 looks for what taking focus
+    // changes (part 2.4): its bounds plus 4 px on every side, where a focus
+    // ring drawn outside the control would show.
+    public const int FocusReach = 4;
+
     // Shows the subject in the theme case and reads it, in one Headless.Run
     // (a fresh application, so no theme case outlives its test), over a
-    // library of its own when it needs one.
-    public static SweepFrame Read(SweepSubject subject, ThemeCase themeCase, TestContext context)
+    // library of its own when it needs one. With walkFocus (R9, under a
+    // contrast case only), it then gives each focusable control the keyboard
+    // focus in turn and reads what changes.
+    public static SweepFrame Read(SweepSubject subject, ThemeCase themeCase, TestContext context, bool walkFocus = false)
     {
         ArgumentNullException.ThrowIfNull(subject);
         ArgumentNullException.ThrowIfNull(themeCase);
@@ -82,8 +106,17 @@ internal static class Sweep
                 Pictures.Save(window, picture, context);
                 FramePixels frame = FramePixels.Capture(window);
                 IReadOnlyList<PaintedPart> parts = Parts(window, frame, subject.Name, themeCase.Name);
-                (IReadOnlyList<DrawnText> texts, int hidden) = Texts(window, frame, subject.Name, themeCase.Name);
-                return new SweepFrame(subject.Name, themeCase.Name, parts, texts, hidden);
+                (IReadOnlyList<DrawnText> texts, int hidden) = Texts(window, frame, subject.Name, themeCase.Name, disabled: false);
+                (IReadOnlyList<DrawnText> disabledTexts, int hiddenDisabled) = Texts(window, frame, subject.Name, themeCase.Name, disabled: true);
+                (IReadOnlyList<DrawnEdge> edges, int hiddenEdges) = Edges(window, frame, subject.Name, themeCase.Name);
+                return new SweepFrame(subject.Name, themeCase.Name, parts, texts, hidden)
+                {
+                    DisabledTexts = disabledTexts,
+                    HiddenDisabledTexts = hiddenDisabled,
+                    Edges = edges,
+                    HiddenEdges = hiddenEdges,
+                    Focus = walkFocus ? WalkFocus(window, subject.Name, themeCase) : [],
+                };
             }
             finally
             {
@@ -131,8 +164,10 @@ internal static class Sweep
     // surface, the commonest colour of the 2 px frame around it; its full-ink
     // pixels, those exactly its ink's colour; and its token ratio, the ink
     // token's against the surface token's, where both are tokens and the
-    // surface drawn is the surface token's colour. Disabled text is R8's.
-    private static (IReadOnlyList<DrawnText> Texts, int Hidden) Texts(Window window, FramePixels frame, string subject, string themeCase)
+    // surface drawn is the surface token's colour. Disabled text is R8's, read
+    // the same way with disabled set: the text of every disabled control,
+    // against the surface around it, which is the control's own fill.
+    private static (IReadOnlyList<DrawnText> Texts, int Hidden) Texts(Window window, FramePixels frame, string subject, string themeCase, bool disabled)
     {
         var texts = new List<DrawnText>();
         var seen = new Dictionary<string, int>(StringComparer.Ordinal);
@@ -145,7 +180,7 @@ internal static class Sweep
                 TextPresenter presenter => (presenter.Text, presenter.Foreground),
                 _ => (null, null),
             };
-            if (string.IsNullOrWhiteSpace(text) || !control.IsEffectivelyVisible || !control.IsEffectivelyEnabled
+            if (string.IsNullOrWhiteSpace(text) || !control.IsEffectivelyVisible || control.IsEffectivelyEnabled == disabled
                 || control.Bounds.Width <= 0 || control.Bounds.Height <= 0)
             {
                 continue;
@@ -191,6 +226,163 @@ internal static class Sweep
 
         return (texts, hidden);
     }
+
+    // R9's edges: every visible element that draws a border (a Border, or a
+    // content presenter, which draws a templated control's border) of the
+    // same width on all four sides, in a brush that paints, at least 2 px
+    // each way and drawn in full: how far its edge stands out from the
+    // surface around it (FramePixels.EdgeContrast, at the middle of each
+    // side, the weakest side), the surface being the commonest colour of the
+    // 2 px frame around its bounds, as R7's is. A border on fewer than four
+    // sides is a dividing line, not a control's outline, and is not read.
+    private static (IReadOnlyList<DrawnEdge> Edges, int Hidden) Edges(Window window, FramePixels frame, string subject, string themeCase)
+    {
+        var edges = new List<DrawnEdge>();
+        var seen = new Dictionary<string, int>(StringComparer.Ordinal);
+        int hidden = 0;
+        foreach (Control control in window.GetVisualDescendants().OfType<Control>())
+        {
+            (Thickness thickness, IBrush? brush) = control switch
+            {
+                Border border => (border.BorderThickness, border.BorderBrush),
+                ContentPresenter presenter => (presenter.BorderThickness, presenter.BorderBrush),
+                _ => (default, null),
+            };
+            if (brush is null || !Paints(brush) || !control.IsEffectivelyVisible || !thickness.IsUniform || thickness.Left <= 0)
+            {
+                continue;
+            }
+
+            PixelRect bounds = Pixels(Bounds(control, window));
+            if (bounds.Width < 2 || bounds.Height < 2)
+            {
+                continue;
+            }
+
+            // The border must be drawn in full, inside every clipping
+            // ancestor. The frame around it is read wherever the window
+            // shows it: a templated control that clips to its own bounds
+            // (a button around its content presenter) hides none of what
+            // surrounds its edge.
+            PixelRect clip = Clip(control, window, frame);
+            PixelRect around = new PixelRect(bounds.X - SurfaceFrame, bounds.Y - SurfaceFrame, bounds.Width + (2 * SurfaceFrame), bounds.Height + (2 * SurfaceFrame))
+                .Intersect(new PixelRect(0, 0, frame.Width, frame.Height));
+            if (bounds.Intersect(clip) != bounds || frame.CommonestOwnColour(around, [bounds]) is not { } surface)
+            {
+                hidden++;
+                continue;
+            }
+
+            edges.Add(new DrawnEdge(themeCase, subject, Numbered(seen, Key(control, window)), surface, frame.EdgeContrast(bounds, surface), bounds));
+        }
+
+        return (edges, hidden);
+    }
+
+    // R9's focus: every focusable control a person can reach with Tab
+    // (focusable, a tab stop, visible and enabled), each given the keyboard
+    // focus in turn from a window where nothing has it. For each, the pixels
+    // of its bounds plus FocusReach that differ between the frame before and
+    // the frame after, less its text areas (TextAreas: a text box's caret and
+    // selection), and the strongest of them against the contrast set's
+    // window colour. A control is not judged, with the reason, when it is
+    // not drawn in full, when it shows focus without having it (the gallery's
+    // "focused" inputs, whose focus pseudo-classes are set by hand, so they
+    // have no look without focus to compare), when it does not take the
+    // focus, or when taking it moves or removes it (a scroller bringing it
+    // into view), since then its pixels are not comparable.
+    private static List<FocusChange> WalkFocus(Window window, string subject, ThemeCase themeCase)
+    {
+        Color windowColour = themeCase.Contrast?.Window
+            ?? throw new InvalidOperationException($"{themeCase}: R9 walks the focus under a contrast set only, against its window colour.");
+        IFocusManager focus = window.FocusManager ?? throw new AssertFailedException("The window has no focus manager.");
+        focus.Focus(null!);
+        Dispatcher.UIThread.RunJobs();
+
+        var seen = new Dictionary<string, int>(StringComparer.Ordinal);
+        List<(Control Control, string Key)> walked = window.GetVisualDescendants().OfType<Control>()
+            .Where(control => control.Focusable && KeyboardNavigation.GetIsTabStop(control) && control.IsEffectivelyVisible && control.IsEffectivelyEnabled
+                && control.Bounds.Width > 0 && control.Bounds.Height > 0)
+            .Select(control => (control, Numbered(seen, Key(control, window))))
+            .ToList();
+
+        var changes = new List<FocusChange>();
+        foreach ((Control control, string key) in walked)
+        {
+            FocusChange Skipped(PixelRect area, string reason) =>
+                new(themeCase.Name, subject, key, windowColour, 0, 0, area, reason);
+
+            if (TopLevel.GetTopLevel(control) != window)
+            {
+                changes.Add(Skipped(default, "it left the window before its turn"));
+                continue;
+            }
+
+            FramePixels before = FramePixels.Capture(window);
+            Rect placed = Bounds(control, window);
+            PixelRect bounds = Pixels(placed);
+            PixelRect area = new PixelRect(bounds.X - FocusReach, bounds.Y - FocusReach, bounds.Width + (2 * FocusReach), bounds.Height + (2 * FocusReach))
+                .Intersect(new PixelRect(0, 0, before.Width, before.Height));
+            if (bounds.Intersect(Clip(control, window, before)) != bounds)
+            {
+                changes.Add(Skipped(area, "not drawn in full"));
+                continue;
+            }
+
+            if (control.Classes.Contains(":focus") || control.Classes.Contains(":focus-within") || control.Classes.Contains(":focus-visible"))
+            {
+                changes.Add(Skipped(area, "it shows focus without having it"));
+                continue;
+            }
+
+            if (!control.Focus(NavigationMethod.Tab))
+            {
+                changes.Add(Skipped(area, "it does not take the focus"));
+                continue;
+            }
+
+            FramePixels after = FramePixels.Capture(window);
+            if (TopLevel.GetTopLevel(control) != window || Bounds(control, window) != placed)
+            {
+                changes.Add(Skipped(area, "taking the focus moved it"));
+            }
+            else
+            {
+                PixelRect[] textAreas = TextAreas(control, window);
+                int changed = 0;
+                double strongest = 0;
+                for (int y = area.Y; y < area.Bottom; y++)
+                {
+                    for (int x = area.X; x < area.Right; x++)
+                    {
+                        Color now = after.At(x, y);
+                        if (now != before.At(x, y) && !textAreas.Any(text => text.Contains(new PixelPoint(x, y))))
+                        {
+                            changed++;
+                            strongest = Math.Max(strongest, Contrast.ContrastRatio(now, windowColour));
+                        }
+                    }
+                }
+
+                changes.Add(new FocusChange(themeCase.Name, subject, key, windowColour, changed, strongest, area, null));
+            }
+
+            focus.Focus(null!);
+            Dispatcher.UIThread.RunJobs();
+        }
+
+        return changes;
+    }
+
+    // Where a control draws a text box's caret and selection: the bounds of
+    // every text presenter in it. Taking the focus by Tab shows the caret, or
+    // selects all the text, both at full contrast, so a text box whose focus
+    // frame were gone would still change pixels there. R9 leaves these areas
+    // out, and judges a text box by its frame alone.
+    private static PixelRect[] TextAreas(Control control, Window window) =>
+        [.. new Visual[] { control }.Concat(control.GetVisualDescendants()).OfType<TextPresenter>()
+            .Where(presenter => presenter.IsEffectivelyVisible && presenter.Bounds.Width > 0 && presenter.Bounds.Height > 0)
+            .Select(presenter => Pixels(Bounds(presenter, window)))];
 
     // The background brush a control paints with, if it has one.
     private static IBrush? BackgroundOf(Control control) => control switch
