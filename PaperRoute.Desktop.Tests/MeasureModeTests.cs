@@ -350,7 +350,9 @@ public sealed class MeasureModeTests : StorageCheckedTests
 
     // The counts the other scenarios add to the idle record (IdleSides), in
     // the JSON and the table: the scenario, the steps of the session, the
-    // steps a key or a click met and their card views, the refresh steps,
+    // steps a key or a click met and their card views, every card view made
+    // in that row (on mid-step the switch's own is the row's less the
+    // step's, so the table says the switch made none), the refresh steps,
     // whether Published's rows were stale at the switch, the managed heap
     // before and after preparation, the frame after each step and the time
     // from a change to the switch; each null or empty where the scenario has
@@ -370,9 +372,9 @@ public sealed class MeasureModeTests : StorageCheckedTests
                     SessionSteps = 6, RefreshSteps = 1, ManagedBytesBefore = 10 * 1024 * 1024, ManagedBytesAfter = 12 * 1024 * 1024,
                     StepFrameMs = [4.04, 5.06, 6, 7, 8, 9],
                 },
-                new IdlePreparationRecord("500", IdleSides.MidStep, 4, 11, false, null, true, 10, 1000.2, 1)
+                new IdlePreparationRecord("500", IdleSides.MidStep, 4, 11, false, null, true, 0, 1000.2, 1)
                 {
-                    SessionSteps = 5, StepsMet = 1, StepsMetViews = 10, StepFrameMs = [1, 2, 3, 4],
+                    SessionSteps = 5, StepsMet = 1, StepsMetViews = 10, ViewsMadeInRow = 10, StepFrameMs = [1, 2, 3, 4],
                 },
                 new IdlePreparationRecord("500", IdleSides.MaximisePrepared, 5, 21, false, null, true, 3, 1000.2, 2)
                 {
@@ -390,6 +392,7 @@ public sealed class MeasureModeTests : StorageCheckedTests
             Number(item, "sessionSteps"),
             Number(item, "stepsMet"),
             Number(item, "stepsMetViews"),
+            Number(item, "viewsMadeInRow"),
             Number(item, "refreshSteps"),
             item.GetProperty("rowsStaleAtSwitch").GetBoolean() ? "stale" : "current",
             Number(item, "managedBytesBefore"),
@@ -399,15 +402,15 @@ public sealed class MeasureModeTests : StorageCheckedTests
         CollectionAssert.AreEqual(
             new[]
             {
-                "theme | 6 | null | null | 1 | current | 10485760 | 12582912 | 4,5.1,6,7,8,9 | null",
-                "switch | 5 | 1 | 10 | null | current | null | null | 1,2,3,4 | null",
-                "maximise | 5 | null | null | null | stale | null | null |  | 41.3",
+                "theme | 6 | null | null | null | 1 | current | 10485760 | 12582912 | 4,5.1,6,7,8,9 | null",
+                "switch | 5 | 1 | 10 | 10 | null | current | null | null | 1,2,3,4 | null",
+                "maximise | 5 | null | null | null | null | stale | null | null |  | 41.3",
             },
             idle.Select(Describe).ToArray());
 
         string table = report.ToTable();
         StringAssert.Contains(table, "Idle side theme-prepared (500): 5 preparation steps made 21 card views; Published prepared at the switch; preparation not stopped; the first switch after idle made 0 card views. 6 steps in the session; Published's rows current at the switch; 1 idle refresh steps; managed memory 10.0 MB before preparation, 12.0 MB after.");
-        StringAssert.Contains(table, "Idle side mid-step (500): 4 preparation steps made 11 card views; Published not prepared at the switch; preparation not stopped; the first switch after idle made 10 card views. 5 steps in the session; Published's rows current at the switch; 1 steps met by the key or the click (10 card views).");
+        StringAssert.Contains(table, "Idle side mid-step (500): 4 preparation steps made 11 card views; Published not prepared at the switch; preparation not stopped; the first switch after idle made 0 card views. 5 steps in the session; Published's rows current at the switch; 1 steps met by the key or the click (10 card views; 10 made in that row in all).");
         StringAssert.Contains(table, "Idle side maximise-prepared (500): 5 preparation steps made 21 card views; Published not prepared at the switch; preparation not stopped; the first switch after idle made 3 card views. 5 steps in the session; Published's rows stale at the switch; 41 ms from the change to the switch.");
     }
 

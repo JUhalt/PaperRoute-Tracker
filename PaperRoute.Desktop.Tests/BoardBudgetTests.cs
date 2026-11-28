@@ -591,17 +591,23 @@ public sealed class BoardBudgetTests : StorageCheckedTests
         {
             case IdleSides.MidStep:
             case IdleSides.KeyStep:
-                Assert.AreEqual(1, record.StepsMet, $"{side}: the last step ran inside the row and was met.");
+                // Counted inside the row's own stopwatch, so a step run just
+                // before the row would read 0 here.
+                Assert.AreEqual(1, record.StepsMet, $"{side}: the last step ran inside the row's stopwatch and was met.");
                 Assert.IsGreaterThan(0, record.StepsMetViews ?? 0, $"{side}: the last step made card views.");
+                Assert.IsNotNull(record.ViewsMadeInRow, $"{side}: the card views made in the row are counted.");
+                Assert.IsGreaterThanOrEqualTo(record.StepsMetViews ?? 0, record.ViewsMadeInRow.Value, $"{side}: the step's card views were made inside the row.");
                 Assert.IsFalse(record.Prepared && side == IdleSides.MidStep, "mid-step: Published was not prepared as the switch was asked for.");
                 if (side == IdleSides.MidStep)
                 {
-                    Assert.AreEqual(record.StepsMetViews, record.ViewsMadeAtSwitch, "mid-step: after the last step the switch itself made no card view.");
+                    Assert.AreEqual(record.StepsMetViews, record.ViewsMadeInRow, "mid-step: every card view made in the row was the step's.");
+                    Assert.AreEqual(0, record.ViewsMadeAtSwitch, "mid-step: after the last step the switch itself made no card view.");
                 }
 
                 break;
             case IdleSides.KeyNone:
                 Assert.AreEqual(0, record.StepsMet, "key-none: no step met the key.");
+                Assert.IsNotNull(record.ViewsMadeInRow, "key-none: the card views made in the row are counted.");
                 break;
             case IdleSides.TimerNone:
                 Assert.AreEqual(0, record.StepsMet, "timer-none: no step in the pause or the key.");

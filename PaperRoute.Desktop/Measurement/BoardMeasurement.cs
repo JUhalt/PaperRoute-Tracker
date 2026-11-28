@@ -730,6 +730,7 @@ public sealed class BoardMeasurement
         // The scenario's rows before the idle period.
         int? stepsMet = side == IdleSides.MidStep ? 0 : null;
         int? stepsMetViews = side == IdleSides.MidStep ? 0 : null;
+        int? viewsMadeInRow = null;
         int? refreshSteps = null;
         bool searchInEffect = false;
         ThemeVariant? themeBefore = window.RequestedThemeVariant;
@@ -740,27 +741,23 @@ public sealed class BoardMeasurement
             {
                 // Row 6: the key arrives as the last step is due, so the step
                 // runs first and the key waits for it (a step cannot stop
-                // early). On key-none no step is due.
-                int stepsBefore = preparer.StepsRun;
-                int stepViews = 0;
-                Time(library, SearchKeystrokeStepDue, $"Search keystroke started when an idle step is due (side {side}): the step, if one is due, then \"{SearchText}\" typed into an empty search, the render its wait ends in, and layout", FilterKeystrokeBudget, "filter keystroke", () =>
+                // early). On key-none no step is due. The steps met and the
+                // card views are counted inside the row's own stopwatch.
+                MetInRow met = TimeMeeting(preparer, library, SearchKeystrokeStepDue, $"Search keystroke started when an idle step is due (side {side}): the step, if one is due, then \"{SearchText}\" typed into an empty search, the render its wait ends in, and layout", FilterKeystrokeBudget, "filter keystroke", () =>
                 {
                     if (IdleSides.Prepares(side))
                     {
-                        int before = CardView.MadeCount;
                         preparer.RunStep();
-
-
-                        stepViews = CardView.MadeCount - before;
                     }
 
                     board.SearchText = SearchText;
                     board.Render();
                     Settle(window);
-                }, informational: true);
-                stepsMet = preparer.StepsRun - stepsBefore;
-                stepsMetViews = stepViews;
-                _rows[^1] = _rows[^1] with { Note = FormattableString.Invariant($"{BetweenSides}; {stepsMet} idle steps met ({StepKinds(preparer, stepsBefore)}), {stepViews} card views made by them") };
+                });
+                stepsMet = met.Steps;
+                stepsMetViews = met.StepViews;
+                viewsMadeInRow = met.ViewsMade;
+                _rows[^1] = _rows[^1] with { Note = FormattableString.Invariant($"{BetweenSides}; {met.Steps} idle steps met inside the row ({StepKinds(preparer, met.First, met.Steps)}), {met.StepViews} card views made by them; {met.ViewsMade} card views made in the row") };
                 NoteChanges(board);
                 _frame(window);
                 board.SearchText = string.Empty;
@@ -931,31 +928,30 @@ public sealed class BoardMeasurement
         double? changeToSwitch = sinceChange?.Elapsed.TotalMilliseconds;
         if (taken)
         {
-            int madeBeforeSwitch = CardView.MadeCount;
-            int stepsBeforeSwitch = preparer.StepsRun;
-            int stepViews = 0;
             string action = side == IdleSides.MidStep
                 ? FormattableString.Invariant($"First switch to Published asked for as the last idle step starts (side {side}: the steps but the last, the wait ({IdlePeriod.TotalSeconds:0} s idle; one frame), then the last step, which the switch waits for, and the switch)")
                 : FormattableString.Invariant($"First switch to Published after the side's steps (none on the side none, every step due on prepared) and the wait ({IdlePeriod.TotalSeconds:0} s idle; one frame)");
-            Time(library, FirstSwitchToPublishedAfterIdle, action, PageSwitchBudget, "page switch", () =>
+
+            // The steps met and the card views are counted inside the row's
+            // own stopwatch; the switch's own card views are the row's less
+            // those of the step it waited for (mid-step).
+            MetInRow met = TimeMeeting(preparer, library, FirstSwitchToPublishedAfterIdle, action, PageSwitchBudget, "page switch", () =>
             {
                 if (side == IdleSides.MidStep)
                 {
-                    int before = CardView.MadeCount;
                     preparer.RunStep();
-
-
-                    stepViews = CardView.MadeCount - before;
                 }
 
                 board.SelectedShelfIndex = 1;
                 Settle(window);
-            }, informational: true);
-            madeAtSwitch = CardView.MadeCount - madeBeforeSwitch;
+            });
+            Require(side == IdleSides.MidStep || met.Steps == 0, $"No idle step ran inside the first switch after idle on the side {side} ({met.Steps}).");
+            madeAtSwitch = met.ViewsMade - met.StepViews;
             if (side == IdleSides.MidStep)
             {
-                stepsMet = preparer.StepsRun - stepsBeforeSwitch;
-                stepsMetViews = stepViews;
+                stepsMet = met.Steps;
+                stepsMetViews = met.StepViews;
+                viewsMadeInRow = met.ViewsMade;
             }
 
             if (preparer.SkippedReason is not null)
@@ -970,11 +966,11 @@ public sealed class BoardMeasurement
             }
             else
             {
-                string met = side == IdleSides.MidStep ? FormattableString.Invariant($"; {stepsMet} idle step run inside the row first ({StepKinds(preparer, stepsBeforeSwitch)}, {stepViews} card views), as the switch waited for it") : string.Empty;
+                string metNote = side == IdleSides.MidStep ? FormattableString.Invariant($"; {met.Steps} idle step run inside the row first ({StepKinds(preparer, met.First, met.Steps)}, {met.StepViews} card views), as the switch waited for it, {met.ViewsMade} card views made in the row in all") : string.Empty;
                 string scenarioNote = scenario == IdleSides.SwitchScenario ? string.Empty : FormattableString.Invariant($", Published's rows {(rowsStale ? "stale" : "current")}");
                 _rows[^1] = _rows[^1] with
                 {
-                    Note = FormattableString.Invariant($"{BetweenSides}; side {side}: {stepCount} preparation steps before it, {viewsBefore} card views ready in the hidden shelf, Published {(prepared ? "prepared" : "not prepared")}{scenarioNote}{met}; {madeAtSwitch} card views made at the switch"),
+                    Note = FormattableString.Invariant($"{BetweenSides}; side {side}: {stepCount} preparation steps before it, {viewsBefore} card views ready in the hidden shelf, Published {(prepared ? "prepared" : "not prepared")}{scenarioNote}{metNote}; {madeAtSwitch} card views made at the switch"),
                 };
                 RequireShelf(view, "PublishedShelf", expectedCards, "after the first switch after idle");
                 Paint(library, FirstSwitchToPublishedAfterIdlePaint, "Published: its frame after the first switch after idle", window, informational: true, note: BetweenSides);
@@ -1016,6 +1012,7 @@ public sealed class BoardMeasurement
             SessionSteps = preparer.StepsRun,
             StepsMet = stepsMet,
             StepsMetViews = stepsMetViews,
+            ViewsMadeInRow = viewsMadeInRow,
             RefreshSteps = refreshSteps,
             RowsStaleAtSwitch = rowsStale,
             ManagedBytesBefore = memoryBefore,
@@ -1107,9 +1104,38 @@ public sealed class BoardMeasurement
 
     private static string Stopped(string? skipped) => skipped is null ? "not stopped" : "stopped: " + skipped;
 
-    // The kinds of the steps run since the first, "none" for none.
-    private static string StepKinds(HiddenShelfPreparer preparer, int first) =>
-        preparer.StepsRun <= first ? "none" : string.Join(", ", preparer.Steps.Skip(first).Select(step => step.Kind + (step.Cap is null ? string.Empty : " capped")));
+    // The kinds of the steps run since the first (count of them, or every one
+    // since), "none" for none.
+    private static string StepKinds(HiddenShelfPreparer preparer, int first, int? count = null)
+    {
+        IEnumerable<HiddenShelfPreparer.Step> steps = preparer.Steps.Skip(first).Take(count ?? int.MaxValue);
+        return steps.Any() ? string.Join(", ", steps.Select(step => step.Kind + (step.Cap is null ? string.Empty : " capped"))) : "none";
+    }
+
+    // What a row that a key or a click meets counted inside its own
+    // stopwatch: the index of the first step it met, the preparer's steps
+    // run and the card views they made, read as the timed work starts and as
+    // it ends, and every card view made in the row. A step run before the
+    // row's stopwatch starts is not counted as met.
+    private sealed record MetInRow(int First, int Steps, int StepViews, int ViewsMade);
+
+    // Times work as Time does (informational), counting MetInRow inside the
+    // timed work itself.
+    private MetInRow TimeMeeting(HiddenShelfPreparer preparer, string library, string id, string action, double budget, string budgetName, Action work)
+    {
+        int stepsAtStart = 0, stepsAtEnd = 0, viewsAtStart = 0, viewsAtEnd = 0;
+        Time(library, id, action, budget, budgetName, () =>
+        {
+            stepsAtStart = preparer.StepsRun;
+            viewsAtStart = CardView.MadeCount;
+            work();
+            stepsAtEnd = preparer.StepsRun;
+            viewsAtEnd = CardView.MadeCount;
+        }, informational: true);
+        int steps = stepsAtEnd - stepsAtStart;
+        int stepViews = preparer.Steps.Skip(stepsAtStart).Take(steps).Sum(step => step.ViewsMade);
+        return new MetInRow(stepsAtStart, steps, stepViews, viewsAtEnd - viewsAtStart);
+    }
 
     // One step the measurement drove: what the preparer did, its timing, and
     // the frame drawn after it, in ms.

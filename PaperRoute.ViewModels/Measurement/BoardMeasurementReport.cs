@@ -259,8 +259,11 @@ public static class IdleSides
 // up to and with the first switch (refreshes and a step met inside a row
 // included); StepsMet and StepsMetViews, the steps run inside the row a key or
 // a click meets (mid-step: the first switch; key-step: the keystroke; timer:
-// the pause and the key after it, expected none) and the card views they made;
-// RefreshSteps, the idle refresh steps (search, timer, theme); RowsStaleAtSwitch,
+// the pause and the key after it, expected none) and the card views they made,
+// counted inside that row's stopwatch (but on timer); ViewsMadeInRow, every
+// card view made inside the row a key or a click meets (mid-step and key), so
+// on mid-step ViewsMadeAtSwitch is the switch's own, the row's less the
+// step's; RefreshSteps, the idle refresh steps (search, timer, theme); RowsStaleAtSwitch,
 // whether Published's rows were stale as the switch began (the switch then
 // refills them); ManagedBytesBefore and ManagedBytesAfter, the managed heap
 // after a full collection before and after preparation (theme); StepFrameMs,
@@ -284,6 +287,8 @@ public sealed record IdlePreparationRecord(
     public int? StepsMet { get; init; }
 
     public int? StepsMetViews { get; init; }
+
+    public int? ViewsMadeInRow { get; init; }
 
     public int? RefreshSteps { get; init; }
 
@@ -635,6 +640,7 @@ public sealed class BoardMeasurementReport
             json.WriteNumber("sessionSteps", record.SessionSteps);
             WriteNumberOrNull(json, "stepsMet", record.StepsMet, 0);
             WriteNumberOrNull(json, "stepsMetViews", record.StepsMetViews, 0);
+            WriteNumberOrNull(json, "viewsMadeInRow", record.ViewsMadeInRow, 0);
             WriteNumberOrNull(json, "refreshSteps", record.RefreshSteps, 0);
             json.WriteBoolean("rowsStaleAtSwitch", record.RowsStaleAtSwitch);
             WriteNumberOrNull(json, "managedBytesBefore", record.ManagedBytesBefore, 0);
@@ -736,7 +742,8 @@ public sealed class BoardMeasurementReport
         var more = new List<string>();
         if (idle.StepsMet is { } met)
         {
-            more.Add(string.Create(CultureInfo.InvariantCulture, $"{met} steps met by the key or the click ({idle.StepsMetViews ?? 0} card views)"));
+            string inRow = idle.ViewsMadeInRow is { } views ? string.Create(CultureInfo.InvariantCulture, $"; {views} made in that row in all") : string.Empty;
+            more.Add(string.Create(CultureInfo.InvariantCulture, $"{met} steps met by the key or the click ({idle.StepsMetViews ?? 0} card views{inRow})"));
         }
 
         if (idle.RefreshSteps is { } refresh)
