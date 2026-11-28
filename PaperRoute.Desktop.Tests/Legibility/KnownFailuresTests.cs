@@ -93,7 +93,8 @@ public sealed partial class KnownFailuresTests
             Entry("R2\tMutedTextBrush on CardBackgroundBrush\thc1\t#1\tcheck 3: hc1's GrayText as its Window"),
             Entry("R2\thcwhite.theme\thcwhite\t#1\tthe theme files: a folder without them"),
         ];
-        Assert.IsEmpty(Problems(r2Current, r2Current.Length, r2Findings), "Each R2 check reports its entry on the spoiled inputs.");
+        List<string> r2Problems = Problems(r2Current, r2Current.Length, r2Findings);
+        Assert.IsEmpty(r2Problems, "Each R2 check reports its entry on the spoiled inputs:" + Environment.NewLine + string.Join(Environment.NewLine, r2Problems));
         KnownFailure r2Stale = Entry("R2\tMutedTextBrush on CardBackgroundBrush\thc2\t#1\ta muted ink too faint in hc2");
         Assert.AreEqual(
             "Line 10: R2, MutedTextBrush on CardBackgroundBrush, hc2 is stale: R2 no longer reports it.",
@@ -127,7 +128,8 @@ public sealed partial class KnownFailuresTests
             Entry("R3\tclosed at 10 px and accepted\tLight\t#1\ttwo route dots alike without colour"),
             Entry("R3\tclosed at 10 px and accepted\thcwhite\t#1\ttwo route dots alike under contrast"),
         ];
-        Assert.IsEmpty(Problems(r3Current, r3Current.Length, r3Findings), "R3 reports its entries on the spoiled kinds, in the first and the last theme case.");
+        List<string> r3Problems = Problems(r3Current, r3Current.Length, r3Findings);
+        Assert.IsEmpty(r3Problems, "R3 reports its entries on the spoiled kinds, in the first and the last theme case:" + Environment.NewLine + string.Join(Environment.NewLine, r3Problems));
         KnownFailure r3Stale = Entry("R3\tcurrent and accepted\tLight\t#1\ttwo route dots alike without colour");
         Assert.AreEqual(
             "Line 10: R3, current and accepted, Light is stale: R3 no longer reports it.",
