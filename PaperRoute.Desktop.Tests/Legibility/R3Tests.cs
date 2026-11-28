@@ -59,22 +59,24 @@ public sealed class R3Tests
         Assert.IsEmpty(findings, "R3, route kinds alike without colour:" + Environment.NewLine + string.Join(Environment.NewLine, findings.Select(finding => $"{finding.ThemeCase}: {finding}")));
     }
 
+    // A bad input for the teeth: "closed" drawn at 10 px, like "accepted".
+    internal static RouteKind ClosedAtTenPixels { get; } = new("closed at 10 px", () =>
+    {
+        Avalonia.Controls.Shapes.Ellipse dot = RouteKinds.Dot("closed");
+        dot.Width = RouteKinds.Slot;
+        dot.Height = RouteKinds.Slot;
+        dot.Margin = default;
+        return dot;
+    });
+
     // The rule's teeth: "closed" drawn at 10 px, like "accepted", differs from
     // it only in colour (1.09:1 in Light), so the two share a pattern and fail.
     [TestMethod]
     public void R3_FailsTwoStatesThatDifferOnlyInColour()
     {
-        RouteKind large = new("closed at 10 px", () =>
-        {
-            Avalonia.Controls.Shapes.Ellipse dot = RouteKinds.Dot("closed");
-            dot.Width = RouteKinds.Slot;
-            dot.Height = RouteKinds.Slot;
-            dot.Margin = default;
-            return dot;
-        });
         RouteKind accepted = RouteKinds.All.Single(kind => kind.Name == "accepted");
 
-        List<(string Name, Color[] Pixels)> swatches = Draw(ThemeCase.Light, [large, accepted], "rules-r3-teeth-light", TestContext);
+        List<(string Name, Color[] Pixels)> swatches = Draw(ThemeCase.Light, [ClosedAtTenPixels, accepted], "rules-r3-teeth-light", TestContext);
         IReadOnlyList<PatternMeasure> measures = Rules.R3Measures(ThemeCase.Light.Name, swatches);
         List<Finding> findings = Rules.R3Findings(measures, contrast: false);
         string measured = string.Join(Environment.NewLine, measures.Select(measure => measure.Line));
@@ -86,11 +88,12 @@ public sealed class R3Tests
         StringAssert.EndsWith(findings[0].Line, "; commonest colours 1.09:1: the same pattern and under 3:1");
     }
 
-    // What the R3 run reports today, listed failures included: every theme
-    // case drawn again, without saving its picture.
-    internal static IReadOnlyList<Finding> CurrentFindings() =>
+    // What the R3 run reports for these kinds (the run's are RouteKinds.All),
+    // listed failures included: every theme case drawn again, without saving
+    // its picture.
+    internal static IReadOnlyList<Finding> CurrentFindings(IReadOnlyList<RouteKind> kinds) =>
         ThemeCase.All
-            .SelectMany(themeCase => Rules.R3Findings(themeCase.Name, Draw(themeCase, RouteKinds.All, picture: null, context: null), themeCase.Contrast is not null))
+            .SelectMany(themeCase => Rules.R3Findings(themeCase.Name, Draw(themeCase, kinds, picture: null, context: null), themeCase.Contrast is not null))
             .ToList();
 
     // Draws each kind alone in its slot, on CardBackgroundBrush, at render

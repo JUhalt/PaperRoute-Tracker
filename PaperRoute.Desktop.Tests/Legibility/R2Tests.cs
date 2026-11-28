@@ -12,9 +12,9 @@ namespace PaperRoute.Desktop.Tests.Legibility;
 // contrast sets (2.2). The rule's three checks are in Rules.R2.cs; these
 // tests run them on the real token file, roles and pairs, and on bad inputs.
 // A failure listed in KnownFailures.tsv does not fail these runs, as with R1
-// (KnownFailuresAreCurrent re-runs them through CurrentFindings). Check 3
-// writes every ratio it measures to legibility-r2-<set>.txt beside the
-// pictures.
+// (KnownFailuresAreCurrent re-runs them through CurrentFindings, on the same
+// inputs). Check 3 writes every ratio it measures to legibility-r2-<set>.txt
+// beside the pictures.
 // Limits of headless: HeadlessLimits.md
 [TestClass]
 public sealed class R2Tests
@@ -34,6 +34,25 @@ public sealed class R2Tests
             .Select(themeCase => (themeCase.Name, themeCase.Contrast!.Value))
             .Append(("fallback", SystemContrastColors.Fallback));
 
+    // Where the theme files are read: Windows' folder on Windows, and nowhere
+    // off Windows, where there is nothing to read.
+    internal static string? RealThemeFolder => OperatingSystem.IsWindows() ? ThemeFolder() : null;
+
+    // What R2's checks judge: the keys check 1 looks up, every key's role
+    // (checks 1 and 2), the sets check 3 measures, and the folder the theme
+    // files are read from (null: none read). The run tests below use the real
+    // ones; KnownFailuresAreCurrent re-runs the same checks on them, and on
+    // spoiled ones in its teeth.
+    internal sealed record Inputs(
+        IReadOnlyList<string> Keys,
+        IReadOnlyDictionary<string, SystemColorRole> Roles,
+        IReadOnlyList<(string Name, SystemContrastColors Colors)> Sets,
+        string? ThemeFolder)
+    {
+        public static Inputs Real =>
+            new([.. R2Tests.Tokens, .. ThemeTokens.DerivedKeys, .. Rules.R2BridgeRoles.Keys], Rules.R2Roles(), R2Tests.Sets.ToList(), RealThemeFolder);
+    }
+
     // Check 1: every token, derived brush and bridge key has a system role,
     // and a shown window resolves each, in both contrast variants, to its
     // role's colour (a derived brush to the colour derived from its role's),
@@ -43,10 +62,11 @@ public sealed class R2Tests
     public void R2_EveryTokenDerivedBrushAndBridgeKeyTakesItsRole()
     {
         IReadOnlyList<KnownFailure> known = KnownFailures.Load();
-        List<Finding> roleFindings = RoleTableFindings().Where(finding => !KnownFailures.Lists(known, finding)).ToList();
+        Inputs inputs = Inputs.Real;
+        List<Finding> roleFindings = RoleTableFindings(inputs).Where(finding => !KnownFailures.Lists(known, finding)).ToList();
         Assert.IsEmpty(roleFindings, "R2, check 1:" + Environment.NewLine + string.Join(Environment.NewLine, roleFindings));
 
-        (List<Finding> resolutionFindings, int resolved) = ResolutionFindings();
+        (List<Finding> resolutionFindings, int resolved) = ResolutionFindings(inputs);
         List<Finding> problems = resolutionFindings.Where(finding => !KnownFailures.Lists(known, finding)).ToList();
         TestContext.WriteLine($"{Tokens.Length} tokens, {ThemeTokens.DerivedKeys.Count} derived brushes and {Rules.R2BridgeRoles.Count} bridge keys; {resolved} resolutions in {ThemeCase.ContrastCases.Count} sets from {ThemeCase.ContrastBases.Count} bases.");
         Assert.IsEmpty(problems, "R2, check 1:" + Environment.NewLine + string.Join(Environment.NewLine, problems));
@@ -58,7 +78,7 @@ public sealed class R2Tests
     public void R2_EveryPairIsADesignedPairUnderContrast()
     {
         IReadOnlyList<KnownFailure> known = KnownFailures.Load();
-        List<Finding> findings = DesignedPairFindings().Where(finding => !KnownFailures.Lists(known, finding)).ToList();
+        List<Finding> findings = DesignedPairFindings(Inputs.Real).Where(finding => !KnownFailures.Lists(known, finding)).ToList();
         int pairs = TokenPairs.All.Count();
         TestContext.WriteLine($"{pairs} pairs mapped through the roles.");
         Assert.IsGreaterThan(40, pairs, "Too few pairs were mapped.");
@@ -73,7 +93,7 @@ public sealed class R2Tests
     {
         IReadOnlyList<KnownFailure> known = KnownFailures.Load();
         var findings = new List<Finding>();
-        foreach ((string name, SystemContrastColors colors) in Sets)
+        foreach ((string name, SystemContrastColors colors) in Inputs.Real.Sets)
         {
             IReadOnlyList<PairRatio> ratios = Rules.R2Ratios(name, ContrastTheme.Colors(colors), TokenPairs.All);
             findings.AddRange(Rules.R2ContrastFindings(ratios).Where(finding => !KnownFailures.Lists(known, finding)));
@@ -215,38 +235,39 @@ public sealed class R2Tests
             "A bridge key in the wrong colour.");
     }
 
-    // What the R2 runs report today, listed failures included: the role
-    // table, the window's resolution, the designed pairs, every set's ratios,
-    // and, on Windows where the folder is, the theme files.
-    internal static IReadOnlyList<Finding> CurrentFindings()
+    // What the R2 runs report on these inputs, listed failures included: the
+    // role table, the window's resolution, the designed pairs, every set's
+    // ratios, and the theme files when a folder is given (a missing file is a
+    // finding).
+    internal static IReadOnlyList<Finding> CurrentFindings(Inputs inputs)
     {
-        var findings = new List<Finding>(RoleTableFindings());
-        findings.AddRange(ResolutionFindings().Findings);
-        findings.AddRange(DesignedPairFindings());
-        foreach ((string name, SystemContrastColors colors) in Sets)
+        ArgumentNullException.ThrowIfNull(inputs);
+        var findings = new List<Finding>(RoleTableFindings(inputs));
+        findings.AddRange(ResolutionFindings(inputs).Findings);
+        findings.AddRange(DesignedPairFindings(inputs));
+        foreach ((string name, SystemContrastColors colors) in inputs.Sets)
         {
             findings.AddRange(Rules.R2ContrastFindings(name, ContrastTheme.Colors(colors), TokenPairs.All));
         }
 
-        if (OperatingSystem.IsWindows() && Directory.Exists(ThemeFolder()))
+        if (inputs.ThemeFolder is { } folder)
         {
-            findings.AddRange(ThemeFileFindings(ThemeFolder(), _ => { }));
+            findings.AddRange(ThemeFileFindings(folder, _ => { }));
         }
 
         return findings;
     }
 
-    private static List<Finding> RoleTableFindings() =>
-        Rules.R2RoleFindings(Tokens.Concat(ThemeTokens.DerivedKeys).Concat(Rules.R2BridgeRoles.Keys), Rules.R2Roles());
+    private static List<Finding> RoleTableFindings(Inputs inputs) => Rules.R2RoleFindings(inputs.Keys, inputs.Roles);
 
-    private static List<Finding> DesignedPairFindings() => Rules.R2DesignedPairFindings(TokenPairs.All, Rules.R2Roles());
+    private static List<Finding> DesignedPairFindings(Inputs inputs) => Rules.R2DesignedPairFindings(TokenPairs.All, inputs.Roles);
 
     // Check 1 in a shown window, in every contrast set from both bases, and
     // the number of keys resolved.
-    private static (List<Finding> Findings, int Resolved) ResolutionFindings()
+    private static (List<Finding> Findings, int Resolved) ResolutionFindings(Inputs inputs)
     {
-        string[] keys = [.. Tokens, .. ThemeTokens.DerivedKeys, .. Rules.R2BridgeRoles.Keys];
-        IReadOnlyDictionary<string, SystemColorRole> roles = Rules.R2Roles();
+        IReadOnlyList<string> keys = inputs.Keys;
+        IReadOnlyDictionary<string, SystemColorRole> roles = inputs.Roles;
         var findings = new List<Finding>();
         int resolved = 0;
         foreach (ThemeCase themeCase in ThemeCase.ContrastCases)
@@ -279,7 +300,7 @@ public sealed class R2Tests
 
                     return local;
                 }));
-                resolved += keys.Length;
+                resolved += keys.Count;
             }
         }
 

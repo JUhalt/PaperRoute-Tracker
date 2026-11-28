@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using PaperRoute.Desktop.Styles;
 using PaperRoute.Desktop.Tests.Styles;
 
 namespace PaperRoute.Desktop.Tests.Legibility;
@@ -14,14 +15,16 @@ public sealed partial class KnownFailuresTests
     private const int ExpectedCount = 0;
 
     // The rules that have a check in this project, each with what re-runs it
-    // and gives everything it reports today, listed failures included; an
-    // entry for another rule cannot be judged yet. Each rule's pull request
-    // adds its name. A rule is re-run only when an entry names it.
+    // on its run tests' own inputs and gives everything it reports today,
+    // listed failures included; an entry for another rule cannot be judged
+    // yet. Each rule's pull request adds its name. A rule is re-run here only
+    // when an entry names it (the teeth below re-run R1, R2 and R3 on every
+    // run, R2 and R3 on spoiled inputs).
     private static readonly Dictionary<string, Func<IReadOnlyList<Finding>>> s_rulesWithACheck = new(StringComparer.Ordinal)
     {
         ["R1"] = () => R1Tests.Variants.SelectMany(variant => Rules.R1(variant, TokenFile.Colors(variant), TokenPairs.All)).ToList(),
-        ["R2"] = R2Tests.CurrentFindings,
-        ["R3"] = R3Tests.CurrentFindings,
+        ["R2"] = () => R2Tests.CurrentFindings(R2Tests.Inputs.Real),
+        ["R3"] = () => R3Tests.CurrentFindings(RouteKinds.All),
     };
 
     // The list, read strictly; then the same check on lists spoiled one way
@@ -56,25 +59,53 @@ public sealed partial class KnownFailuresTests
             string.Join(Environment.NewLine, Problems([listed], 1, CurrentFindings([listed]))),
             "An entry the real token file no longer fails.");
 
-        // R2 and R3 are judged the same way, each by re-running its checks:
-        // the real token file passes check 3 in hc1, and the real route dots
-        // differ in Light, so these entries are stale; while a rule still
-        // reports an entry, it is current.
-        KnownFailure r2 = Entry("R2\tMutedTextBrush on CardBackgroundBrush\thc1\t#1\ta muted ink too faint in hc1");
-        var r2Fails = new Finding("R2", "hc1", "MutedTextBrush on CardBackgroundBrush", "hc1: text on a page, card or header: MutedTextBrush on CardBackgroundBrush is 1.00:1");
-        Assert.IsEmpty(Problems([r2], 1, [r2Fails]), "An R2 entry R2 still reports is current.");
+        // R2 and R3 are judged the same way, each by re-running its checks on
+        // the inputs its run tests use. Here the re-runs get those inputs
+        // spoiled one way per check (the faults of R2Tests' and R3Tests' own
+        // teeth), so every check must report its entry, through the set or
+        // theme case that ends its loop; an entry the spoiling leaves alone is
+        // stale. A re-run that dropped a check, a set or a theme case would
+        // leave its entry stale here.
+        R2Tests.Inputs real = R2Tests.Inputs.Real;
+        Dictionary<string, SystemColorRole> accentOnText = real.Roles.ToDictionary(StringComparer.Ordinal);
+        accentOnText["AccentBrush"] = SystemColorRole.WindowText;
+        R2Tests.Inputs spoiled = real with
+        {
+            Keys = [.. real.Keys, "UnmappedTestBrush"],
+            Roles = accentOnText,
+            Sets = real.Sets.Select(set => set.Name == "hc1" ? (set.Name, set.Colors with { GrayText = set.Colors.Window }) : set).ToList(),
+            ThemeFolder = Path.Combine(AppContext.BaseDirectory, "no theme folder"),
+        };
+        IReadOnlyList<Finding> r2Findings = R2Tests.CurrentFindings(spoiled);
+        KnownFailure[] r2Current =
+        [
+            Entry("R2\tUnmappedTestBrush\tcontrast\t#1\tcheck 1, the role table: a key with no role"),
+            Entry("R2\tUnmappedTestBrush\thcwhite\t#1\tcheck 1, in a shown window: a key with no role"),
+            Entry("R2\tOnAccentTextBrush on AccentBrush\tcontrast\t#1\tcheck 2: the accent on WindowText"),
+            Entry("R2\tMutedTextBrush on CardBackgroundBrush\thc1\t#1\tcheck 3: hc1's GrayText as its Window"),
+            Entry("R2\thcwhite.theme\thcwhite\t#1\tthe theme files: a folder without them"),
+        ];
+        Assert.IsEmpty(Problems(r2Current, r2Current.Length, r2Findings), "Each R2 check reports its entry on the spoiled inputs.");
+        KnownFailure r2Stale = Entry("R2\tMutedTextBrush on CardBackgroundBrush\thc2\t#1\ta muted ink too faint in hc2");
         Assert.AreEqual(
-            "Line 10: R2, MutedTextBrush on CardBackgroundBrush, hc1 is stale: R2 no longer reports it.",
-            string.Join(Environment.NewLine, Problems([r2], 1, CurrentFindings([r2]))),
-            "An R2 entry the real token file and contrast sets no longer fail.");
+            "Line 10: R2, MutedTextBrush on CardBackgroundBrush, hc2 is stale: R2 no longer reports it.",
+            string.Join(Environment.NewLine, Problems([r2Stale], 1, r2Findings)),
+            "An R2 entry for the real hc2, which passes check 3.");
 
-        KnownFailure r3 = Entry("R3\tclosed and accepted\tLight\t#1\ttwo route dots alike without colour");
-        var r3Fails = new Finding("R3", "Light", "closed and accepted", "closed and accepted: 5.0 % of positions differ; commonest colours 1.09:1: the same pattern and under 3:1");
-        Assert.IsEmpty(Problems([r3], 1, [r3Fails]), "An R3 entry R3 still reports is current.");
+        RouteKind current = RouteKinds.All.Single(kind => kind.Name == "current");
+        RouteKind accepted = RouteKinds.All.Single(kind => kind.Name == "accepted");
+        IReadOnlyList<Finding> r3Findings = R3Tests.CurrentFindings([R3Tests.ClosedAtTenPixels, current, accepted]);
+        KnownFailure[] r3Current =
+        [
+            Entry("R3\tclosed at 10 px and accepted\tLight\t#1\ttwo route dots alike without colour"),
+            Entry("R3\tclosed at 10 px and accepted\thcwhite\t#1\ttwo route dots alike under contrast"),
+        ];
+        Assert.IsEmpty(Problems(r3Current, r3Current.Length, r3Findings), "R3 reports its entries on the spoiled kinds, in the first and the last theme case.");
+        KnownFailure r3Stale = Entry("R3\tcurrent and accepted\tLight\t#1\ttwo route dots alike without colour");
         Assert.AreEqual(
-            "Line 10: R3, closed and accepted, Light is stale: R3 no longer reports it.",
-            string.Join(Environment.NewLine, Problems([r3], 1, CurrentFindings([r3]))),
-            "An R3 entry the real route dots no longer fail.");
+            "Line 10: R3, current and accepted, Light is stale: R3 no longer reports it.",
+            string.Join(Environment.NewLine, Problems([r3Stale], 1, r3Findings)),
+            "An R3 entry for the real current and accepted dots, which differ.");
 
         KnownFailure noCheck = Entry("R5\tthe card\tDark\t#1\ta light patch");
         Assert.AreEqual(
