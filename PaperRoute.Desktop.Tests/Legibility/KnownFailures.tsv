@@ -5,7 +5,10 @@
 # source as well as here, or when an entry names a rule that has no check in this project yet. This is not R5's allow-list, which will hold looks that are accepted, not faults.
 #
 # One line per failure, five cells separated by tabs, none empty: rule (R1, R2 or R3), subject (for a pair of R1 or R2
-# "<ink> on <surface>", token keys; for R2's role and resolution checks the key; for R3 "<one> and <other>", route kinds),
-# theme case (R1: Light, Dark; R2: hc1, hc2, hcblack, hcwhite, fallback, or "contrast" for a check that holds in every
-# set; R3: any of the six), issue ("#" and its number), and one line of why, as each rule's Finding gives them.
+# "<ink> on <surface>", token keys; for R2's role and resolution checks the key, or "the window's variant"; for R2's
+# theme-file check "<file> <key>", such as "hc1.theme GrayText", or "<file>" when the file is missing; for R3
+# "<one> and <other>", route kinds), theme case (R1: Light, Dark; R2: hc1, hc2, hcblack, hcwhite, fallback, or
+# "contrast" for a check that holds in every set; R3: any of the six), issue ("#" and its number), and one line of why,
+# as each rule's Finding gives them. An entry for R2's resolution check covers its set entered from a Light base and from
+# a Dark base alike. An entry for a theme file is judged only on Windows, where the theme files are read.
 rule	subject	theme case	issue	why

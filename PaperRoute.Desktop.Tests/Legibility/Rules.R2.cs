@@ -19,7 +19,14 @@ namespace PaperRoute.Desktop.Tests.Legibility;
 // theme files. A finding of check 3, of the window's resolution and of the
 // theme files names its set as its theme case (hc1, hc2, hcblack, hcwhite,
 // or fallback); the role table and check 2 hold for every set at once, so
-// their findings name the theme case "contrast" (R2AnySet).
+// their findings name the theme case "contrast" (R2AnySet). A finding's
+// subject is the pair, "<ink> on <surface>", for checks 2 and 3; the key for
+// check 1, or "the window's variant" when the window is not in the set's
+// variant; and for the theme files "<file> <key>" (such as "hc1.theme
+// GrayText"), or "<file>" when the file is missing. The window's resolution
+// is checked with each set entered from a Light base and from a Dark base;
+// the base is named only in the finding's line, so one listed entry covers
+// both.
 // Limits of headless: HeadlessLimits.md
 internal static partial class Rules
 {
