@@ -313,6 +313,37 @@ public sealed class NavigatorTests
         Assert.HasCount(2, board.ShownWith);
     }
 
+    // Not in the design's list: a page that asks to switch pages from its
+    // Shown or Hidden is refused at once, as the page contract says, and the
+    // move under way finishes as if alone.
+    [TestMethod]
+    public async Task ASwitchAskedFromShownOrHiddenIsRefused()
+    {
+        var pages = new TestPages();
+        Navigator navigator = pages.Navigator;
+        await navigator.GoAsync(s_board);
+        await navigator.GoAsync(s_library);
+        await navigator.GoAsync(s_board);
+        FakePage board = pages.Page(PageKey.Board);
+        FakePage library = pages.Page(PageKey.Library);
+        Task<bool>? fromHidden = null;
+        Task<bool>? fromShown = null;
+        board.WhenHidden = () => fromHidden = navigator.GoAsync(s_journals);
+        library.WhenShown = () => fromShown = navigator.GoAsync(s_deadlines);
+
+        Assert.IsTrue(await navigator.GoAsync(s_library));
+
+        Assert.IsNotNull(fromHidden);
+        Assert.IsNotNull(fromShown);
+        await RefusedAtOnce(fromHidden, "A switch asked from Hidden is refused.");
+        await RefusedAtOnce(fromShown, "A switch asked from Shown is refused.");
+        Assert.AreEqual(s_library, navigator.Current);
+        Assert.AreSame(library, navigator.CurrentPage);
+        Assert.IsEmpty(pages.MadeFor(PageKey.Journals), "The refused switches made no page.");
+        Assert.IsEmpty(pages.MadeFor(PageKey.Deadlines), "The refused switches made no page.");
+        HistoryIs(navigator.BackHistory, "Only the move under way is recorded.", s_board, s_library, s_board);
+    }
+
     // Not in the design's list (it is silent on races): while one leave
     // guard is still answering, a second move of any kind is refused at once
     // and changes nothing; the first then finishes as if alone. Back and

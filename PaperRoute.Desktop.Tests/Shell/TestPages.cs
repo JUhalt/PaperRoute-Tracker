@@ -25,9 +25,22 @@ internal sealed class FakePage(PageKey key) : IPage
 
     public TaskCompletionSource<bool>? HeldAnswer { get; set; }
 
-    public void Shown(PageRequest request) => ShownWith.Add(request);
+    // What the page does when shown or hidden, beyond counting it.
+    public Action? WhenShown { get; set; }
 
-    public void Hidden() => HiddenCount++;
+    public Action? WhenHidden { get; set; }
+
+    public void Shown(PageRequest request)
+    {
+        ShownWith.Add(request);
+        WhenShown?.Invoke();
+    }
+
+    public void Hidden()
+    {
+        HiddenCount++;
+        WhenHidden?.Invoke();
+    }
 
     public ValueTask<bool> CanLeaveAsync()
     {

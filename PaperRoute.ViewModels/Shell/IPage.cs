@@ -10,14 +10,16 @@ public interface IPage
 
     // Each time the page becomes the current one, with the request that made
     // it so: for the manuscript page, its manuscript and section. Also called
-    // alone when another section of the manuscript shown is asked for.
+    // alone when another section of the manuscript shown is asked for. It
+    // must not switch pages: a switch asked from here is refused.
     void Shown(PageRequest request)
     {
     }
 
     // Each time the page stops being the current one, once the leave was
     // allowed, and never on a refusal: stop timers and drop references, as
-    // today's LeaveCurrentPage does (Form1.Shell.vb:829-848).
+    // today's LeaveCurrentPage does (Form1.Shell.vb:829-848). It must not
+    // switch pages: a switch asked from here is refused.
     void Hidden()
     {
     }

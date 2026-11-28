@@ -15,7 +15,8 @@ public sealed class Navigator : INavigator
     private readonly Stack<PageRequest> _back = new();
     private readonly Stack<PageRequest> _forward = new();
 
-    // A move is waiting on a leave guard; another is refused meanwhile.
+    // A move is under way: its leave guard, Hidden, the page being made and
+    // Shown. Another move is refused meanwhile.
     private bool _moving;
 
     public Navigator(PageCatalog catalog, ILibrarySession session, IInteractions interactions, IUiDispatcher dispatcher, IDebouncer debouncer)

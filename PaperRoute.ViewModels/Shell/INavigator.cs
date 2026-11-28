@@ -31,8 +31,10 @@ public interface INavigator
     // be left; a refusal changes nothing and returns false. A recorded move
     // puts the page left on Back and clears Forward. The page already shown
     // (another section of the manuscript shown included) records nothing and
-    // returns true. While a move waits on a leave guard, another move is
-    // refused (returns false) and changes nothing.
+    // returns true. While a move is under way (its leave guard, Hidden, the
+    // page being made and Shown), another move is refused (returns false)
+    // and changes nothing, so a page cannot switch pages from its Shown or
+    // Hidden.
     Task<bool> GoAsync(PageRequest request, bool recordHistory = true);
 
     // Back and Forward skip manuscripts the library no longer holds. A
