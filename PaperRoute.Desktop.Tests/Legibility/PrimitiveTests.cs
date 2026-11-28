@@ -130,25 +130,40 @@ public sealed class PrimitiveTests
     }
 
     // At the middle of each side the stronger of the two outermost pixels
-    // counts, and the weakest side is the answer: the bottom's middle pixel,
-    // #767676 on white. Fails if another place on a side is read (the rest
-    // of the bottom row is black), if only the outermost pixel is read (the
-    // left side's is white, its second black), or if the strongest side wins.
+    // counts, and the weakest side is the answer. Each side is the weakest
+    // in turn: its outermost middle pixel is white, its second #767676, and
+    // the pixel just outside it black; every other side reads white, then
+    // black. Fails if a side reads outside the shape or off its middle
+    // (black there gives 21:1), if only the outermost pixel is read (white
+    // everywhere gives 1:1), or if the strongest side wins.
     [TestMethod]
-    public void EdgeContrastTakesTheWeakestSide()
+    [DataRow("top")]
+    [DataRow("bottom")]
+    [DataRow("left")]
+    [DataRow("right")]
+    public void EdgeContrastTakesTheWeakestSide(string weakSide)
     {
         Color grey = Color.FromRgb(0x76, 0x76, 0x76);
         var shape = new PixelRect(4, 4, 10, 10);
+        // At the weak side's middle: its second pixel, and the pixel just
+        // outside the shape. White is the outermost ring; black fills the
+        // rest of the shape.
+        (PixelPoint second, PixelPoint outside) = weakSide switch
+        {
+            "top" => (new PixelPoint(9, 5), new PixelPoint(9, 3)),
+            "bottom" => (new PixelPoint(9, 12), new PixelPoint(9, 14)),
+            "left" => (new PixelPoint(5, 9), new PixelPoint(3, 9)),
+            "right" => (new PixelPoint(12, 9), new PixelPoint(14, 9)),
+            _ => throw new ArgumentOutOfRangeException(nameof(weakSide), weakSide, "No such side."),
+        };
         FramePixels frame = new CodeBitmap(20, 20, s_white)
-            .Fill(new PixelRect(4, 4, 10, 1), s_black)
-            .Fill(new PixelRect(4, 13, 10, 1), s_black)
-            .Set(9, 13, grey)
-            .Fill(new PixelRect(5, 4, 1, 10), s_black)
-            .Fill(new PixelRect(13, 4, 1, 10), s_black)
+            .Fill(new PixelRect(5, 5, 8, 8), s_black)
+            .Set(second.X, second.Y, grey)
+            .Set(outside.X, outside.Y, s_black)
             .Frame();
 
         Assert.AreEqual(Contrast.ContrastRatio(grey, s_white), frame.EdgeContrast(shape, s_white),
-            "The weakest side is the bottom, whose middle pixel is #767676.");
+            $"The weakest side is the {weakSide}, whose second middle pixel is #767676.");
 
         FramePixels open = new CodeBitmap(20, 20, s_white)
             .Fill(new PixelRect(4, 4, 10, 1), s_black)
