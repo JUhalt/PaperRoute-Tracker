@@ -18,7 +18,7 @@ internal readonly record struct PairRatio(string ThemeCase, TokenPair Pair, doub
 // bounds, and returns its findings; it never asserts. The tests assert, so a
 // teeth test can hand a rule a bad input and read what it reports.
 // Limits of headless: HeadlessLimits.md
-internal static class Rules
+internal static partial class Rules
 {
     // R1: every ink on its surface at 4.5:1, muted and disabled text included
     // (question 5). The colours are one theme case's, read from the token file
