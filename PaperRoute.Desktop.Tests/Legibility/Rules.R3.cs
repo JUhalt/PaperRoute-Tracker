@@ -3,6 +3,16 @@ using Avalonia.Media;
 
 namespace PaperRoute.Desktop.Tests.Legibility;
 
+// One value R3 measures: how far two route kinds' patterns differ in one
+// theme case (the share of positions, from 0 to 1), and the contrast of their
+// commonest colours.
+internal readonly record struct PatternMeasure(string ThemeCase, string One, string Other, double Differing, double Ratio)
+{
+    // "<one> and <other>: <n> % of positions differ; commonest colours <r>:1".
+    public string Line => string.Create(CultureInfo.InvariantCulture,
+        $"{One} and {Other}: {Differing * 100:F1} % of positions differ; commonest colours {Ratio:F2}:1");
+}
+
 // R3, route kinds told apart without colour (plan :164; harness design 2.4),
 // as today's rule (WorkflowThemeKeyboardSmokeTests.vb,
 // RouteMapKinds_CanBeToldApartWithoutColor): each kind is painted alone; a
@@ -10,15 +20,39 @@ namespace PaperRoute.Desktop.Tests.Legibility;
 // two swatches share a pattern when under 10 % or over 90 % of positions
 // differ; a pair fails when it shares a pattern and either a contrast theme is
 // on (the colours are the user's) or its commonest colours are under 3:1.
-// Input: swatches of equal size. Output: findings, one line each.
+// Input: swatches of equal size. Output: findings (Rules.cs), one line each,
+// whose subject is the pair, "<one> and <other>".
 // Limits of headless: HeadlessLimits.md
 internal static partial class Rules
 {
-    public static List<string> R3Findings(IReadOnlyList<(string Name, Color[] Pixels)> swatches, bool contrast, ICollection<string> measured)
+    public static List<Finding> R3Findings(string themeCase, IReadOnlyList<(string Name, Color[] Pixels)> swatches, bool contrast) =>
+        R3Findings(R3Measures(themeCase, swatches), contrast);
+
+    // R3's findings from its measurements: the pairs that share a pattern,
+    // under a contrast theme or under 3:1.
+    public static List<Finding> R3Findings(IEnumerable<PatternMeasure> measures, bool contrast)
+    {
+        ArgumentNullException.ThrowIfNull(measures);
+        var findings = new List<Finding>();
+        foreach (PatternMeasure measured in measures)
+        {
+            bool same = measured.Differing < Thresholds.R3SamePatternUnder || measured.Differing > Thresholds.R3SamePatternOver;
+            if (same && (contrast || measured.Ratio < Thresholds.R3Colours))
+            {
+                findings.Add(new Finding("R3", measured.ThemeCase, $"{measured.One} and {measured.Other}",
+                    measured.Line + (contrast ? ": the same pattern under a contrast theme" : ": the same pattern and under 3:1")));
+            }
+        }
+
+        return findings;
+    }
+
+    // What R3 measures: every pair of swatches, in order, passing or not. The
+    // R3 run writes these to legibility-r3-<case>.txt (Measurements).
+    public static IReadOnlyList<PatternMeasure> R3Measures(string themeCase, IReadOnlyList<(string Name, Color[] Pixels)> swatches)
     {
         ArgumentNullException.ThrowIfNull(swatches);
-        ArgumentNullException.ThrowIfNull(measured);
-        var findings = new List<string>();
+        var measures = new List<PatternMeasure>();
         for (int first = 0; first < swatches.Count - 1; first++)
         {
             for (int second = first + 1; second < swatches.Count; second++)
@@ -30,20 +64,11 @@ internal static partial class Rules
                     throw new ArgumentException($"The swatches of {oneName} ({one.Length} pixels) and {otherName} ({other.Length}) are not one size.", nameof(swatches));
                 }
 
-                double differing = R3Differing(one, other);
-                double ratio = Contrast.ContrastRatio(Commonest(one), Commonest(other));
-                bool same = differing < Thresholds.R3SamePatternUnder || differing > Thresholds.R3SamePatternOver;
-                string line = string.Create(CultureInfo.InvariantCulture,
-                    $"{oneName} and {otherName}: {differing * 100:F1} % of positions differ; commonest colours {ratio:F2}:1");
-                measured.Add(line);
-                if (same && (contrast || ratio < Thresholds.R3Colours))
-                {
-                    findings.Add(line + (contrast ? ": the same pattern under a contrast theme" : ": the same pattern and under 3:1"));
-                }
+                measures.Add(new PatternMeasure(themeCase, oneName, otherName, R3Differing(one, other), Contrast.ContrastRatio(Commonest(one), Commonest(other))));
             }
         }
 
-        return findings;
+        return measures;
     }
 
     // The share of positions in one swatch's pattern and not the other's, or

@@ -1,11 +1,9 @@
-using System.Runtime.InteropServices;
+using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Layout;
 using Avalonia.Media;
-using Avalonia.Media.Imaging;
-using Avalonia.Platform;
 using Avalonia.Threading;
 using ManuscriptPipeline.Services;
 
@@ -15,11 +13,16 @@ namespace PaperRoute.Desktop.Tests.Legibility;
 // of RouteKinds drawn alone in its fixed slot at render scale 4, in all six
 // theme cases, and judged by Rules.R3Findings. Each case's picture is saved
 // for the maintainer's eye (rules-r3-<case>.png) and its numbers beside it
-// (legibility-r3-<case>.txt).
+// (legibility-r3-<case>.txt). A failure listed in KnownFailures.tsv does not
+// fail the run, as with R1 (KnownFailuresAreCurrent re-runs it through
+// CurrentFindings).
 // Limits of headless: HeadlessLimits.md
 [TestClass]
 public sealed class R3Tests
 {
+    // The columns of legibility-r3-<case>.txt.
+    private static readonly string[] s_patternColumns = ["theme case", "pair", "positions differing (%)", "commonest colours ratio"];
+
     public TestContext TestContext { get; set; } = null!;
 
     [TestMethod]
@@ -30,17 +33,30 @@ public sealed class R3Tests
             RouteKinds.All.Select(kind => kind.Name).ToArray(),
             "The registry holds every route-dot state the card draws, in order.");
 
-        var findings = new List<string>();
+        IReadOnlyList<KnownFailure> known = KnownFailures.Load();
+        var findings = new List<Finding>();
         foreach (ThemeCase themeCase in ThemeCase.All)
         {
-            List<(string Name, Color[] Pixels)> swatches = Draw(themeCase, RouteKinds.All, "rules-r3-" + themeCase.Name.ToLowerInvariant());
-            var measured = new List<string>();
-            findings.AddRange(Rules.R3Findings(swatches, themeCase.Contrast is not null, measured).Select(finding => $"{themeCase}: {finding}"));
-            MeasuredValues.Write("r3", themeCase.Name, measured, TestContext);
-            TestContext.WriteLine($"{themeCase}: " + string.Join("; ", measured));
+            List<(string Name, Color[] Pixels)> swatches = Draw(themeCase, RouteKinds.All, "rules-r3-" + themeCase.Name.ToLowerInvariant(), TestContext);
+            IReadOnlyList<PatternMeasure> measures = Rules.R3Measures(themeCase.Name, swatches);
+            findings.AddRange(Rules.R3Findings(measures, themeCase.Contrast is not null).Where(finding => !KnownFailures.Lists(known, finding)));
+            string path = Measurements.Write(
+                Pictures.Directory(),
+                "R3",
+                themeCase.Name,
+                s_patternColumns,
+                measures.Select(measured => (IReadOnlyList<string>)
+                [
+                    measured.ThemeCase,
+                    $"{measured.One} and {measured.Other}",
+                    (measured.Differing * 100).ToString("F1", CultureInfo.InvariantCulture),
+                    Measurements.Number(measured.Ratio),
+                ]));
+            TestContext.WriteLine($"Measured values saved: {path}");
+            TestContext.WriteLine($"{themeCase}: " + string.Join("; ", measures.Select(measured => measured.Line)));
         }
 
-        Assert.IsEmpty(findings, "R3, route kinds alike without colour:" + Environment.NewLine + string.Join(Environment.NewLine, findings));
+        Assert.IsEmpty(findings, "R3, route kinds alike without colour:" + Environment.NewLine + string.Join(Environment.NewLine, findings.Select(finding => $"{finding.ThemeCase}: {finding}")));
     }
 
     // The rule's teeth: "closed" drawn at 10 px, like "accepted", differs from
@@ -58,19 +74,30 @@ public sealed class R3Tests
         });
         RouteKind accepted = RouteKinds.All.Single(kind => kind.Name == "accepted");
 
-        List<(string Name, Color[] Pixels)> swatches = Draw(ThemeCase.Light, [large, accepted], "rules-r3-teeth-light");
-        var measured = new List<string>();
-        List<string> findings = Rules.R3Findings(swatches, contrast: false, measured);
-        TestContext.WriteLine(string.Join(Environment.NewLine, measured));
+        List<(string Name, Color[] Pixels)> swatches = Draw(ThemeCase.Light, [large, accepted], "rules-r3-teeth-light", TestContext);
+        IReadOnlyList<PatternMeasure> measures = Rules.R3Measures(ThemeCase.Light.Name, swatches);
+        List<Finding> findings = Rules.R3Findings(measures, contrast: false);
+        string measured = string.Join(Environment.NewLine, measures.Select(measure => measure.Line));
+        TestContext.WriteLine(measured);
 
-        Assert.HasCount(1, findings, "One pair, alike: " + string.Join("; ", measured));
-        StringAssert.StartsWith(findings[0], "closed at 10 px and accepted: ");
-        StringAssert.EndsWith(findings[0], "; commonest colours 1.09:1: the same pattern and under 3:1");
+        Assert.HasCount(1, findings, "One pair, alike: " + string.Join("; ", measures.Select(measure => measure.Line)));
+        Assert.AreEqual(new Finding("R3", "Light", "closed at 10 px and accepted", findings[0].Line), findings[0], "The finding names R3, its theme case and the pair.");
+        StringAssert.StartsWith(findings[0].Line, "closed at 10 px and accepted: ");
+        StringAssert.EndsWith(findings[0].Line, "; commonest colours 1.09:1: the same pattern and under 3:1");
     }
 
+    // What the R3 run reports today, listed failures included: every theme
+    // case drawn again, without saving its picture.
+    internal static IReadOnlyList<Finding> CurrentFindings() =>
+        ThemeCase.All
+            .SelectMany(themeCase => Rules.R3Findings(themeCase.Name, Draw(themeCase, RouteKinds.All, picture: null, context: null), themeCase.Contrast is not null))
+            .ToList();
+
     // Draws each kind alone in its slot, on CardBackgroundBrush, at render
-    // scale 4, saves the picture and returns each slot's pixels.
-    private List<(string Name, Color[] Pixels)> Draw(ThemeCase themeCase, IReadOnlyList<RouteKind> kinds, string picture) => Headless.Run(() =>
+    // scale 4, saves the picture (unless none is named, when the frame is
+    // settled as Pictures.Save settles it) and returns each slot's pixels,
+    // read through FramePixels.
+    private static List<(string Name, Color[] Pixels)> Draw(ThemeCase themeCase, IReadOnlyList<RouteKind> kinds, string? picture, TestContext? context) => Headless.Run(() =>
     {
         themeCase.Apply(Application.Current!);
         var row = new StackPanel
@@ -96,34 +123,30 @@ public sealed class R3Tests
         try
         {
             window.SetRenderScaling(RouteKinds.Scale);
-            Pictures.Save(window, picture, TestContext);
-            Dispatcher.UIThread.RunJobs();
-            using WriteableBitmap? frame = window.CaptureRenderedFrame();
-            Assert.IsNotNull(frame, "The headless platform captured no frame.");
-            using ILockedFramebuffer buffer = frame.Lock();
-            bool bgra = buffer.Format == PixelFormat.Bgra8888;
-            Assert.IsTrue(bgra || buffer.Format == PixelFormat.Rgba8888, $"A frame in {buffer.Format}, which the test does not read.");
-            var bytes = new byte[buffer.RowBytes * buffer.Size.Height];
-            Marshal.Copy(buffer.Address, bytes, 0, bytes.Length);
+            if (picture is not null)
+            {
+                Pictures.Save(window, picture, context!);
+            }
+            else
+            {
+                Dispatcher.UIThread.RunJobs();
+                AvaloniaHeadlessPlatform.ForceRenderTimerTick(30);
+            }
 
+            FramePixels frame = FramePixels.Capture(window);
             int side = (int)Math.Round(RouteKinds.Slot * RouteKinds.Scale);
             var swatches = new List<(string Name, Color[] Pixels)>();
             foreach ((string name, Border slot) in slots)
             {
                 Point origin = slot.TranslatePoint(default, window) ?? throw new AssertFailedException($"The slot of {name} is not in the window.");
-                int left = (int)Math.Round(origin.X * RouteKinds.Scale);
-                int top = (int)Math.Round(origin.Y * RouteKinds.Scale);
-                Assert.IsTrue(left + side <= buffer.Size.Width && top + side <= buffer.Size.Height, $"The slot of {name} lies outside the frame {buffer.Size}.");
+                var area = new PixelRect((int)Math.Round(origin.X * RouteKinds.Scale), (int)Math.Round(origin.Y * RouteKinds.Scale), side, side);
+                Assert.IsTrue(frame.Contains(area), $"The slot of {name} lies outside the frame {frame.Width} x {frame.Height}.");
                 var pixels = new Color[side * side];
                 for (int y = 0; y < side; y++)
                 {
                     for (int x = 0; x < side; x++)
                     {
-                        // The frame is opaque, so premultiplied colour is the colour.
-                        int offset = ((top + y) * buffer.RowBytes) + ((left + x) * 4);
-                        pixels[(y * side) + x] = bgra
-                            ? Color.FromRgb(bytes[offset + 2], bytes[offset + 1], bytes[offset])
-                            : Color.FromRgb(bytes[offset], bytes[offset + 1], bytes[offset + 2]);
+                        pixels[(y * side) + x] = frame.At(area.X + x, area.Y + y);
                     }
                 }
 
