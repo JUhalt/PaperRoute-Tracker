@@ -258,6 +258,17 @@ public sealed class R2Tests
         return findings;
     }
 
+    // Whether a re-run that reads the theme files from this folder (null:
+    // none, as off Windows) can judge an entry: an entry for a theme file,
+    // "<file> <key>" or "<file>", only when the files are read. Every other
+    // entry is judged on every system.
+    internal static bool Judges(string? themeFolder, KnownFailure entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        return themeFolder is not null || !ThemeCase.ContrastCases.Any(themeCase =>
+            entry.Subject == themeCase.ThemeFile || entry.Subject.StartsWith(themeCase.ThemeFile + " ", StringComparison.Ordinal));
+    }
+
     private static List<Finding> RoleTableFindings(Inputs inputs) => Rules.R2RoleFindings(inputs.Keys, inputs.Roles);
 
     private static List<Finding> DesignedPairFindings(Inputs inputs) => Rules.R2DesignedPairFindings(TokenPairs.All, inputs.Roles);

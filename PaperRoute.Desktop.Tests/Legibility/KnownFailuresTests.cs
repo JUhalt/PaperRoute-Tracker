@@ -16,16 +16,19 @@ public sealed partial class KnownFailuresTests
 
     // The rules that have a check in this project, each with what re-runs it
     // on its run tests' own inputs and gives everything it reports today,
-    // listed failures included; an entry for another rule cannot be judged
-    // yet. Each rule's pull request adds its name. A rule is re-run here only
-    // when an entry names it (the teeth below re-run R1, R2 and R3 on every
-    // run, R2 and R3 on spoiled inputs).
-    private static readonly Dictionary<string, Func<IReadOnlyList<Finding>>> s_rulesWithACheck = new(StringComparer.Ordinal)
+    // listed failures included, and which entries that re-run can judge on
+    // this system; an entry for another rule cannot be judged yet. Each
+    // rule's pull request adds its name. A rule is re-run here only when an
+    // entry names it (the teeth below re-run R1, R2 and R3 on every run, R2
+    // and R3 on spoiled inputs).
+    private static readonly Dictionary<string, RuleCheck> s_rulesWithACheck = new(StringComparer.Ordinal)
     {
-        ["R1"] = () => R1Tests.Variants.SelectMany(variant => Rules.R1(variant, TokenFile.Colors(variant), TokenPairs.All)).ToList(),
-        ["R2"] = () => R2Tests.CurrentFindings(R2Tests.Inputs.Real),
-        ["R3"] = () => R3Tests.CurrentFindings(RouteKinds.All),
+        ["R1"] = new(() => R1Tests.Variants.SelectMany(variant => Rules.R1(variant, TokenFile.Colors(variant), TokenPairs.All)).ToList(), _ => true),
+        ["R2"] = new(() => R2Tests.CurrentFindings(R2Tests.Inputs.Real), entry => R2Tests.Judges(R2Tests.RealThemeFolder, entry)),
+        ["R3"] = new(() => R3Tests.CurrentFindings(RouteKinds.All), _ => true),
     };
+
+    public TestContext TestContext { get; set; } = null!;
 
     // The list, read strictly; then the same check on lists spoiled one way
     // each, which must name exactly that fault.
@@ -35,6 +38,11 @@ public sealed partial class KnownFailuresTests
         IReadOnlyList<KnownFailure> entries = KnownFailures.Load();
         IReadOnlyList<Finding> findings = CurrentFindings(entries);
         List<string> problems = Problems(entries, ExpectedCount, findings);
+        foreach (KnownFailure entry in entries.Where(entry => s_rulesWithACheck.TryGetValue(entry.Rule, out RuleCheck? check) && !check.JudgedHere(entry)))
+        {
+            TestContext.WriteLine($"Line {entry.Line}: {entry.Rule}, {entry.Subject}, {entry.ThemeCase} cannot be judged on this system (its check does not run here), so it is not called stale.");
+        }
+
         Assert.IsEmpty(problems, "The known-failures list:" + Environment.NewLine + string.Join(Environment.NewLine, problems));
 
         // The check's teeth.
@@ -92,6 +100,25 @@ public sealed partial class KnownFailuresTests
             string.Join(Environment.NewLine, Problems([r2Stale], 1, r2Findings)),
             "An R2 entry for the real hc2, which passes check 3.");
 
+        // A theme file's entry is judged only where the theme files are read
+        // (on Windows): elsewhere R2's re-run cannot report it, so it is not
+        // stale there; every other entry is judged everywhere.
+        KnownFailure[] themeFiles =
+        [
+            Entry("R2\thc1.theme GrayText\thc1\t#1\ta theme file that differs from the app's set"),
+            Entry("R2\thc1.theme\thc1\t#1\ta theme file missing"),
+        ];
+        Assert.IsEmpty(Problems(themeFiles, 2, [], entry => R2Tests.Judges(null, entry)), "Where no theme file is read, a theme file's entry is not judged.");
+        Assert.AreEqual(
+            "Line 10: R2, hc1.theme GrayText, hc1 is stale: R2 no longer reports it." + Environment.NewLine +
+            "Line 10: R2, hc1.theme, hc1 is stale: R2 no longer reports it.",
+            string.Join(Environment.NewLine, Problems(themeFiles, 2, [], entry => R2Tests.Judges(spoiled.ThemeFolder, entry))),
+            "Where the theme files are read, a theme file's entry R2 does not report is stale.");
+        Assert.AreEqual(
+            "Line 10: R2, MutedTextBrush on CardBackgroundBrush, hc2 is stale: R2 no longer reports it.",
+            string.Join(Environment.NewLine, Problems([r2Stale], 1, [], entry => R2Tests.Judges(null, entry))),
+            "Where no theme file is read, any other R2 entry is still judged.");
+
         RouteKind current = RouteKinds.All.Single(kind => kind.Name == "current");
         RouteKind accepted = RouteKinds.All.Single(kind => kind.Name == "accepted");
         IReadOnlyList<Finding> r3Findings = R3Tests.CurrentFindings([R3Tests.ClosedAtTenPixels, current, accepted]);
@@ -122,7 +149,10 @@ public sealed partial class KnownFailuresTests
             "A line with four cells must not be read.");
     }
 
-    private static List<string> Problems(IReadOnlyList<KnownFailure> entries, int expectedCount, IReadOnlyList<Finding> findings)
+    // What is wrong with the list, judged against the findings; judgedHere
+    // says which entries the re-runs can judge on this system (by default,
+    // each rule's own answer).
+    private static List<string> Problems(IReadOnlyList<KnownFailure> entries, int expectedCount, IReadOnlyList<Finding> findings, Func<KnownFailure, bool>? judgedHere = null)
     {
         var problems = new List<string>();
         if (entries.Count != expectedCount)
@@ -138,11 +168,13 @@ public sealed partial class KnownFailuresTests
                 problems.Add($"{name} has no issue number (\"#\" and its number).");
             }
 
-            if (!s_rulesWithACheck.ContainsKey(entry.Rule))
+            // An entry whose check does not run on this system is not judged
+            // stale here; a system where it runs judges it.
+            if (!s_rulesWithACheck.TryGetValue(entry.Rule, out RuleCheck? check))
             {
                 problems.Add($"{name} names a rule with no check in this project yet.");
             }
-            else if (!findings.Any(finding => finding.Rule == entry.Rule && finding.Subject == entry.Subject && finding.ThemeCase == entry.ThemeCase))
+            else if ((judgedHere ?? check.JudgedHere)(entry) && !findings.Any(finding => finding.Rule == entry.Rule && finding.Subject == entry.Subject && finding.ThemeCase == entry.ThemeCase))
             {
                 problems.Add($"{name} is stale: {entry.Rule} no longer reports it.");
             }
@@ -156,8 +188,12 @@ public sealed partial class KnownFailuresTests
     private static IReadOnlyList<Finding> CurrentFindings(IReadOnlyList<KnownFailure> entries) =>
         entries.Select(entry => entry.Rule).Distinct(StringComparer.Ordinal)
             .Where(s_rulesWithACheck.ContainsKey)
-            .SelectMany(rule => s_rulesWithACheck[rule]())
+            .SelectMany(rule => s_rulesWithACheck[rule].Rerun())
             .ToList();
+
+    // One rule's check: what re-runs it, and which entries that re-run can
+    // judge on this system.
+    private sealed record RuleCheck(Func<IReadOnlyList<Finding>> Rerun, Func<KnownFailure, bool> JudgedHere);
 
     // One data line, read as the tenth line of a file with the real header.
     private static KnownFailure Entry(string line)
