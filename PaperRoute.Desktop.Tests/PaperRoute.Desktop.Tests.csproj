@@ -36,6 +36,8 @@
     <!-- Every banned core member one file may call, with that file, and the banned list it is checked against (LiftedBanTests). -->
     <None Update="CoreSurface\lifted-bans.txt" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\PaperRoute.ViewModels\BannedSymbols.txt" Link="CoreSurface\BannedSymbols.txt" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The two draft-file shapes PaperRoute 1.0.0 and 1.0.1 write (RecoveryDraftsTests). -->
+    <None Update="Fixtures\Recovery\*.json" CopyToOutputDirectory="PreserveNewest" />
     <!-- The accessibility trees and Tab orders the Board must keep (AccessibilityTreeTests). -->
     <None Update="Expected\*.txt" CopyToOutputDirectory="PreserveNewest" />
     <!-- The target catalog and the parity map as data (ParityMapTests); PaperRoute.Tests links parity-map.tsv for its key lock. -->

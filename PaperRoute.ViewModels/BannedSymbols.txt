@@ -12,7 +12,7 @@ M:ManuscriptPipeline.Services.StorageMigrationService.EnsureCurrentStorage;The B
 M:ManuscriptPipeline.Services.StorageMigrationService.EnsureCurrentStorage(System.String,System.String,System.String,System.String);The Board trial never migrates storage (d1 1.3, lock 3)
 M:ManuscriptPipeline.Services.StorageMigrationService.WriteCurrentSchemaVersionReplacingExisting(System.String);The Board trial is read-only: it never writes the schema version (d1 1.3, lock 3)
 T:ManuscriptPipeline.Services.PortableBackupService;The Board trial is read-only: it never writes a backup (d1 1.3, lock 3)
-T:ManuscriptPipeline.Services.RecoveryDraftStore;The Board trial is read-only: it never writes or deletes a recovery draft (d1 1.3, lock 3)
+T:ManuscriptPipeline.Services.RecoveryDraftStore;Recovery drafts are read, written and deleted only by RecoveryDrafts, in the library's data\recovery folder, under a #pragma (start-up design 2.5, lock 3)
 T:ManuscriptPipeline.Services.StorageFile;The Board trial is read-only: it never writes or replaces a storage file (d1 1.3, lock 3)
 T:ManuscriptPipeline.Services.ManagedPacketDeletionService;The Board trial is read-only: it never deletes packet files (d1 1.3, lock 3)
 T:ManuscriptPipeline.Services.ManagedLibraryService.ManagedVersionDeletionTransaction;The Board trial is read-only: it never deletes managed versions (d1 1.3, lock 3)

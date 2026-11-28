@@ -9,7 +9,7 @@
 #              and why it cannot change a library on disk, or, for the few that write, what confines the write to the isolated session.
 # A second category, WRITES THE PERSON'S STORAGE: start-up and recovery only; the owner is named in lifted-bans.txt. Such a line's reason
 #              starts "WRITES THE PERSON'S STORAGE: " and says what it writes; EachLiftedBanHasOneOwner fails it unless lifted-bans.txt lists
-#              the member with its one owner file (start-up design 2.8).
+#              the member, or its whole type, with its one owner file (start-up design 2.8).
 # A type named only in the parameters of a listed member (ManagedLibraryService) needs no line of its own: naming it runs none of its code.
 # Before adding a line: read the member in PaperRoute.Core, and add it only if it cannot write outside the isolated session, or, in the
 # second category, only for start-up and recovery, with its owner in lifted-bans.txt.
@@ -38,6 +38,10 @@ M:ManuscriptPipeline.Services.ManuscriptStagePolicyService.GetRequirement(Manusc
 M:ManuscriptPipeline.Services.ManuscriptStagePolicyService.IsStageSupported(ManuscriptPipeline.Models.Manuscript,ManuscriptPipeline.Models.PaperStage);reads a manuscript's latest submission and decision in memory (ManuscriptAttentionService.GetLatestSubmission, GetLatestDecision) to say whether a stage is supported; the manuscript page's held stage at Save (ManuscriptRules.StepNeededFor); no I/O in either file
 M:ManuscriptPipeline.Services.ManuscriptStagePolicyService.RequirementDescription(ManuscriptPipeline.Services.ManuscriptStageWorkflowRequirement);maps a requirement to its words; the manuscript page's stage message (ManuscriptRules.StepNeededFor); no I/O
 M:ManuscriptPipeline.Services.ManuscriptStageSummaryService.CountByStage(System.Collections.Generic.IEnumerable{ManuscriptPipeline.Models.Manuscript});counts manuscripts by stage in memory; no I/O
+M:ManuscriptPipeline.Services.RecoveryDraftStore.#ctor(System.String);keeps the path <folder>\recovery\manuscript-page-draft.json and builds JSON options; no I/O; RecoveryDrafts gives it the library's data folder (the main slot) or a waiting slot's folder under data\recovery
+M:ManuscriptPipeline.Services.RecoveryDraftStore.Delete;WRITES THE PERSON'S STORAGE: deletes the one draft file at its path (File.Exists, File.Delete) and nothing else; also banned (RS0030), called only from RecoveryDrafts under a #pragma, for a draft this session wrote, adopted or discarded (start-up design 2.5 rule 4)
+M:ManuscriptPipeline.Services.RecoveryDraftStore.Read;reads the draft file (File.Exists, StorageFile.OpenRead) and returns null for a missing or unreadable file, which it leaves where it is; writes nothing
+M:ManuscriptPipeline.Services.RecoveryDraftStore.Write(ManuscriptPipeline.Services.RecoveryDraft);WRITES THE PERSON'S STORAGE: creates the slot's recovery folder and writes the one draft file through StorageFile.Write (flushed, then swapped in); also banned (RS0030), called only from RecoveryDrafts.WriteFrom under a #pragma, into a slot that is empty or holds this session's own draft (start-up design 2.5 rule 2)
 M:ManuscriptPipeline.Services.RouteSummaryService.Describe(ManuscriptPipeline.Models.Manuscript);builds the route dots and text from a manuscript in memory; no I/O in the file or in what it calls
 M:ManuscriptPipeline.Services.StageClockService.Describe(ManuscriptPipeline.Models.Manuscript,System.DateTime);builds the stage-clock text in memory; no I/O
 M:ManuscriptPipeline.Services.StorageEnvironment.ConfigureIsolatedSessionRoot(System.String);WRITES: creates the new <temp>\PaperRoute-Trial-<guid> folder TrialStartup.StartSnapshot names and makes it the isolated session (lock 1 for --snapshot-from); refuses a folder that exists, is not a direct child of the temporary folder, or comes after any root was resolved (StorageEnvironment.vb:36-67)
@@ -79,7 +83,7 @@ T:ManuscriptPipeline.Models.TagColor;in memory only: two auto-properties (Tag, C
 T:ManuscriptPipeline.Models.TagPalette;in memory only: an enum of eight colors (Models\TagColor.vb)
 T:ManuscriptPipeline.Models.WorkType;in memory only: an enum of nine work types (Models\WorkType.vb)
 T:ManuscriptPipeline.Services.ManuscriptAttentionSnapshot;in memory only: auto-properties with defaults, no methods, no I/O (Services\ManuscriptAttentionService.vb)
-T:ManuscriptPipeline.Services.RecoveryDraft;in memory only: five auto-properties (ManuscriptId, WrittenAtUtc, Reason, Manuscript, UnsavedLibrary), no methods; the draft the manuscript page loads (WorkingCopy.Load); reading and writing the file is RecoveryDraftStore's, which stays banned (Services\RecoveryDraftStore.vb)
+T:ManuscriptPipeline.Services.RecoveryDraft;in memory only: five auto-properties (ManuscriptId, WrittenAtUtc, Reason, Manuscript, UnsavedLibrary), no methods; the draft the manuscript page loads (WorkingCopy.Load); reading and writing the file is RecoveryDraftStore's, which stays banned everywhere but RecoveryDrafts (lifted-bans.txt) (Services\RecoveryDraftStore.vb)
 T:ManuscriptPipeline.Services.RecoveryDraftLibrary;in memory only: three list properties (Authors, Affiliations, TagColors), no methods (Services\RecoveryDraftStore.vb)
 T:ManuscriptPipeline.Services.RouteDotState;in memory only: an enum of three values (Services\RouteSummaryService.vb)
 T:ManuscriptPipeline.Services.RouteSummary;in memory only: a constructor that stores Dots and Text, and their two getters; no I/O (Services\RouteSummaryService.vb)
