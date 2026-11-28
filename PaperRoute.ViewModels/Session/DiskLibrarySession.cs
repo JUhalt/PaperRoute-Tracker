@@ -150,8 +150,20 @@ public sealed class DiskLibrarySession : ILibrarySession
                 _heldSettingsSave = null;
             }
 
-            // On the caller's context, as every settings save is.
-            held?.SetResult(WriteSettings());
+            // On the caller's context, as every settings save is. A fault
+            // WriteSettings does not catch goes to the held callers, so none
+            // waits forever and the load's own outcome is not hidden.
+            if (held is not null)
+            {
+                try
+                {
+                    held.SetResult(WriteSettings());
+                }
+                catch (Exception ex)
+                {
+                    held.SetException(ex);
+                }
+            }
         }
     }
 

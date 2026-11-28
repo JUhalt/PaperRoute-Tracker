@@ -66,6 +66,8 @@ public interface ILibrarySession : IDisposable
     // shutdown waits for library work (Form1.LibraryWork.vb:180-190). It waits
     // on the worker itself, never on the task the interface awaits, so it
     // cannot deadlock on the interface thread. True when a worker was running.
-    // For the shutdown path only.
+    // For the shutdown path only. A settings save held during that load is
+    // written later, on the caller's context, which the shutdown path is
+    // blocking: B5 writes it itself after this wait, or accepts its loss.
     bool WaitForWork();
 }
