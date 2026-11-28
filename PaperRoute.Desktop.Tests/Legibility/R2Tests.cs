@@ -203,6 +203,7 @@ public sealed class R2Tests
         SystemContrastColors grey = SystemContrastColors.Hc1 with { GrayText = SystemContrastColors.Hc1.Window };
         List<string> greyFindings = Rules.R2ContrastFindings("hc1, GrayText as Window", pairs, ContrastTheme.Colors(grey), new List<string>());
         TestContext.WriteLine(string.Join(Environment.NewLine, greyFindings));
+        Assert.IsNotEmpty(greyFindings, "The spoiled set must fail some pair.");
         Assert.HasCount(pairs.Count(pair => pair.Ink == "MutedTextBrush"), greyFindings, "Every muted pair, and only those, fails.");
         Assert.IsTrue(greyFindings.All(finding => finding.Contains(": MutedTextBrush on ", StringComparison.Ordinal) && finding.EndsWith(" is 1.00:1", StringComparison.Ordinal)),
             "A muted pair is reported at 1.00:1:" + Environment.NewLine + string.Join(Environment.NewLine, greyFindings));
