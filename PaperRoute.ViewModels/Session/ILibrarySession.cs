@@ -72,7 +72,11 @@ public interface ILibrarySession : IDisposable
     // LastSaveWarning and clears SaveFailed; Failed carries the exception's
     // message and sets SaveFailed. A cancelled token throws before anything is
     // written; once the worker runs, the save is not cut off, and WaitForWork
-    // waits for it as for a load.
+    // waits for it as for a load. Nor does a subscriber of StateChanged or
+    // LibraryChanged that throws cut it off: the save still ends with its
+    // worker and raises both end events, and only then does the task fault
+    // with that exception. Its outcome is then lost, so read IsWorking and
+    // SaveFailed instead.
     Task<SaveOutcome> SaveAsync(CancellationToken cancel);
 
     // Reads the library off the interface thread and returns to the caller's

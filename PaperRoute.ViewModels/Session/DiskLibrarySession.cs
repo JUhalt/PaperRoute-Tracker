@@ -278,37 +278,63 @@ public sealed class DiskLibrarySession : ILibrarySession
             _worker = worker;
         }
 
-        StateChanged?.Invoke(this, EventArgs.Empty);
+        // A subscriber that throws here does not end the save: the finally
+        // waits for the worker and ends the save as usual, and the exception
+        // then leaves SaveAsync. The catch below takes only what the worker
+        // threw, so a subscriber's exception never sets SaveFailed.
         SaveOutcome outcome = SaveOutcome.Refused;
         try
         {
-            outcome = SaveOutcome.Saved(await worker);
-        }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
-        {
-            // Today's save catches every exception (Form1.vb:1643). This one
-            // lets out-of-memory through, as the load does (IsReadFailure),
-            // so the process does not carry on as if the save had merely
-            // failed.
-            outcome = SaveOutcome.Failed(ex.Message);
+            StateChanged?.Invoke(this, EventArgs.Empty);
         }
         finally
         {
-            lock (_work)
+            try
             {
-                _saving = false;
+                outcome = SaveOutcome.Saved(await worker);
             }
-
-            if (outcome.Kind != SaveOutcomeKind.Refused)
+            catch (Exception ex) when (ex is not OutOfMemoryException)
             {
-                SaveFailed = outcome.Kind == SaveOutcomeKind.Failed;
+                // Today's save catches every exception (Form1.vb:1643). This
+                // one lets out-of-memory through, as the load does
+                // (IsReadFailure), so the process does not carry on as if the
+                // save had merely failed.
+                outcome = SaveOutcome.Failed(ex.Message);
             }
-
-            StateChanged?.Invoke(this, EventArgs.Empty);
-            LibraryChanged?.Invoke(this, EventArgs.Empty);
+            finally
+            {
+                EndSave(outcome);
+            }
         }
 
         return outcome;
+    }
+
+    // Ends a library save once its worker has ended, on the caller's context.
+    // The outcome is Refused here only when the worker ran out of memory,
+    // which leaves SaveFailed as it was. LibraryChanged is raised even when a
+    // subscriber of StateChanged throws, so a render the Board held during the
+    // save is not lost.
+    private void EndSave(SaveOutcome outcome)
+    {
+        lock (_work)
+        {
+            _saving = false;
+        }
+
+        if (outcome.Kind != SaveOutcomeKind.Refused)
+        {
+            SaveFailed = outcome.Kind == SaveOutcomeKind.Failed;
+        }
+
+        try
+        {
+            StateChanged?.Invoke(this, EventArgs.Empty);
+        }
+        finally
+        {
+            LibraryChanged?.Invoke(this, EventArgs.Empty);
+        }
     }
 
     // The save itself, on the worker: the library as the caller's context

@@ -450,6 +450,129 @@ public sealed class LibrarySaveTests
             "The render after the save shows no card for the search.");
     }
 
+    // A subscriber that throws as the save starts does not end the save: it
+    // stays IsWorking, refusing a load and a second save, until its worker has
+    // ended, and only then does the task fault, with that subscriber's own
+    // exception. SaveFailed says what the worker did (it saved), both end
+    // events are raised once, and the next save runs.
+    [TestMethod]
+    public async Task ASubscriberThatThrowsAsASaveStartsDoesNotEndIt()
+    {
+        LargeLibraryFixture.WriteExample(_root);
+        using DiskLibrarySession session = await LoadedSession();
+        using var held = new HeldWork(session);
+        var thrown = new InvalidOperationException("A subscriber of StateChanged threw.");
+        int states = 0;
+        int changes = 0;
+        session.StateChanged += (_, _) =>
+        {
+            if (++states == 1)
+            {
+                throw thrown;
+            }
+        };
+        session.LibraryChanged += (_, _) => changes++;
+        session.Manuscripts[0].Title = "Saved past a subscriber that threw";
+
+        Task<SaveOutcome> save = session.SaveAsync(CancellationToken.None);
+        held.WaitUntilHeld();
+
+        Assert.IsFalse(save.IsCompleted, "The save's task ended while its worker was held: the subscriber's exception ended the save before its worker.");
+        Assert.IsTrue(session.IsWorking, "IsWorking is true while the worker runs, though a subscriber threw.");
+        Task<bool> load = session.LoadAsync(CancellationToken.None);
+        Task<SaveOutcome> second = session.SaveAsync(CancellationToken.None);
+        Assert.IsTrue(load.IsCompleted && !await load, "A load while the save's worker runs is refused, though a subscriber threw.");
+        Assert.IsTrue(second.IsCompleted, "A save refused while another runs returns at once.");
+        Assert.AreEqual(SaveOutcomeKind.Refused, (await second).Kind, "A second save while the worker runs is refused, though a subscriber threw.");
+
+        held.Release();
+        InvalidOperationException caught = await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => save);
+
+        Assert.AreSame(thrown, caught, "The save's task did not fault with the subscriber's own exception.");
+        Assert.IsFalse(session.IsWorking, "The save stayed IsWorking after its worker had ended.");
+        Assert.IsFalse(session.SaveFailed, "The subscriber's exception was taken for a failed save.");
+        Assert.AreEqual(2, states, "StateChanged is raised once more as the save ends.");
+        Assert.AreEqual(1, changes, "LibraryChanged is raised once as the save ends.");
+        using (DiskLibrarySession again = await LoadedSession())
+        {
+            Assert.AreEqual("Saved past a subscriber that threw", again.Manuscripts[0].Title, "The library file does not hold what was saved.");
+        }
+
+        Assert.AreEqual(SaveOutcomeKind.Saved, (await session.SaveAsync(CancellationToken.None)).Kind, "The save after it did not run.");
+    }
+
+    // The other side of the same rule: when a subscriber throws as the save
+    // starts and the worker's save fails, SaveFailed says so once the save has
+    // ended. A subscriber's exception neither sets nor clears it.
+    [TestMethod]
+    public async Task ASubscriberThatThrowsDoesNotHideAFailedSave()
+    {
+        LargeLibraryFixture.WriteExample(_root);
+        using DiskLibrarySession session = await LoadedSession();
+        _ = BlockTheSave();
+        var thrown = new InvalidOperationException("A subscriber of StateChanged threw.");
+        int states = 0;
+        session.StateChanged += (_, _) =>
+        {
+            if (++states == 1)
+            {
+                throw thrown;
+            }
+        };
+
+        InvalidOperationException caught = await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => session.SaveAsync(CancellationToken.None));
+        WaitForTheWorker(session);
+
+        Assert.IsTrue(session.SaveFailed, "The worker's save failed, but SaveFailed does not say so after a subscriber threw.");
+        Assert.IsFalse(session.IsWorking);
+        Assert.AreSame(thrown, caught);
+    }
+
+    // A subscriber that throws at the StateChanged raised as the save ends
+    // does not stop LibraryChanged: the Board's render, held while the save
+    // ran, is released, and the task faults with that exception once the save
+    // has ended, IsWorking false and SaveFailed false.
+    [TestMethod]
+    public async Task ASubscriberThatThrowsAsASaveEndsDoesNotStopLibraryChanged()
+    {
+        LargeLibraryFixture.WriteExample(_root);
+        using DiskLibrarySession session = await LoadedSession();
+        var search = new ManualDebouncer();
+        var board = new BoardViewModel(session, search, new QueuedUiDispatcher());
+        board.Render();
+        int renders = board.RenderCount;
+        string title = session.Manuscripts.First(manuscript => manuscript.Location == ManuscriptLocation.Pipeline).Title;
+        var thrown = new InvalidOperationException("A subscriber of StateChanged threw.");
+        int states = 0;
+        int changes = 0;
+        session.StateChanged += (_, _) =>
+        {
+            if (++states == 2)
+            {
+                throw thrown;
+            }
+        };
+        session.LibraryChanged += (_, _) => changes++;
+        using var held = new HeldWork(session);
+        var ui = new InterfaceThread();
+
+        Task<SaveOutcome> save = ui.Enter(() => session.SaveAsync(CancellationToken.None));
+        held.WaitUntilHeld();
+        board.SearchText = title;
+        Assert.IsTrue(search.Fire(), "The search's wait was not started.");
+        Assert.AreEqual(renders, board.RenderCount, "The Board rendered while the save ran.");
+
+        held.Release();
+        Assert.IsGreaterThan(0, ui.RunPosted(TimeSpan.FromSeconds(30)), "The save posted nothing to the caller's context.");
+        InvalidOperationException caught = await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => save);
+
+        Assert.AreEqual(1, changes, "LibraryChanged was not raised after a subscriber of the ending StateChanged threw.");
+        Assert.AreEqual(renders + 1, board.RenderCount, "The Board's render held during the save was not released.");
+        Assert.AreSame(thrown, caught, "The save's task did not fault with the subscriber's own exception.");
+        Assert.IsFalse(session.IsWorking);
+        Assert.IsFalse(session.SaveFailed, "The subscriber's exception was taken for a failed save.");
+    }
+
     // E2.10's automated counterpart ("The mismatched library", 1.0's
     // checklist): a library file that names fewer manuscripts than the managed
     // folder holds, the empty library first and then one manuscript short, is
