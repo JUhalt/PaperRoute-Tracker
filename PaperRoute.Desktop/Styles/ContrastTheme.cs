@@ -25,10 +25,10 @@ namespace PaperRoute.Desktop.Styles;
 // moves the application's RequestedThemeVariant between the contrast variant
 // and the appearance chosen, and every DynamicResource follows: no restart,
 // where today a Board built before the switch keeps its colours until one
-// (r1 5.1). AppTheme also adds Contrast.axaml, the few rules a token cannot
-// carry (a pressed chip in the selection colours, an outlined quiet button,
-// focus rings in the text colour, no motion), to the application's styles
-// while a contrast theme is on.
+// (r1 5.1). Contrast.axaml, the few rules a token cannot carry (a pressed
+// chip in the selection colours, an outlined quiet button, focus rings in the
+// text colour, no motion), holds inside every top level that shows a contrast
+// variant (AppTheme.ContrastClass).
 public static class ContrastTheme
 {
     public static ThemeVariant HighContrastDark { get; } = new("HighContrastDark", ThemeVariant.Dark);

@@ -1,7 +1,6 @@
 using System.Runtime.CompilerServices;
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Markup.Xaml;
 using Avalonia.Styling;
 using Avalonia.Threading;
 
@@ -29,20 +28,33 @@ public enum Appearance
 // DynamicResource follows: no restart.
 //
 // ContrastTheme keeps the contrast dictionaries and their colours; this
-// object decides which variant is live and adds Contrast.axaml, the rules a
-// token cannot carry, to the application's styles while a contrast theme is
-// on. Reading the stored appearance waits for the issue that opens real
-// libraries or the Settings page (issue 20); until then the app runs at System.
+// object decides which variant is live. Contrast.axaml, the rules a token
+// cannot carry, is always loaded, and each of its rules holds only inside a
+// top level carrying the class ContrastClass, which every top level carries
+// exactly while it shows a contrast variant (set here, as the variant
+// changes). Adding and removing the file left its setters on template parts
+// after a contrast theme went off; WholeWindowThemeTests' round trips show
+// that the class leaves nothing behind. Reading the stored appearance waits for the issue that
+// opens real libraries or the Settings page (issue 20); until then the app
+// runs at System.
 public sealed class AppTheme
 {
-    private static readonly Uri s_contrastStyles = new("avares://PaperRoute.Desktop/Styles/Contrast.axaml");
+    // The class Contrast.axaml's selectors require of the top level.
+    public const string ContrastClass = "contrast";
 
     private static readonly ConditionalWeakTable<Application, AppTheme> s_themes = new();
 
     private readonly Application _application;
     private Appearance _appearance;
     private ContrastPreference? _contrast;
-    private IStyle? _contrastStyles;
+
+    // Every top level (a window, a popup's root) carries ContrastClass while
+    // it shows a contrast variant: the application's, or one of its own.
+    static AppTheme()
+    {
+        TopLevel.ActualThemeVariantProperty.Changed.AddClassHandler<TopLevel>(
+            (topLevel, _) => topLevel.Classes.Set(ContrastClass, ContrastTheme.IsContrast(topLevel.ActualThemeVariant)));
+    }
 
     private AppTheme(Application application)
     {
@@ -126,23 +138,12 @@ public sealed class AppTheme
 
     private void Apply()
     {
-        ThemeVariant variant = Variant;
         if (_contrast is { IsHigh: true } contrast)
         {
             ContrastTheme.Fill(_application.Resources, contrast.Colors);
-            if (_contrastStyles is null)
-            {
-                _contrastStyles = (IStyle)AvaloniaXamlLoader.Load(s_contrastStyles);
-                _application.Styles.Add(_contrastStyles);
-            }
-        }
-        else if (_contrastStyles is not null)
-        {
-            _application.Styles.Remove(_contrastStyles);
-            _contrastStyles = null;
         }
 
-        _application.RequestedThemeVariant = variant;
+        _application.RequestedThemeVariant = Variant;
     }
 
     private void OnContrastChanged(object? sender, EventArgs e)

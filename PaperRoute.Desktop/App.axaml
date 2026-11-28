@@ -20,5 +20,7 @@
     <StyleInclude Source="/Styles/Inputs.axaml" />
     <StyleInclude Source="/Styles/Board.axaml" />
     <StyleInclude Source="/Styles/Rail.axaml" />
+    <!-- Last, so it wins; its rules hold only under a contrast variant (AppTheme). -->
+    <StyleInclude Source="/Styles/Contrast.axaml" />
   </Application.Styles>
 </Application>
