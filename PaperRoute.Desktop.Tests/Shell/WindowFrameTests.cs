@@ -308,8 +308,8 @@ public sealed class WindowFrameTests : StorageCheckedTests
     // at once with yes, never asking the page (here one that would refuse),
     // and only after the running load's worker has ended. A settings save
     // held during that load is not written by the close: it would write the
-    // settings that load read, which are on disk already, so its loss loses
-    // nothing a person changed; it is written only if the interface thread
+    // settings that load read (or the defaults it fell back to), so its loss
+    // loses nothing a person changed; it is written only if the interface thread
     // runs again. The window maps the shutdown's reason, and only it, to
     // this step (WindowClosingEventArgs cannot be made outside Avalonia).
     //
@@ -366,7 +366,10 @@ public sealed class WindowFrameTests : StorageCheckedTests
         Assert.IsTrue(finished, "The shutdown's close step did not finish at once.");
         Assert.IsTrue(allowed, "The shutdown's close step refused.");
         Assert.AreEqual(0, asked, "The shutdown asked the page.");
-        Assert.IsTrue(released, "The interface thread never blocked in the close step: it did not wait for the load.");
+        // The interface thread also blocks in the test's own WaitForWork below
+        // the step, so this shows only that the releaser saw it blocked;
+        // workerRunningAfter is what shows the step waited for the load.
+        Assert.IsTrue(released, "The interface thread never blocked.");
         Assert.IsFalse(workerRunningAfter, "The close step returned while the load's worker still ran.");
         Assert.AreEqual(string.Empty, noticeAtClose, "The close step ran the load's publish on the blocked interface thread.");
         Assert.IsFalse(saveDoneAtClose, "The close step wrote the held settings save.");
