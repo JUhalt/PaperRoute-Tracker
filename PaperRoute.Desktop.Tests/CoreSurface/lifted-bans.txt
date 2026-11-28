@@ -1,7 +1,9 @@
 # Every banned core member (PaperRoute.ViewModels\BannedSymbols.txt, RS0030, shared by PaperRoute.Desktop) that the interface may call, and the one file that may.
 # Checked by PaperRoute.Desktop.Tests\CoreSurface\LiftedBanTests.cs (EachLiftedBanHasOneOwner), from the sources as text: a pragma that lifts RS0030 in a
 # file that owns no ban fails, so does a banned name under a pragma whose file does not own that ban, a line whose owner no longer calls it, and a ban
-# listed twice. Start-up design 2.8 (build 6, #421).
+# listed twice. A pragma is the only way to lift a ban: RS0030 named anywhere else in the two projects' sources (a SuppressMessage attribute, a
+# GlobalSuppressions file) or in their build files (NoWarn, WarningsNotAsErrors, an analyzer config's severity) fails too, comments in build files
+# apart. Start-up design 2.8 (build 6, #421).
 #
 # One line per lifted ban, sorted (ordinal), "<documentation ID>;<owner file>;<reason> (#<issue>)":
 #   documentation ID   the symbol exactly as BannedSymbols.txt names it.
