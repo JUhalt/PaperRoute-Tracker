@@ -114,8 +114,17 @@ public sealed class InstanceHoldTests
         // A second start during the storage step, before the holder listens.
         Assert.IsTrue(form.AskToComeForward(root, Limit), $"A second start could not reach the holder ({which}).");
 
+        // The callback must come on a thread other than Listen's caller: the
+        // caller posts it to its window (ISingleInstance).
+        int listener = Environment.CurrentManagedThreadId;
+        int onListenersThread = 0;
         hold.Listen(() =>
         {
+            if (Environment.CurrentManagedThreadId == listener)
+            {
+                Interlocked.Increment(ref onListenersThread);
+            }
+
             Interlocked.Increment(ref delivered);
             arrived.Release();
         });
@@ -128,6 +137,7 @@ public sealed class InstanceHoldTests
         Assert.IsTrue(arrived.Wait(Wait), $"A come-forward request made after Listen was lost ({which}).");
         WaitUntilServed(hold);
         Assert.AreEqual(2, Volatile.Read(ref delivered), $"Two requests, one before Listen and one after, were not delivered once each ({which}).");
+        Assert.AreEqual(0, Volatile.Read(ref onListenersThread), $"A request was delivered on the thread that called Listen, not on a background thread ({which}).");
     }
 
     // Returns once the hold has served every request sent to it so far, its
