@@ -30,9 +30,13 @@ public sealed class R7Tests : StorageCheckedTests
 
     public TestContext TestContext { get; set; } = null!;
 
-    // Absorbs P-R7's two tests as its Board rows once it judges; until then
     // P_R7_CardTitlesHaveTheirContrastOnScreenInLight and ...InDark judge the
-    // Board's titles as before.
+    // Board's titles as before. This sweep absorbs them only once it judges
+    // and the Board subject also shows the Published and File Drawer shelves:
+    // the subject is shown as it opens, on the Pipeline shelf, while P-R7
+    // checks the seven titles of all three shelves. The verdict commit adds
+    // two subjects for Page/Board whose Shown sets SelectedShelfIndex to 1
+    // and to 2.
     [TestMethod]
     public void R7_EveryTextHasItsContrastByItsStrongestPixel()
     {
